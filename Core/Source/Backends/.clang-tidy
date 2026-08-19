@@ -1,0 +1,4 @@
+# The RmlUi SDL platform/renderer backends are vendored third-party code.
+# Exempt them from our checks so upstream style doesn't produce noise.
+Checks: '-*'
+InheritParentConfig: false

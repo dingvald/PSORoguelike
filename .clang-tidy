@@ -1,0 +1,48 @@
+# C++ Core Guidelines checks + enforcement of the naming conventions in CLAUDE.md.
+# Vendored code under Core/Source/Backends is exempted by its own .clang-tidy.
+Checks: >
+  -*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-vararg,
+  readability-identifier-naming
+
+# Report, don't fail the build (nothing is wired to gate on this yet).
+WarningsAsErrors: ''
+
+# Only surface diagnostics from our own headers, not vendor or backend headers.
+HeaderFilterRegex: '.*[/\\](Core[/\\]Source[/\\]Engine|App[/\\]Source)[/\\].*'
+
+FormatStyle: file
+
+CheckOptions:
+  # Namespaces: lower_case (`rl`).
+  readability-identifier-naming.NamespaceCase: lower_case
+
+  # Types: PascalCase.
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.UnionCase: CamelCase
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  readability-identifier-naming.TypedefCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+
+  # Functions and methods: PascalCase.
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+
+  # Members: private/protected are m_snake_case; public (e.g. Impl structs) plain snake_case.
+  readability-identifier-naming.PrivateMemberPrefix: 'm_'
+  readability-identifier-naming.PrivateMemberCase: lower_case
+  readability-identifier-naming.ProtectedMemberPrefix: 'm_'
+  readability-identifier-naming.ProtectedMemberCase: lower_case
+  readability-identifier-naming.PublicMemberCase: lower_case
+
+  # constexpr / compile-time constants: k + PascalCase (kInitialWidth).
+  readability-identifier-naming.ConstexprVariablePrefix: 'k'
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+
+  # Locals and parameters: lower_case.
+  readability-identifier-naming.LocalVariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case

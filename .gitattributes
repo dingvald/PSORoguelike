@@ -1,0 +1,13 @@
+* text=auto
+
+# Windows batch/cmd scripts must keep CRLF line endings
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts must keep LF line endings
+*.sh text eol=lf
+
+# Treat premake binary and assets as binary
+*.exe binary
+*.ttf binary
+*.otf binary

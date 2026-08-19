@@ -1,0 +1,12 @@
+<rml>
+    <head>
+        <title>PSORoguelike</title>
+        <link type="text/rcss" href="hello.rcss"/>
+    </head>
+    <body>
+        <div id="hello-panel">
+            <h1>PSORoguelike</h1>
+            <p>Engine scaffold -- window + RmlUi are live.</p>
+        </div>
+    </body>
+</rml>

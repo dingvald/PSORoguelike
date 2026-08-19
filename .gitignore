@@ -1,0 +1,30 @@
+# Build output (anchored to repo root so Vendor/Binaries/ stays tracked)
+/Binaries/
+bin/
+bin-int/
+obj/
+
+# Generated project files
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+Makefile
+*.make
+
+# Visual Studio
+.vs/
+.vscode/
+
+# vcpkg manifest install tree (restored via `vcpkg install`)
+vcpkg_installed/
+
+# Vendored third-party checkouts (restored via scripts)
+Vendor/vcpkg/
+Vendor/premake-core/
+
+# Runtime save data (player.json/world.json/region files) -- generated at
+# play time, not project content. Anchored to repo root; App's own copy
+# lives under Binaries/, already excluded above.
+/Saves/

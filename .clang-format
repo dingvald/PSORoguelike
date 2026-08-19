@@ -1,0 +1,52 @@
+# C++ Core Guidelines house style — see CLAUDE.md for the prose version.
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+
+ColumnLimit: 120
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+
+# Allman braces (opening brace on its own line) everywhere EXCEPT namespaces,
+# which keep the attached `namespace rl {` form the code already uses.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# Outer namespace body not indented; nested (e.g. unnamed) namespaces are.
+NamespaceIndentation: Inner
+FixNamespaceComments: true
+
+# `Type* name`, left-aligned pointer/reference.
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# Keep short definitions like `~Application() { Shutdown(); }` on one line,
+# but never collapse control-flow bodies.
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Preserve the hand-authored include groups (project / RmlUi / SDL); sort within
+# each group only.
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive
