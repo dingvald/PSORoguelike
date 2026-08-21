@@ -217,11 +217,51 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 
 ## M3 — Tile/Grid World Representation
 
-**Status:** Not started
+**Status:** 3.1 done
 
 - **3.1 Grid & tile rendering:** Engine: `TileMap`/`Grid` component, camera, SDL-renderer tile
   blitting, ECS `Position`/`Transform`. Editor/UI: none yet (no content format to edit until
-  3.2).
+  3.2). **Done:** ported from `UnnamedRoguelike`'s proven pattern, stripped of everything
+  specific to its chunked/streamed/multi-height `World` (`Chunk`, `ChunkPosition`,
+  `LocalTilePosition`, and the height-band tint/shade/scale/parallax system all dropped
+  entirely) — this project's world is a single fixed-size, non-chunked grid per dungeon area.
+  `Application::Initialize` now creates a GPU-backed `SDL_Renderer` (`SDL_CreateGPUDevice` +
+  `SDL_CreateGPURenderer`, Vulkan/SPIR-V) instead of a plain one, per the user's explicit choice
+  to port the sibling's full custom SDL_GPU tile pipeline rather than fall back to plain
+  `SDL_Renderer` blits. New in `Core/Source/Engine/Render/`: `Camera`/`Viewport`/
+  `TileVertexMath` (ported onto `psr::Vec2`, no `TilePosition` split needed without chunking;
+  `parallax_factor` dropped, height-only), `GpuResource`/`ShaderCompiler`/`TileVertex`/
+  `TileGpuPipeline` (the SPIR-V pipeline + two-tone palette-swap shading, ported verbatim —
+  none of it was chunk-coupled in the source), `TextureAtlasMath`/`TextureAtlasPacker`/
+  `TextureAtlas` (recursive `.png` packer keyed by filename-stem hash, ported verbatim), and
+  `RenderableTile`/`IRenderableLookup`/`TileRenderer` (the one reworked file: iterates a
+  `Grid`'s cells intersected with the viewport via `Rect::Intersect` instead of chunk lookups;
+  `RenderableTile` drops `texture_id_string`/`Describe()`, both JSON-round-trip concerns
+  deferred to M3.2). New `Core/Source/Engine/World/Grid.h` (fixed `width x height` flat
+  `entt::entity` array, `entt::null` for empty cells — not an ECS component, a plain owned
+  class) and `Core/Source/Engine/Math/Vec2f.h` (float mirror of `Vec2`, no `Lerp()` — unused
+  until M6 tweening). New `Core/Source/Engine/ECS/Position.h` (wraps `Vec2 tile`,
+  `entt::meta`-reflectable via the same `Register(ComponentSchemaRegistrar&)` pattern as
+  `PrefabIdComponent`) — deliberately **not** paired with a `Transform` component:
+  `IRenderableLookup::GetRenderOffset` is the existing seam for a future sub-tile offset (an
+  M6 tween concern), so a second component with nothing to write into it would be speculative.
+  App-side (`App/Source/`): `Components/RenderableComponent.h` (App's mirror of `RenderableTile`,
+  reflectable), `Render/RegistryRenderableLookup` (the `IRenderableLookup` impl over `Registry`,
+  simplified vs. the sibling — no fog-of-war/dimming, since no visibility system exists here
+  yet), and `Components/RegisterComponents.{h,cpp}` — the first real instance of the
+  `entt::meta` registration aggregator `Registry.h`'s and `Build-App.lua`'s comments had long
+  anticipated but that never existed until now; it also finally registers `PrefabIdComponent`,
+  which had been sitting unregistered since M1.2. `vcpkg.json` gained `sdl3[vulkan]` and a
+  host-only `glslang[tools]` (the offline GLSL→SPIR-V compiler); new
+  `Scripts/Compile-Shaders.ps1` plus `App/Assets/Shaders/TileSprite.{vert,frag}.glsl` (+
+  committed `.spv`). Verified with a throwaway 40x30 checkerboard smoke-test layer (per this
+  file's own verification guidance, matching the pattern M1.1/M2.2 already used) that exercised
+  the full pipeline end-to-end in a live build (screenshot-confirmed rendering, camera
+  pan/zoom logic covered separately by unit tests) — removed once confirmed working, not kept.
+  Catch2 coverage in `Core-Test/Source/CameraTests.cpp`/`ViewportTests.cpp`/
+  `TileVertexMathTests.cpp`; the GPU pipeline/atlas/`TileRenderer` itself aren't practically
+  unit-testable (need a live GPU-backed `SDL_Renderer`), same reasoning this file already gives
+  for Editor UI being manually verified instead.
 - **3.2 Area/biome data schema:** Engine: JSON schema for area theme (tile palette, race,
   hazard type) — feeds dungeon generation in M4. Editor: **Area editor layer** — tile palette
   assignment, race/hazard config, live preview (mirrors `BiomeEditorLayer` + its texture/color

@@ -9,6 +9,12 @@ header comment). `-Suite Core|All` (default `All`) picks which suite(s) to build
 `-Configuration` picks Debug/Release/Dist (default `Debug`). Remaining arguments are forwarded to
 the Catch2 executable (tag filters, `-s`, etc).
 
+## Compile-Shaders.ps1
+
+Compiles `App/Assets/Shaders/*.glsl` into SPIR-V (`.spv`) via `glslangValidator`. Re-run whenever
+a `.glsl` source changes -- the compiled `.spv` has no other source of truth and must be
+committed alongside it.
+
 ## Run-ClangFormat.ps1
 
 Rewrites in place. `-Check` verifies only (CI-friendly, non-zero exit on drift).

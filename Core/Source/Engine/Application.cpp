@@ -10,12 +10,14 @@
 #include <RmlUi/Debugger.h>
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 
 namespace psr {
 
 struct Application::Impl
 {
     SDL_Window* window = nullptr;
+    SDL_GPUDevice* gpu_device = nullptr;
     SDL_Renderer* renderer = nullptr;
 
     // Raw owning pointers: these are RmlUi interfaces whose lifetime must be
@@ -53,14 +55,23 @@ bool Application::Initialize(ApplicationInitContext context)
         return false;
     }
 
-    // Plain SDL_Renderer, driver auto-selected -- this scaffold has no
-    // custom GPU tile pipeline yet, so there's no need to create our own
-    // SDL_GPUDevice/Vulkan renderer (see UnnamedRoguelike's Application for
-    // that fuller shape once a tile-rendering milestone lands here).
-    s.renderer = SDL_CreateRenderer(s.window, nullptr);
+    // GPU-backed renderer: TileGpuPipeline (Core/Source/Engine/Render) builds
+    // its custom tile-sprite pipeline against this exact same Vulkan device
+    // (via SDL_GetGPURendererDevice), sharing one window/swapchain with
+    // RmlUi's vendored SDL_Renderer-based backend below. Shaders are
+    // precompiled to SPIR-V offline (Scripts/Compile-Shaders.ps1), so no
+    // DXIL/DXBC/MSL cross-compilation step or DirectX toolchain is involved.
+    s.gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, /* debug_mode */ true, "vulkan");
+    if (!s.gpu_device)
+    {
+        SDL_Log("SDL_CreateGPUDevice failed: %s", SDL_GetError());
+        return false;
+    }
+
+    s.renderer = SDL_CreateGPURenderer(s.gpu_device, s.window);
     if (!s.renderer)
     {
-        SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
+        SDL_Log("SDL_CreateGPURenderer failed: %s", SDL_GetError());
         return false;
     }
 
@@ -312,6 +323,14 @@ void Application::Shutdown()
     {
         SDL_DestroyRenderer(s.renderer);
         s.renderer = nullptr;
+    }
+    // The renderer doesn't take ownership of a device we supplied to
+    // SDL_CreateGPURenderer -- destroy it ourselves, after the renderer
+    // (which still needs a valid device up through its own destruction).
+    if (s.gpu_device)
+    {
+        SDL_DestroyGPUDevice(s.gpu_device);
+        s.gpu_device = nullptr;
     }
     if (s.window)
     {

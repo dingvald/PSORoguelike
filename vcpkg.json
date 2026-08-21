@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "description": "PSO-inspired turn-based roguelike + engine (C++23, SDL3, RmlUi)",
   "dependencies": [
-    "sdl3",
+    {
+      "name": "sdl3",
+      "features": [
+        "vulkan"
+      ]
+    },
     {
       "name": "sdl3-image",
       "features": [
@@ -19,6 +24,13 @@
     },
     "entt",
     "catch2",
-    "rapidjson"
+    "rapidjson",
+    {
+      "name": "glslang",
+      "features": [
+        "tools"
+      ],
+      "host": true
+    }
   ]
 }
