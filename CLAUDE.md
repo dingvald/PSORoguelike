@@ -33,7 +33,7 @@ Not gated on build; run manually. Tooling details in [Scripts/README.md](Scripts
 
 Forward-looking rules for new work — not a mandate to retroactively refactor existing code, though flag violations if directly encountered.
 
-1. **Division of labor.** Claude implements engine systems and editor features; the user owns game content creation via the editor tools and C++ API. Claude does not author real game content (areas, enemies, items, balance, etc.). Exception: minimal throwaway test fixtures to exercise a new system in automated tests are fine — that's scaffolding to prove the engine works, not content authoring.
+1. **Division of labor.** Claude implements engine systems and editor features that support data-driven content; the user owns game content creation via the editor tools and C++ API. Claude does not author real game content (areas, enemies, items, balance, etc.) on its own initiative. Exceptions: minimal throwaway test fixtures to exercise a new system in automated tests are fine — that's scaffolding to prove the engine works, not content authoring — and if the user explicitly requests content, Claude should write it rather than defer.
 
 2. **Every feature needs a UI/editor answer.** When implementing an engine feature, explicitly consider both the internal components/systems *and* what UI or editor support it needs to be usable by the content creator. Decide and state whether the feature needs new editor tooling — don't leave content-facing features editor-less by default.
 

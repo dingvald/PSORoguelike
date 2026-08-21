@@ -1,0 +1,103 @@
+/* Color picker popup chrome + SV-square/hue-strip layout. Structural rules
+   (.field-row/.field-label/.field-input-hex/.btn) come from theme.rcss +
+   field_widgets.rcss, <link>ed before this file -- only the popup-specific
+   layout lives here. */
+body {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    width: 420px;
+    height: 560px;
+    box-sizing: border-box;
+    padding: 20px;
+}
+
+h2 {
+    margin-bottom: 0.6em;
+}
+
+.picker-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+#sv-square {
+    display: block;
+    position: relative;
+    width: 300px;
+    height: 300px;
+    border: 1px #33363f;
+    drag: drag;
+    cursor: crosshair;
+}
+
+/* Two stacked layers approximate the classic two-gradient SV-square (white ->
+   hue horizontally, transparent -> black vertically) as discrete solid-colour
+   strips instead of `linear-gradient` decorators -- this project's
+   SDL_Renderer-backed RenderInterface never implements CompileShader, so any
+   shader-based decorator (RmlUi 6.x renders linear/radial/conic gradients via
+   a compiled shader) silently produces no geometry. Plain `background-color`
+   fills route through the already-working CompileGeometry/RenderGeometry path
+   instead. See ColorPickerPopup::RefreshSvGradient/BuildValueOverlayRows/
+   BuildHueGradientRows for the C++ side that populates these. */
+#sv-saturation-layer, #sv-value-layer {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#sv-indicator {
+    display: block;
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    border: 3px #fff;
+    border-radius: 12px;
+}
+
+#hue-strip {
+    display: block;
+    position: relative;
+    width: 36px;
+    height: 300px;
+    border: 1px #33363f;
+    border-radius: 18px;
+    drag: drag;
+    cursor: pointer;
+}
+
+/* Same discrete-strip technique as the SV-square's layers above, in place of
+   the `linear-gradient` decorator this strip used to declare directly. */
+#hue-gradient {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+#hue-indicator {
+    display: block;
+    position: absolute;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    border: 3px #fff;
+    border-radius: 12px;
+}

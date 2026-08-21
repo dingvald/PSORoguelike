@@ -1,0 +1,172 @@
+/* Structural rules for UI/FieldWidgets.h's builder set + the collapse-toggle
+   list pattern. <link> this after theme.rcss in any document that uses these
+   widgets -- colors/accents here defer to theme.rcss's palette (one cyan
+   accent, consistent "selected" treatment) rather than hardcoding a second
+   palette per screen, unlike the sibling toolkit this was ported from (every
+   one of its editor screens redeclared this file's rules with its own
+   gold/orange accent). */
+
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 0;
+}
+
+.field-label {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 130px;
+    color: #8a8f9c;
+    vertical-align: middle;
+}
+
+input.field-input, input, select, .field-input {
+    display: inline-block;
+    background-color: #fff;
+    color: #222;
+    border: 2px #999;
+    padding: 3px 5px;
+    cursor: text;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    width: 200px;
+    font-size: 0.9em;
+    vertical-align: middle;
+}
+
+/* Overrides the generic input.field-input rule above (same 0,1,1 specificity
+   -- tag + class each -- so later in the cascade wins): that rule's 200px
+   width/text cursor fit text/number fields, but render a checkbox hugely
+   oversized with no visible checked-state, since RmlUi has no built-in
+   checkbox appearance of its own (see BuildBoolField). */
+input.checkbox-input {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    cursor: pointer;
+    background-color: #fff;
+    border: 2px #999;
+}
+
+input.checkbox-input:hover {
+    border: 2px #5cc8ff;
+}
+
+input.checkbox-input:checked {
+    background-color: #23303d;
+    border: 2px #5cc8ff;
+}
+
+.field-input-small {
+    width: 70px;
+}
+
+.field-input-hex {
+    width: 120px;
+}
+
+/* RmlUi's <select> has no built-in appearance for its internal selectarrow/
+   selectvalue/selectbox elements or for <option> -- left unstyled, selectbox
+   has no `position`, so it stays in normal document flow instead of floating
+   as a popup: the widget's manually-computed screen offset gets discarded on
+   the next layout pass, leaving the option list crammed into the flow
+   (garbled) and effectively unclickable. */
+select {
+    position: relative;
+    padding-right: 22px;
+    cursor: pointer;
+}
+
+select selectvalue {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+select selectarrow {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 12px;
+    height: 12px;
+    background-color: #555;
+}
+
+select:hover selectarrow {
+    background-color: #5cc8ff;
+}
+
+selectbox {
+    position: absolute;
+    display: block;
+    min-width: 100%;
+    max-height: 220px;
+    box-sizing: border-box;
+    background-color: #1c1e24;
+    border: 2px #33363f;
+}
+
+selectbox option {
+    display: block;
+    padding: 4px 6px;
+    color: #e6e8ec;
+    cursor: pointer;
+}
+
+selectbox option:hover {
+    background-color: #2f333e;
+    color: #7ed6ff;
+}
+
+selectbox option:checked {
+    background-color: #23303d;
+}
+
+.invalid {
+    border: 2px #e5686b;
+}
+
+.texture-id-value {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 90px;
+    color: #7ed6ff;
+    vertical-align: middle;
+}
+
+.color-swatch {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 24px;
+    height: 20px;
+    border: 1px #33363f;
+    vertical-align: middle;
+    background-color: #000;
+}
+
+.collapse-toggle {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+    cursor: pointer;
+    color: #8a8f9c;
+}
+
+.collapse-toggle:hover {
+    color: #7ed6ff;
+}
+
+.list-item-body {
+    display: block;
+}
+
+.list-item.collapsed .list-item-body {
+    display: none;
+}

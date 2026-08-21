@@ -1,0 +1,13 @@
+<rml>
+    <head>
+        <title>Choose a Texture</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="texture_picker.rcss"/>
+    </head>
+    <body>
+        <h2>Choose a Texture</h2>
+        <div id="texture-list"></div>
+        <span id="texture-picker-close" class="btn">Close</span>
+    </body>
+</rml>

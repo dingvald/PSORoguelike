@@ -1,0 +1,26 @@
+/* editor_menu.rcss -- layout only; colors/type come from theme.rcss. */
+
+body {
+    width: 100%;
+    height: 100%;
+}
+
+#editor-menu-shell {
+    display: block;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+#editor-menu-panel {
+    position: absolute;
+    width: 420px;
+    top: 40%;
+    left: 50%;
+    margin-left: -210px;
+    text-align: center;
+}
+
+.subtitle {
+    margin-bottom: 1.2em;
+}

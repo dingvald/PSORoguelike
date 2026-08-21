@@ -19,6 +19,10 @@ group ""
 
 include "App/Build-App.lua"
 
+group "Tools"
+	include "Editor/Build-Editor.lua"
+group ""
+
 group "Tests"
 	include "Core-Test/Build-Core-Test.lua"
 group ""

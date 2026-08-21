@@ -1,0 +1,31 @@
+<rml>
+    <head>
+        <title>Pick a Color</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="color_picker.rcss"/>
+    </head>
+    <body>
+        <h2>Pick a Color</h2>
+        <div class="picker-top">
+            <div id="sv-square">
+                <div id="sv-saturation-layer"></div>
+                <div id="sv-value-layer"></div>
+                <div id="sv-indicator"></div>
+            </div>
+            <div id="hue-strip">
+                <div id="hue-gradient"></div>
+                <div id="hue-indicator"></div>
+            </div>
+        </div>
+        <div class="field-row">
+            <span class="field-label">alpha</span>
+            <input type="range" id="alpha-slider" min="0" max="255" step="1"/>
+        </div>
+        <div class="field-row">
+            <span class="field-label">hex</span>
+            <input type="text" id="hex-input" class="field-input-hex" maxlength="9"/>
+        </div>
+        <span id="picker-done" class="btn">Done</span>
+    </body>
+</rml>

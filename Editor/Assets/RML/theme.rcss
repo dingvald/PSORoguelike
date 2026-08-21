@@ -1,0 +1,60 @@
+/* Editor dark theme -- shared base styles every editor RmlUi document
+   <link>s (before its own document-specific .rcss). RmlUi's RCSS has no
+   var()/custom-property support, so this file is the single place concrete
+   color/spacing/type values live; per-screen .rcss files should style
+   structure/layout only and build on the classes below rather than
+   re-declaring colors. */
+
+body {
+    font-family: "Pixel Code";
+    font-size: 16px;
+    color: #e6e8ec;
+    background-color: #14151a;
+}
+
+h1, h2, h3 {
+    display: block;
+    font-weight: bold;
+    color: #e6e8ec;
+}
+h1 { font-size: 1.75em; margin-bottom: 0.4em; }
+h2 { font-size: 1.3em; margin-bottom: 0.3em; }
+h3 { font-size: 1.1em; margin-bottom: 0.3em; }
+
+p { display: block; }
+
+.text-muted { color: #8a8f9c; }
+.text-accent { color: #5cc8ff; }
+.text-danger { color: #e5686b; }
+.text-success { color: #4caf82; }
+
+.panel {
+    display: block;
+    background-color: #1c1e24;
+    border: 1px #33363f;
+    padding: 1.5em;
+}
+
+.btn {
+    display: block;
+    background-color: #262932;
+    color: #e6e8ec;
+    border: 1px #33363f;
+    padding: 0.5em 1em;
+    text-align: center;
+}
+.btn:hover { background-color: #2f333e; border-color: #454a56; }
+.btn.selected { background-color: #23303d; border-color: #5cc8ff; color: #7ed6ff; }
+.btn.disabled { color: #5a5f6b; }
+
+.menu-list { display: block; }
+.menu-row {
+    display: block;
+    padding: 0.6em 0.8em;
+    margin: 0.2em 0;
+    color: #e6e8ec;
+    background-color: transparent;
+    border: 1px transparent;
+}
+.menu-row:hover { background-color: #2f333e; }
+.menu-row.selected { background-color: #23303d; border-color: #5cc8ff; color: #7ed6ff; }

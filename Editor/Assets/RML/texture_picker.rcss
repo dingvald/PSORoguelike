@@ -1,0 +1,75 @@
+/* Texture picker popup chrome. theme.rcss + field_widgets.rcss (linked
+   before this file) supply .btn and the base palette -- only the
+   popup-specific layout and #texture-list/.texture-row rules live here. */
+body {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    width: 440px;
+    height: 500px;
+    box-sizing: border-box;
+    padding: 20px;
+}
+
+h2 {
+    margin-bottom: 0.6em;
+}
+
+/* RmlUi never sizes its internal scrollbarvertical element unless the app
+   styles it -- left unstyled, it defaults to filling its scrollable
+   container's full width, and LayoutDetails::GetContainingBlock subtracts
+   that (now-huge) scrollbar width from every child's available width,
+   collapsing it to zero. #texture-list needs this. */
+scrollbarvertical {
+    width: 10px;
+}
+
+scrollbarvertical slidertrack {
+    background-color: #1c1e24;
+}
+
+scrollbarvertical sliderbar {
+    background-color: #33363f;
+}
+
+scrollbarvertical sliderbar:hover {
+    background-color: #454a56;
+}
+
+#texture-list {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    height: 380px;
+    margin-bottom: 16px;
+    overflow-y: auto;
+    border: 1px #33363f;
+    padding: 6px;
+}
+
+.texture-row {
+    display: block;
+    padding: 9px 10px;
+    cursor: pointer;
+}
+
+.texture-row:hover {
+    background-color: #2f333e;
+    color: #7ed6ff;
+}
+
+.texture-row.selected {
+    color: #7ed6ff;
+    background-color: #23303d;
+}
+
+.texture-empty {
+    display: block;
+    color: #8a8f9c;
+    font-size: 0.9em;
+    padding: 6px 8px;
+}

@@ -18,6 +18,7 @@
       ]
     },
     "entt",
-    "catch2"
+    "catch2",
+    "rapidjson"
   ]
 }

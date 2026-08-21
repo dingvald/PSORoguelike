@@ -1,0 +1,18 @@
+<rml>
+    <head>
+        <title>Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="editor_menu.rcss"/>
+    </head>
+    <body>
+        <div id="editor-menu-shell">
+            <div id="editor-menu-panel" class="panel">
+                <h1>Editor</h1>
+                <p class="subtitle text-muted">Choose an editor</p>
+                <ul class="menu-list">
+                    <li id="menu-exit" class="menu-row">Exit</li>
+                </ul>
+            </div>
+        </div>
+    </body>
+</rml>
