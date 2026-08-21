@@ -1,6 +1,8 @@
 #include "Layers/EditorMenuLayer.h"
 
 #include "Engine/Events/KeyEvent.h"
+#include "Layers/DungeonEditorLayer.h"
+#include "Layers/PieceEditorLayer.h"
 
 #include <EditorFilepaths.h>
 
@@ -34,7 +36,7 @@ void EditorMenuLayer::OnAttach()
         return;
     }
 
-    m_selected_index = RowExit;
+    m_selected_index = RowPieces;
     RefreshSelectionHighlight();
     m_document->Show();
 }
@@ -97,6 +99,12 @@ void EditorMenuLayer::ConfirmSelection()
 {
     switch (m_selected_index)
     {
+    case RowPieces:
+        TransitionTo<PieceEditorLayer>();
+        break;
+    case RowDungeons:
+        TransitionTo<DungeonEditorLayer>();
+        break;
     case RowExit:
         RequestQuit();
         break;

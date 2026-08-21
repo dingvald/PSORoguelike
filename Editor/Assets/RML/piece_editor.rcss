@@ -1,0 +1,97 @@
+/* Piece Editor's own styles, beyond the shared List/Edit shell in
+   content_editor.rcss (linked before this file) -- the palette, per-cell
+   inspector, and stamped-prefab row list. */
+
+.side-top {
+    flex: 0 0 auto;
+    max-height: 55%;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.palette-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow-y: auto;
+    border: 1px #33363f;
+}
+
+/* A palette row: no opaque background -- the entity sprite is drawn over
+   .palette-icon by the layer, a fill would cover it. Selection shows as a
+   cyan left border (theme.rcss's accent), matching this project's
+   .btn.selected treatment rather than a hover-only recolour. */
+.palette-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    position: relative;
+    height: 40px;
+    box-sizing: border-box;
+    padding: 4px;
+    padding-left: 44px;
+    border-bottom: 1px #262932;
+    cursor: pointer;
+}
+
+.palette-row:hover .palette-name { color: #7ed6ff; }
+.palette-row.selected { border-left: 3px #5cc8ff; }
+
+.palette-icon {
+    display: block;
+    position: absolute;
+    left: 6px;
+    top: 4px;
+    width: 32px;
+    height: 32px;
+}
+
+.palette-name {
+    display: inline-block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.palette-row.eraser .palette-name { color: #e5a15c; }
+
+.fields-panel {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px #33363f;
+    padding: 8px;
+    margin-bottom: 6px;
+}
+
+.cell-head {
+    display: block;
+    color: #7ed6ff;
+    padding: 2px 0 6px 0;
+}
+
+.prefab-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 0;
+}
+
+.prefab-name {
+    display: inline-block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.prefab-edge {
+    flex: 0 0 auto;
+    width: auto;
+}

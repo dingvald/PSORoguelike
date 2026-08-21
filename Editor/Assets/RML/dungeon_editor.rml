@@ -1,0 +1,59 @@
+<rml>
+    <head>
+        <title>Dungeon Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+        <link type="text/rcss" href="dungeon_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Dungeons</h1>
+                <span id="new-dungeon" class="btn action">New Dungeon</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="dungeon-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-dungeon" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="generate-preview" class="btn">Generate</span>
+                <span id="reroll-preview" class="btn">Reroll seed</span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div id="edit-body" class="edit-body">
+                <div class="grid-column">
+                    <div id="grid-panel" class="grid-panel"></div>
+                </div>
+                <div class="side-column">
+                    <h3>Id</h3>
+                    <div id="field-id" class="field-row"></div>
+                    <h3>Name</h3>
+                    <div id="field-name" class="field-row"></div>
+                    <h3>Area tag</h3>
+                    <div id="field-area-tag" class="field-row"></div>
+                    <h3>Room count</h3>
+                    <div id="field-room-min" class="field-row"></div>
+                    <div id="field-room-max" class="field-row"></div>
+                    <h3>Loopback count</h3>
+                    <div id="field-loopback-min" class="field-row"></div>
+                    <div id="field-loopback-max" class="field-row"></div>
+                    <h3>Pieces &mdash; weight/max per dungeon
+                        <span id="add-piece-ref" class="btn">Add Piece</span>
+                    </h3>
+                    <div id="piece-ref-list" class="ref-scroll"></div>
+                    <h3>Locks &mdash; type + count
+                        <span id="add-lock" class="btn">Add Lock</span>
+                    </h3>
+                    <div id="lock-list" class="ref-scroll"></div>
+                </div>
+            </div>
+        </div>
+    </body>
+</rml>

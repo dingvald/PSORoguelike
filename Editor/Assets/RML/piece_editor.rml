@@ -1,0 +1,51 @@
+<rml>
+    <head>
+        <title>Piece Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+        <link type="text/rcss" href="piece_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Pieces</h1>
+                <span id="new-piece" class="btn action">New Piece</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="piece-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-piece" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div id="edit-body" class="edit-body">
+                <div class="grid-column">
+                    <div id="grid-panel" class="grid-panel"></div>
+                </div>
+                <div class="side-column">
+                    <div class="side-top">
+                        <h3>Id</h3>
+                        <div id="field-id" class="field-row"></div>
+                        <h3>Name</h3>
+                        <div id="field-name" class="field-row"></div>
+                        <h3>Area tag</h3>
+                        <div id="field-area-tag" class="field-row"></div>
+                        <h3>Category</h3>
+                        <div id="field-category" class="field-row"></div>
+                        <h3>Selected cell</h3>
+                        <div id="cell-inspector" class="fields-panel"></div>
+                    </div>
+                    <h3>Entities &mdash; left-click paints, right-click erases</h3>
+                    <div id="palette-list" class="palette-scroll"></div>
+                </div>
+            </div>
+        </div>
+    </body>
+</rml>

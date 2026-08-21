@@ -1,0 +1,127 @@
+/* Shared List/Edit shell structure for every content editor layer (Piece,
+   Dungeon, and future ones) -- <link> after theme.rcss/field_widgets.rcss,
+   before the screen's own .rcss (which holds only what's unique to it: the
+   palette for Piece, the piece-ref/lock rows for Dungeon, etc). Centralizing
+   this avoids the per-screen copy-paste UnnamedRoguelike's own editor layers
+   each keep (BiomeEditorLayer/FeatureEditorLayer/WorldMapEditorLayer all
+   redeclare an identical .toolbar/.scroll-panel/.edit-body block).
+
+   Screens are transparent because each layer's OnRender draws its grid/
+   preview canvas with SDL/GPU BEFORE RmlUi's paint pass; an opaque
+   screen/row background would cover it. */
+
+/* Overrides theme.rcss's opaque body background: Application::Run paints
+   RmlUi's document AFTER each Layer::OnRender (see Application.cpp), so an
+   opaque body would cover every SDL/GPU-drawn grid line and sprite these
+   screens draw underneath it. */
+body {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background-color: transparent;
+}
+
+scrollbarvertical {
+    width: 10px;
+}
+scrollbarvertical slidertrack { background-color: #1c1c22; }
+scrollbarvertical sliderbar { background-color: #33363f; }
+scrollbarvertical sliderbar:hover { background-color: #454a56; }
+
+.screen {
+    display: none;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background-color: transparent;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    background-color: #1c1e24;
+    border-bottom: 1px #33363f;
+}
+
+.title { font-size: 1.1em; }
+
+.action { background-color: #23303d; border-color: #5cc8ff; }
+.action:hover { background-color: #2a3947; }
+.back { margin-left: auto; }
+
+.scroll-panel {
+    display: block;
+    width: 100%;
+    height: 88%;
+    box-sizing: border-box;
+    padding: 14px;
+    overflow-y: auto;
+}
+
+.edit-body {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 88%;
+    box-sizing: border-box;
+}
+
+.grid-column {
+    flex: 1 1 auto;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Transparent -- the grid/preview is drawn over it with SDL/GPU; ordinary
+   (no pointer-events:none) so #edit-body's mouse listeners still fire. */
+.grid-panel {
+    display: block;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background-color: transparent;
+}
+
+.side-column {
+    flex: 0 0 360px;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-left: 1px #33363f;
+    padding: 8px;
+}
+
+.list-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 4px;
+    border-bottom: 1px #262932;
+}
+
+.list-name {
+    display: inline-block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.list-empty {
+    display: block;
+    color: #8a8f9c;
+    padding: 6px 4px;
+}

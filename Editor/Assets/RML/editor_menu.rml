@@ -10,6 +10,8 @@
                 <h1>Editor</h1>
                 <p class="subtitle text-muted">Choose an editor</p>
                 <ul class="menu-list">
+                    <li id="menu-pieces" class="menu-row">Pieces</li>
+                    <li id="menu-dungeons" class="menu-row">Dungeons</li>
                     <li id="menu-exit" class="menu-row">Exit</li>
                 </ul>
             </div>

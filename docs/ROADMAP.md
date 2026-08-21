@@ -269,28 +269,87 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 
 ## M4 — Dungeon Piece Library & Generation
 
-**Status:** Not started
+**Status:** 4.1/4.2/4.3/4.4 done, 4.5 not started
 
-- **4.1 Piece data format & socket schema:** Engine: `DungeonPiece` schema — a tile-grid chunk
-  (dimensions, tiles drawn from the owning area's M3.2 palette), border **sockets** (cell
-  position + edge direction + a socket type/tag, e.g. `"north-door"`, so the stitcher only
-  connects type-compatible sockets), and metadata (room category — corridor/room/vault/boss
-  arena — area/race tag, placement weight). Editor/UI: none yet (needs 4.2's authoring UI).
-- **4.2 Piece editor:** Engine: none new. Editor: **Piece editor layer** — List/Edit shell
-  consistent with the other content editors (M3.2 area editor, M5.2 entity editor); Edit mode
-  is a palette-driven tile-paint canvas (adapts `FeatureEditorLayer`'s grid-paint-plus-inspector
-  pattern to a full room footprint) plus a socket-placement tool for tagging border cells. UI:
-  none (authoring only).
-- **4.3 Socket-matching stitcher:** Engine: mission generator that places pieces from the
-  library and connects them by matching compatible open sockets edge-to-edge (placement/
-  backtracking algorithm), filtered by the piece's area/race tag and the fixed area unlock
-  order (4.5). Editor/UI: none new — this is what 4.4 previews.
-- **4.4 Generation preview & tuning:** Engine: none new (consumes 4.3). Editor: **generation
-  preview tool** — seed/param tuning (piece-pool filters, target room count, dead-end/loop
-  tolerance) with live regenerate-and-preview of a full stitched layout (mirrors
-  `DungeonEditorLayer`'s always-live preview-canvas pattern). This is where a piece library
-  gets validated as actually producing coherent dungeons. UI: none yet (mission-entry UI lands
-  in M10).
+- **4.1 Piece data format & socket schema:** Engine: `DungeonPiece` schema — a sparse set of
+  cells (arbitrary/non-rectangular footprint; membership, not a fixed W×H array, defines the
+  shape), each cell a stack of stamped entity **prefabs** (mirrors `FeatureCell::prefabs` in
+  UnnamedRoguelike), plus metadata (room category — corridor/room/vault/boss arena/entrance/
+  exit — area tag). Editor/UI: none yet (needs 4.2's authoring UI). **Done:** pieces are
+  composed of entities, not embedded tile/render data, per the user's explicit brief — a
+  cell's visual comes entirely from its stamped prefabs' own `RenderableComponent`. A "socket"
+  is just a stamped prefab carrying the new `SocketComponent` (`Core/Source/Engine/ECS/
+  SocketComponent.h`: `tags`, `fallback_prefab_id`) — its border edge is a per-placement
+  override (`PieceCellPrefab::edge`, `Core/Source/Engine/Dungeon/DungeonPiece.h`), not stored on
+  the prefab, since the same socket prefab can face any direction depending on where it's
+  stamped. Follows the `Biome`/`Feature` bespoke-schema pattern (not the ECS
+  `ComponentSchemaRegistrar` pipeline, since `DungeonPiece` is a content asset, not a
+  component): `PieceSchema`/`PieceSchemaEmitter`/`PieceLibraryFile`/`PieceLibrary`
+  (`Core/Source/Engine/Dungeon/`), content at `App/Assets/Data/Pieces/*.json`. No `_string`
+  companion fields for NameId references (`prefab_id`, piece/dungeon refs) — resolved via the
+  existing `NameIdRegistry` instead, this project's own (better) convention vs. the sibling's
+  per-struct retention. Fixed a pre-existing gap in the process: the Editor previously ran off a
+  postbuild-copied `Assets/` folder, so any editor-saved content would have lived only in the
+  gitignored `Binaries/` output; `EditorFilepaths::DataPath` now points at App's *source*
+  `Assets/Data` via a `PSR_APP_ASSETS_DIR` compile-time define (mirrors UnnamedRoguelike's own
+  `RL_APP_ASSETS_DIR` fix), and the Editor now compiles `App/Source/Components/` and
+  `App/Source/Render/` directly (App is a `ConsoleApp`, can't be linked) so content editors can
+  enumerate/preview real entity prefabs. Catch2 coverage in
+  `Core-Test/Source/DungeonPieceSchemaTests.cpp`.
+- **4.2 Piece editor:** Engine: none new. Editor: **Piece editor layer**. **Done:**
+  `Editor/Source/Layers/PieceEditorLayer` — List/Edit shell consistent with the other content
+  editors (mirrors `FeatureEditorLayer`'s shell almost directly, closer than expected once
+  cells became pure entity-stamp lists like `FeatureCell`): a single palette-driven paint tool
+  (no separate tile/socket tools — tiles are prefabs too) stamps the selected prefab into cells,
+  which is what defines the footprint shape (irregular/non-rectangular falls out for free); a
+  socket-carrying brush auto-computes its default border edge from which neighbour cell is
+  unpainted at paint time, editable after in the per-cell inspector per the "few constraints"
+  brief. UI: none (authoring only).
+- **4.3 Socket-matching stitcher:** Engine: generator that places pieces from the library and
+  connects them by matching compatible open sockets edge-to-edge, filtered by the piece's area
+  tag. Editor/UI: none new — this is what 4.4 previews. **Done:** `Dungeon` schema
+  (`Core/Source/Engine/Dungeon/Dungeon.h` — a **saved content asset**, not just generation
+  params: which pieces are eligible plus a **per-dungeon weight/max-occurrence per piece
+  reference** since the same piece can be reused across dungeons differently, a room-count
+  range, a loopback-count range, and a list of lock-and-key configs) and
+  `DungeonStitcher::GenerateDungeon` (`Core/Source/Engine/Dungeon/DungeonStitcher.{h,cpp}`):
+  Phase 1 grows a connected tree from a single Entrance to a single Exit (connectivity
+  guaranteed by construction, not a separate check); Phase 2 adds loopback connections between
+  still-open, geometrically-adjacent, tag-compatible sockets for multiple paths; Phase 3
+  resolves every socket left unconnected as a dead end (swapped for its `fallback_prefab_id` or
+  left open); Phase 4 places `dungeon.locks` as solvable lock/key gates on **bridge** edges of
+  the entrance-to-exit path only (a loopback edge can never gate anything, since an alternate
+  path already exists), processed outward from Entrance so a later key is never blocked by an
+  earlier lock, each verified solvable via BFS before being recorded. Deliberately an
+  **abstract, verified-solvable annotation** on the layout, not a spawned in-world lock/key
+  entity — items (M8) and interaction (M6/M7) don't exist yet for that wiring. A `SocketLookup`
+  callback boundary keeps the stitcher itself free of any ECS/Registry dependency, so it's
+  fully unit-testable against synthetic fixture pieces with no live engine state. Catch2
+  coverage in `Core-Test/Source/DungeonSchemaTests.cpp` /
+  `Core-Test/Source/DungeonStitcherTests.cpp` (connectivity, no cell/socket overlap,
+  `max_occurrences`/`weight` respected, room/loopback ranges honoured, every lock's key
+  reachable without crossing it or an earlier lock, seed-reproducible).
+- **4.4 Generation preview & tuning:** Editor: **generation preview tool** — seed/param tuning
+  with live regenerate-and-preview of a full stitched layout. **Done:** folded into a
+  **Dungeon editor** (`Editor/Source/Layers/DungeonEditorLayer`) rather than a separate layer,
+  per the user's brief — the described params (piece-pool filter, target room count, loop
+  tolerance) are exactly the `Dungeon` schema's own fields, so the Dungeon definition's List/
+  Edit screen (repeatable piece-ref rows with weight/max-occurrence, room/loopback-range
+  fields, repeatable lock-config rows) embeds a "Generate"/"Reroll seed" toolbar and live
+  preview canvas directly. The preview computes the generated layout's world-cell bounding box
+  (unlike `PieceEditorLayer`'s fixed edit canvas — a whole dungeon isn't bounded the same way a
+  single piece is) and renders every placed piece's stamped prefabs, plus a debug overlay
+  (locked connections outlined, key rooms tinted, dead-end sockets tinted) so the loopback/
+  dead-end/lock-key structure is inspectable while tuning. Shares a name with (but is unrelated
+  to) UnnamedRoguelike's own `DungeonEditorLayer`, which serves its different layered-noise
+  biome pipeline. UI: none yet (mission-entry UI lands in M10). Along the way, fixed a bug
+  affecting **both** M4.2/M4.4: `theme.rcss`'s opaque `body` background was painting over every
+  SDL/GPU-drawn grid line and sprite, since `Application::Run` renders RmlUi's document *after*
+  each `Layer::OnRender` — `content_editor.rcss` (the new shared List/Edit shell stylesheet
+  both editors `<link>`, factored out to avoid the per-screen copy-paste UnnamedRoguelike's own
+  editor layers each keep) now makes `body` transparent. Verified live in the running Editor
+  with throwaway fixture pieces/entities (per this file's own verification precedent) — removed
+  once confirmed working, not kept.
 - **4.5 Fixed area unlock order:** Engine: Forest→Caves→Mines→Ruins gating hook, consumed by
   the hub in M10. Editor: ordering field on the M3.2 area editor. UI: none yet.
 

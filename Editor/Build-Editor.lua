@@ -10,6 +10,11 @@ local VcpkgBinDebug   = path.translate(path.getabsolute("../vcpkg_installed/x64-
 -- doesn't need its own copy checked in. Its own Assets/RML documents are
 -- overlaid on top -- see the postbuild commands below.
 local AppAssets = path.translate(path.getabsolute("../App/Assets"), "\\")
+-- Forward-slash absolute path (safe inside a C string literal) so content
+-- editors write Data/ JSON back to the game's SOURCE assets, not the
+-- postbuild-copied runtime folder under Binaries/ (which is gitignored and
+-- gets re-copied from source on every build).
+local AppAssetsFwd = path.getabsolute("../App/Assets")
 local EditorRml = path.translate(path.getabsolute("Assets/RML"), "\\")
 
 project "Editor"
@@ -18,7 +23,22 @@ project "Editor"
    cppdialect "C++23"
    staticruntime "off"
 
-   files { "Source/**.h", "Source/**.cpp", "Assets/**" }
+   files
+   {
+      "Source/**.h", "Source/**.cpp", "Assets/**",
+
+      -- App is a ConsoleApp (not a library) so it can't be linked; compile its
+      -- component definitions directly instead -- content editors need
+      -- RegisterComponents/RenderableComponent to enumerate and preview real
+      -- entity prefabs, mirrors UnnamedRoguelike's Editor/Build-Editor.lua.
+      "../App/Source/Components/**.h",
+      "../App/Source/Components/**.cpp",
+      -- RegistryRenderableLookup resolves a live entity's RenderableComponent
+      -- into the RenderableTile content editors draw for palette icons/canvas
+      -- previews -- reused as-is rather than duplicating it Editor-side.
+      "../App/Source/Render/**.h",
+      "../App/Source/Render/**.cpp",
+   }
 
    includedirs
    {
@@ -27,11 +47,21 @@ project "Editor"
       -- Include Core (the engine)
       "../Core/Source",
 
+      -- So "Components/..." above resolves the same way it does for App.
+      "../App/Source",
+
       -- vcpkg dependencies
       ("../" .. VcpkgDir .. "/include"),
    }
 
-   defines { "RMLUI_SDL_VERSION_MAJOR=3" }
+   defines { "RMLUI_SDL_VERSION_MAJOR=3", 'PSR_APP_ASSETS_DIR="' .. AppAssetsFwd .. '"' }
+
+   -- RegisterComponents.cpp instantiates entt::meta registration templates for
+   -- every component in one translation unit -- same COFF section-count fix
+   -- (C1128) as App/Build-App.lua, now that Editor compiles it too.
+   filter "toolset:msc*"
+       buildoptions { "/bigobj" }
+   filter {}
 
    -- Libraries common to all configurations (same name in debug/release vcpkg trees).
    links

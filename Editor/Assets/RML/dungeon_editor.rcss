@@ -1,0 +1,32 @@
+/* Dungeon Editor's own styles, beyond the shared List/Edit shell in
+   content_editor.rcss (linked before this file) -- the repeatable piece-ref
+   and lock-config row lists. */
+
+h3 .btn {
+    margin-left: 8px;
+}
+
+.ref-scroll {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px #33363f;
+    margin-bottom: 6px;
+}
+
+.ref-row, .lock-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 4px;
+    border-bottom: 1px #262932;
+}
+
+.ref-id, .ref-weight, .ref-max, .lock-type, .lock-count {
+    flex: 1 1 auto;
+    min-width: 0;
+}
