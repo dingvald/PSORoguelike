@@ -1,0 +1,23 @@
+/* Prefab Editor's own styles, beyond the shared List/Edit shell in
+   content_editor.rcss and the shared row-card/inspector-card system in
+   field_widgets.rcss (both linked before this file) -- just the socket tag
+   list's scroll box and its field width. */
+
+h3 .btn {
+    margin-left: 8px;
+}
+
+.ref-scroll {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px #33363f;
+    margin-bottom: 6px;
+}
+
+.tag-id {
+    flex: 1 1 auto;
+    min-width: 0;
+}

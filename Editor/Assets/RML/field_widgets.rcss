@@ -8,6 +8,7 @@
 
 .field-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     width: 100%;
@@ -60,11 +61,20 @@ input.checkbox-input:checked {
     border: 2px #5cc8ff;
 }
 
-.field-input-small {
+/* Tag-qualified (not just the bare class) so these tie the base
+   "input.field-input, input, select, .field-input" rule's specificity above
+   and win via source order -- a bare ".field-input-small"/".field-input-hex"
+   class selector is LOWER specificity than "input.field-input" (tag+class),
+   so the base rule's width:200px was silently winning over these on any
+   input carrying both classes (e.g. BuildVec2Field's x/y inputs,
+   BuildColorField's hex input) -- functionally invisible until a narrow
+   container (PrefabEditorLayer's 360px side-column) made the resulting
+   200px-wide sub-fields overflow off the window entirely. */
+input.field-input-small {
     width: 70px;
 }
 
-.field-input-hex {
+input.field-input-hex {
     width: 120px;
 }
 
@@ -169,4 +179,137 @@ selectbox option:checked {
 
 .list-item.collapsed .list-item-body {
     display: none;
+}
+
+/* Shared addable/removable row-list chrome (see fieldwidgets::BuildRowList)
+   -- every editor's "list of things that can be added or removed" (Dungeon's
+   piece-refs/locks, Prefab's socket tags, Piece's per-cell stamped prefabs,
+   ...) renders through this one row shape instead of each screen inventing
+   its own, so add/remove/drag-reorder look and behave identically everywhere. */
+.row-card {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    background-color: #1c1e24;
+    border: 1px #33363f;
+    border-radius: 4px;
+}
+
+.row-card.dragging {
+    opacity: 0.4;
+}
+
+.row-card.drag-over {
+    border: 1px #5cc8ff;
+}
+
+.drag-handle {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    color: #5a5f6b;
+    cursor: move;
+}
+
+.drag-handle:hover {
+    color: #8a8f9c;
+}
+
+.row-card-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.row-card-remove {
+    flex-shrink: 0;
+    padding: 2px 8px;
+}
+
+/* The fuller Unity-Inspector-style card, used only by Prefab Editor's
+   component list on top of the .row-card visuals above (dragging/drag-over
+   states are shared). Body collapse reuses .list-item/.list-item-body/
+   .collapsed verbatim (see WireCollapseToggle) -- apply both ".inspector-card"
+   and ".list-item" to the same element, no new collapse mechanism needed. */
+.inspector-card {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 6px;
+    background-color: #1c1e24;
+    border: 1px #33363f;
+    border-radius: 4px;
+}
+
+.inspector-card.dragging {
+    opacity: 0.4;
+}
+
+.inspector-card.drag-over {
+    border: 1px #5cc8ff;
+}
+
+.inspector-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+}
+
+.component-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: #5cc8ff;
+}
+
+.component-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #e6e8ec;
+}
+
+.inspector-card-body {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 10px 10px 10px;
+    border-top: 1px #262932;
+}
+
+/* Styled to read as a full-width "Add Component" button (matching the plain
+   .btn from theme.rcss, same grey every other button in this side column
+   uses -- "Choose...", "Pick...", etc. -- not the cyan .action accent, which
+   is reserved for the toolbar's Save button) while staying a real <select>
+   underneath -- reuses BuildEnumField's mechanics rather than a bespoke
+   popup/menu widget. Margin matches .inspector-card's own margin-bottom so
+   it lines up exactly flush with the cards above it. */
+#add-component-select {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 6px 0;
+    background-color: #262932;
+    color: #e6e8ec;
+    border: 1px #33363f;
+    padding: 0.3em 0.7em;
+    text-align: center;
+    cursor: pointer;
+}
+
+#add-component-select:hover {
+    background-color: #2f333e;
+    border-color: #454a56;
 }

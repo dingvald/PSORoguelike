@@ -16,11 +16,13 @@ struct PrefabIdComponent
 {
     std::uint32_t value = 0;
 
-    // No .Data<>() -- deliberately excluded from JSON authoring: this is a
-    // derived-at-instantiation fact, not something content should set. Still
-    // fully clone-eligible -- RegisterComponent<T> binds that independent of
-    // field-level .Data<>() calls.
-    static void Register(ComponentSchemaRegistrar& reg) { reg.Component<PrefabIdComponent>("prefab_id"); }
+    // Not authorable -- this is a derived-at-instantiation fact, not
+    // something content should set. Still fully clone-eligible --
+    // RegisterComponent<T> binds that independent of authorable/.Data<>().
+    static void Register(ComponentSchemaRegistrar& reg)
+    {
+        reg.Component<PrefabIdComponent>("prefab_id", /*authorable=*/false);
+    }
 };
 
 } // namespace psr

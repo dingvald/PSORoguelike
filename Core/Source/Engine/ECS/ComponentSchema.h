@@ -44,11 +44,15 @@ struct FieldSchema
 
 // One registered component's authorable surface. `is_tag` marks an empty
 // component (registered with a type id but no data members); its JSON body must
-// be `{}`.
+// be `{}`. `authorable` gates whether the component may appear in entity JSON
+// / editor "add component" pickers at all -- false for engine-derived-only
+// components (e.g. Position, stamped at spawn time, never authored) even if
+// they have real data members.
 struct ComponentSchema
 {
     std::string id;
     bool is_tag = false;
+    bool authorable = true;
     std::vector<FieldSchema> fields;
 };
 

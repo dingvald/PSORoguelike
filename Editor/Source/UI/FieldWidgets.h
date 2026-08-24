@@ -3,10 +3,12 @@
 #include "Engine/Math/Color.h"
 #include "Engine/Math/Vec2.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Rml {
@@ -96,6 +98,64 @@ namespace fieldwidgets {
     // Collapse state is purely a view concern and isn't preserved across a full
     // rebuild of item's parent list.
     Listeners WireCollapseToggle(Rml::Element& item);
+
+    // Wires native RmlUi drag-and-drop reordering across an already-built row
+    // set: rows[i]/handles[i] must be parallel (same length, same order).
+    // handles[i] (expected to carry RCSS `drag: drag;`, e.g. a ".drag-handle"
+    // child of rows[i]) is the drag source; rows[i] itself (expected to carry
+    // `drag: drag-drop;`) is the drop target that receives "dragover"/
+    // "dragdrop". Dropping handle i onto row j calls request_reorder(i, j)
+    // once, on "dragdrop".
+    //
+    // request_reorder must ONLY stash the two indices for later (e.g. into a
+    // layer's deferred m_pending_action, drained on a later OnRender) -- it
+    // must never rebuild/destroy the row list synchronously. RmlClickListener
+    // above documents that ElementDocument::Close() is deferred because
+    // RmlUi's update loop can't safely have elements destroyed into it
+    // mid-dispatch; the same hazard applies here, since rows/handles are
+    // still live RmlUi elements mid-drag when "dragdrop" fires.
+    Listeners WireDragReorder(const std::vector<Rml::Element*>& rows, const std::vector<Rml::Element*>& handles,
+                              std::function<void(std::size_t from_index, std::size_t to_index)> request_reorder);
+
+    // One rebuilt addable/removable row list, shared by every editor screen
+    // that has one (Dungeon's piece-refs/locks, Prefab's socket tags, Piece's
+    // per-cell stamped prefabs, ...) instead of each screen hand-rolling its
+    // own markup-loop + remove-button wiring. Rebuilds container with one
+    // ".row-card" per entry in content_html (each string is that row's
+    // caller-specific inner fields -- e.g. what today's per-editor code
+    // already builds by hand), wrapped in the shared drag-handle + remove-
+    // button chrome (see field_widgets.rcss's .row-card), or empty_message if
+    // content_html is empty. Wires the remove button (calls on_remove(index))
+    // and drag-reorder (via WireDragReorder above, calls
+    // request_reorder(from, to) -- same deferred-only constraint applies).
+    //
+    // Returns the row elements so the caller can QuerySelector() its own
+    // field containers out of each row by class and wire them, exactly as
+    // every editor's row-list code already does today.
+    struct RowList
+    {
+        Listeners listeners;
+        std::vector<Rml::Element*> rows;
+    };
+    RowList BuildRowList(Rml::Element& container, const std::vector<std::string>& content_html,
+                         const std::string& empty_message, std::function<void(std::size_t)> on_remove,
+                         std::function<void(std::size_t, std::size_t)> request_reorder);
+
+    // Shared index math for every request_reorder callback (WireDragReorder/
+    // BuildRowList's contract): moves the element at from_index to
+    // to_index's ORIGINAL (pre-move) position -- i.e. dropping row i onto row
+    // j places it immediately where j used to be, shifting elements between
+    // them by one. No-op if either index is out of range or they're equal.
+    template <typename T>
+    void MoveElement(std::vector<T>& items, std::size_t from_index, std::size_t to_index)
+    {
+        if (from_index >= items.size() || to_index >= items.size() || from_index == to_index)
+            return;
+        T value = std::move(items[from_index]);
+        items.erase(items.begin() + static_cast<std::ptrdiff_t>(from_index));
+        const std::size_t insert_at = from_index < to_index ? to_index - 1 : to_index;
+        items.insert(items.begin() + static_cast<std::ptrdiff_t>(insert_at), std::move(value));
+    }
 
 } // namespace fieldwidgets
 

@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 
@@ -378,6 +379,128 @@ Listeners WireCollapseToggle(Rml::Element& item)
     listener->Attach(*toggle);
     out.push_back(std::move(listener));
     return out;
+}
+
+Listeners WireDragReorder(const std::vector<Rml::Element*>& rows, const std::vector<Rml::Element*>& handles,
+                          std::function<void(std::size_t, std::size_t)> request_reorder)
+{
+    Listeners out;
+    if (rows.size() != handles.size())
+        return out;
+
+    // Shared by every row's listeners below: which row a drag started from,
+    // live only while a drag is in flight.
+    auto dragging_index = std::make_shared<std::optional<std::size_t>>();
+
+    for (std::size_t i = 0; i < handles.size(); ++i)
+    {
+        Rml::Element* handle = handles[i];
+        Rml::Element* row = rows[i];
+        if (!handle || !row)
+            continue;
+
+        auto start_listener = std::make_unique<RmlEventListener>("dragstart", [dragging_index, row, i](Rml::Event&)
+                                                                  {
+                                                                      *dragging_index = i;
+                                                                      row->SetClass("dragging", true);
+                                                                  });
+        start_listener->Attach(*handle);
+        out.push_back(std::move(start_listener));
+
+        // Cleanup only -- reordering itself happens via "dragdrop" below, not
+        // here. Fires after "dragdrop" (source is notified once the drag
+        // gesture as a whole has ended), so rows[] are still live elements at
+        // this point as long as request_reorder only stashed its indices.
+        auto end_listener = std::make_unique<RmlEventListener>("dragend", [dragging_index, rows](Rml::Event&)
+                                                                {
+                                                                    dragging_index->reset();
+                                                                    for (Rml::Element* r : rows)
+                                                                        if (r)
+                                                                        {
+                                                                            r->SetClass("dragging", false);
+                                                                            r->SetClass("drag-over", false);
+                                                                        }
+                                                                });
+        end_listener->Attach(*handle);
+        out.push_back(std::move(end_listener));
+    }
+
+    for (std::size_t j = 0; j < rows.size(); ++j)
+    {
+        Rml::Element* row = rows[j];
+        if (!row)
+            continue;
+
+        auto over_listener = std::make_unique<RmlEventListener>("dragover", [dragging_index, rows, row, j](Rml::Event&)
+                                                                 {
+                                                                     if (!*dragging_index || **dragging_index == j)
+                                                                         return;
+                                                                     for (Rml::Element* r : rows)
+                                                                         if (r)
+                                                                             r->SetClass("drag-over", false);
+                                                                     row->SetClass("drag-over", true);
+                                                                 });
+        over_listener->Attach(*row);
+        out.push_back(std::move(over_listener));
+
+        auto out_listener =
+            std::make_unique<RmlEventListener>("dragout", [row](Rml::Event&) { row->SetClass("drag-over", false); });
+        out_listener->Attach(*row);
+        out.push_back(std::move(out_listener));
+
+        auto drop_listener = std::make_unique<RmlEventListener>("dragdrop", [dragging_index, request_reorder, j](Rml::Event&)
+                                                                 {
+                                                                     if (*dragging_index && **dragging_index != j)
+                                                                         request_reorder(**dragging_index, j);
+                                                                 });
+        drop_listener->Attach(*row);
+        out.push_back(std::move(drop_listener));
+    }
+
+    return out;
+}
+
+RowList BuildRowList(Rml::Element& container, const std::vector<std::string>& content_html,
+                     const std::string& empty_message, std::function<void(std::size_t)> on_remove,
+                     std::function<void(std::size_t, std::size_t)> request_reorder)
+{
+    RowList result;
+    if (content_html.empty())
+    {
+        container.SetInnerRML(empty_message);
+        return result;
+    }
+
+    std::string markup;
+    for (const std::string& inner : content_html)
+        markup += "<div class=\"row-card\"><span class=\"drag-handle\">|||</span><div class=\"row-card-content\">" +
+                  inner + "</div><span class=\"btn row-card-remove\">x</span></div>";
+    container.SetInnerRML(markup);
+
+    Rml::ElementList element_rows;
+    container.QuerySelectorAll(element_rows, ".row-card");
+    result.rows.assign(element_rows.begin(), element_rows.end());
+
+    std::vector<Rml::Element*> handles;
+    handles.reserve(result.rows.size());
+    for (Rml::Element* row : result.rows)
+        handles.push_back(row ? row->QuerySelector(".drag-handle") : nullptr);
+
+    for (std::size_t i = 0; i < result.rows.size() && i < content_html.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* remove_button = result.rows[i]->QuerySelector(".row-card-remove"))
+        {
+            auto listener = std::make_unique<RmlClickListener>([on_remove, index] { on_remove(index); });
+            listener->Attach(*remove_button);
+            result.listeners.push_back(std::move(listener));
+        }
+    }
+
+    for (auto& listener : WireDragReorder(result.rows, handles, std::move(request_reorder)))
+        result.listeners.push_back(std::move(listener));
+
+    return result;
 }
 
 } // namespace psr::fieldwidgets

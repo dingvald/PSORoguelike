@@ -78,16 +78,65 @@ scrollbarvertical sliderbar:hover { background-color: #454a56; }
     flex: 1 1 auto;
     height: 100%;
     box-sizing: border-box;
+    /* An explicit-px .preview-window (set by its resize handle) must never
+       reflow .side-column -- clip instead of growing the row via flexbox's
+       default content-based min-width, backstopping the resize drag's own
+       clamp to this column's box. */
+    min-width: 0;
+    overflow: hidden;
 }
 
-/* Transparent -- the grid/preview is drawn over it with SDL/GPU; ordinary
-   (no pointer-events:none) so #edit-body's mouse listeners still fire. */
-.grid-panel {
-    display: block;
+/* The bordered, resizable live-preview section every editor's "#preview-
+   window" element becomes -- see PreviewWindowChrome::Build. Starts at
+   100%/100% (filling .grid-column exactly like the old bare .grid-panel
+   did) until the user drags .preview-resize-handle, at which point it
+   switches to explicit px width/height. */
+.preview-window {
+    display: flex;
+    flex-direction: column;
+    position: relative;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
+    border: 1px #33363f;
+}
+
+/* Transparent -- the grid/preview is drawn over it with SDL/GPU; ordinary
+   (no pointer-events:none) so #edit-body's mouse listeners still fire.
+   Fills all space above .preview-toolbar rather than the whole column. */
+.preview-window .grid-panel {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
     background-color: transparent;
+}
+
+.preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    background-color: #1c1e24;
+    border-top: 1px #33363f;
+}
+
+.preview-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    background-color: #33363f;
+    cursor: resize;
+    drag: drag;
+}
+.preview-resize-handle:hover,
+.preview-resize-handle.active {
+    background-color: #5cc8ff;
 }
 
 .side-column {

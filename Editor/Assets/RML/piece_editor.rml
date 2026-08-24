@@ -27,7 +27,7 @@
             </div>
             <div id="edit-body" class="edit-body">
                 <div class="grid-column">
-                    <div id="grid-panel" class="grid-panel"></div>
+                    <div id="preview-window" class="preview-window"></div>
                 </div>
                 <div class="side-column">
                     <div class="side-top">

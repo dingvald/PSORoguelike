@@ -9,6 +9,8 @@
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "UI/FieldWidgets.h"
+#include "UI/PreviewCanvas.h"
+#include "UI/PreviewWindowChrome.h"
 
 #include <cstdint>
 #include <functional>
@@ -99,21 +101,32 @@ private:
 
     // -- Render --
     void RenderPreview(SDL_Renderer& renderer, int output_w, int output_h);
+    void RefreshZoomReadout();
 
     // -- RmlUi wiring --
     void LoadDocuments();
     void WireButtonClick(const char* element_id, std::function<void()> on_click);
+    void WirePreviewInteraction();
+    void HandlePreviewMouseDown(Rml::Event& event);
+    void HandlePreviewMouseMove(Rml::Event& event);
+    void HandlePreviewMouseUp(Rml::Event& event);
+    void HandlePreviewMouseScroll(Rml::Event& event);
 
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable dungeon-list rows
+    std::vector<std::unique_ptr<RmlEventListener>> m_preview_listeners; // #edit-body pan/zoom listeners
     fieldwidgets::Listeners m_form_listeners;                        // id/name/area_tag/room/loopback fields
     fieldwidgets::Listeners m_piece_row_listeners;
     fieldwidgets::Listeners m_lock_row_listeners;
-    std::vector<std::unique_ptr<RmlClickListener>> m_piece_row_button_listeners; // per-row remove buttons
-    std::vector<std::unique_ptr<RmlClickListener>> m_lock_row_button_listeners;  // per-row remove buttons
+    fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
+
+    // Reorder (drag-drop) finalizes here, one frame after the drag gesture
+    // itself -- see fieldwidgets::WireDragReorder's doc comment for why.
+    // Drained once at the top of OnRender.
+    std::function<void()> m_pending_action;
 
     // -- Prefab caches (keyed by prefab id) --
     struct PrefabVisual
@@ -146,6 +159,11 @@ private:
     bool m_renderer_initialized = false;
     std::optional<TextureAtlas> m_tile_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
+
+    // World units for m_preview_canvas -- 1 generated-layout cell =
+    // kBaseCellPx world-pixels at zoom 1.0.
+    static constexpr float kBaseCellPx = 48.0f;
+    PreviewCanvas m_preview_canvas;
 
     int m_output_w = 0;
     int m_output_h = 0;

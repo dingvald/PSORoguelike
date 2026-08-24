@@ -196,12 +196,13 @@ class ComponentSchemaRegistrar
 public:
     explicit ComponentSchemaRegistrar(entt::meta_ctx& ctx) : m_ctx(&ctx) {}
 
-    template <typename TComponent> ComponentSchemaBuilder<TComponent> Component(std::string_view type_name)
+    template <typename TComponent>
+    ComponentSchemaBuilder<TComponent> Component(std::string_view type_name, bool authorable = true)
     {
         const std::string owned{type_name};
         entt::meta_factory<TComponent> factory =
             RegisterComponent<TComponent>(*m_ctx).type(entt::hashed_string::value(owned.c_str()));
-        m_model.components.push_back(ComponentSchema{owned, std::is_empty_v<TComponent>, {}});
+        m_model.components.push_back(ComponentSchema{owned, std::is_empty_v<TComponent>, authorable, {}});
         return ComponentSchemaBuilder<TComponent>{factory, m_model.components.back(), *m_ctx};
     }
 

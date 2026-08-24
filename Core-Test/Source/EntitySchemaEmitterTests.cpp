@@ -68,6 +68,14 @@ struct SampleTagComponent
 {
 };
 
+// Has a real data member (unlike PrefabIdComponent's empty-fields trick) --
+// exercises that `authorable=false` hides a component from JSON/schema even
+// when it has authorable-shaped fields, the same situation as Position.
+struct SampleHiddenComponent
+{
+    int value = 0;
+};
+
 psr::EntitySchemaModel RegisterSampleModel(entt::meta_ctx& ctx)
 {
     psr::ComponentSchemaRegistrar reg{ctx};
@@ -81,6 +89,7 @@ psr::EntitySchemaModel RegisterSampleModel(entt::meta_ctx& ctx)
         .Data<&SampleComponent::items>("items")
         .Data<&SampleComponent::tags>("tags");
     reg.Component<SampleTagComponent>("sample_tag");
+    reg.Component<SampleHiddenComponent>("hidden", /*authorable=*/false).Data<&SampleHiddenComponent::value>("value");
     return reg.Model();
 }
 
@@ -103,11 +112,12 @@ TEST_CASE("ComponentSchemaRegistrar captures component ids, tag-ness, field name
     entt::meta_ctx ctx;
     const psr::EntitySchemaModel model = RegisterSampleModel(ctx);
 
-    REQUIRE(model.components.size() == 2);
+    REQUIRE(model.components.size() == 3);
 
     const psr::ComponentSchema& sample = model.components[0];
     CHECK(sample.id == "sample");
     CHECK_FALSE(sample.is_tag);
+    CHECK(sample.authorable); // default, unspecified at the Component<T>() call site
     REQUIRE(sample.fields.size() == 8);
     CHECK(sample.fields[0].name == "count");
     CHECK(sample.fields[0].kind == psr::FieldKind::Integer);
@@ -147,7 +157,13 @@ TEST_CASE("ComponentSchemaRegistrar captures component ids, tag-ness, field name
     const psr::ComponentSchema& tag = model.components[1];
     CHECK(tag.id == "sample_tag");
     CHECK(tag.is_tag);
+    CHECK(tag.authorable);
     CHECK(tag.fields.empty());
+
+    const psr::ComponentSchema& hidden = model.components[2];
+    CHECK(hidden.id == "hidden");
+    CHECK_FALSE(hidden.authorable);
+    REQUIRE(hidden.fields.size() == 1); // authorable=false doesn't stop fields registering...
 }
 
 TEST_CASE("BuildEntityJsonSchema emits a strict, kind-appropriate schema", "[EntitySchema]")
@@ -163,6 +179,9 @@ TEST_CASE("BuildEntityJsonSchema emits a strict, kind-appropriate schema", "[Ent
     CHECK(components["additionalProperties"].GetBool() == false);
     REQUIRE(components["properties"].HasMember("sample"));
     REQUIRE(components["properties"].HasMember("sample_tag"));
+    // ...but it's still omitted entirely from the emitted schema -- the
+    // "hidden" key itself is illegal in entity JSON, not just unfilled.
+    CHECK_FALSE(components["properties"].HasMember("hidden"));
 
     const rapidjson::Value& body = components["properties"]["sample"];
     CHECK(body["additionalProperties"].GetBool() == false);
@@ -233,6 +252,13 @@ TEST_CASE("ValidateEntityDocument rejects non-conforming documents", "[EntitySch
     {
         rapidjson::Document doc = Parse(R"({ "schema_version": 1,
             "components": { "nope": {} } })");
+        REQUIRE_THROWS_AS(psr::ValidateEntityDocument(doc, model), psr::EntityLoaderError);
+    }
+
+    SECTION("non-authorable component id")
+    {
+        rapidjson::Document doc = Parse(R"({ "schema_version": 1,
+            "components": { "hidden": { "value": 1 } } })");
         REQUIRE_THROWS_AS(psr::ValidateEntityDocument(doc, model), psr::EntityLoaderError);
     }
 

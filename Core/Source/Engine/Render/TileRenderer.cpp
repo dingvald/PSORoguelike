@@ -71,22 +71,27 @@ void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window
         for (int x = visible.Left(); x < visible.Right(); ++x)
         {
             Vec2 position{x, y};
-            entt::entity entity = m_grid->GetEntity(position);
-            if (entity == entt::null)
-                continue;
+            for (entt::entity entity : m_grid->GetEntities(position))
+            {
+                std::optional<RenderableTile> renderable = m_renderable_lookup->GetRenderableTile(entity);
+                if (!renderable)
+                    continue;
 
-            std::optional<RenderableTile> renderable = m_renderable_lookup->GetRenderableTile(entity);
-            if (!renderable)
-                continue;
-
-            items.push_back(DrawItem{position, m_renderable_lookup->GetRenderOffset(entity), renderable->texture_id,
-                                     renderable->texture_size, renderable->uv, renderable->color_1, renderable->color_2,
-                                     renderable->render_layer});
+                items.push_back(DrawItem{position, m_renderable_lookup->GetRenderOffset(entity),
+                                         renderable->texture_id, renderable->texture_size, renderable->uv,
+                                         renderable->color_1, renderable->color_2, renderable->render_layer});
+            }
         }
     }
 
-    std::sort(items.begin(), items.end(),
-              [](const DrawItem& lhs, const DrawItem& rhs) { return lhs.render_layer < rhs.render_layer; });
+    // stable_sort, not sort: Grid::GetEntities yields a tile's occupants in
+    // stamp/insertion order, and the piece editor's drag-reorder already
+    // treats that order as an authored, meaningful signal for a cell's
+    // stamped prefabs -- so entities sharing a render_layer on the same tile
+    // should keep that order rather than being left to an unstable sort's
+    // implementation-defined tie-breaking.
+    std::stable_sort(items.begin(), items.end(),
+                     [](const DrawItem& lhs, const DrawItem& rhs) { return lhs.render_layer < rhs.render_layer; });
 
     Vec2 atlas_size = m_atlas->GetSize();
     if (atlas_size.x <= 0 || atlas_size.y <= 0)

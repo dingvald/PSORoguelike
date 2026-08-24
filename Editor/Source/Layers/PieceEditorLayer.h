@@ -7,6 +7,8 @@
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "UI/FieldWidgets.h"
+#include "UI/PreviewCanvas.h"
+#include "UI/PreviewWindowChrome.h"
 
 #include <cstdint>
 #include <functional>
@@ -106,12 +108,15 @@ private:
 
     // -- Grid render + interaction --
     void RenderEditContent(SDL_Renderer& renderer, int output_w, int output_h);
-    bool GridLayout(); // caches m_grid_*, returns whether valid this frame
-    std::optional<Vec2> CellUnder(float mouse_x, float mouse_y) const;
+    bool UpdatePreviewCanvas(); // returns whether #grid-panel is valid this frame
+    SDL_FRect CellBox(Vec2 cell) const; // screen-space box for a grid cell, via m_preview_canvas
+    std::optional<Vec2> CellUnder(float screen_x, float screen_y) const;
     void WireGridInteraction();
     void HandleGridMouseDown(Rml::Event& event);
     void HandleGridMouseMove(Rml::Event& event);
     void HandleGridMouseUp(Rml::Event& event);
+    void HandleGridMouseScroll(Rml::Event& event);
+    void RefreshZoomReadout();
 
     // -- RmlUi wiring --
     void LoadDocuments();
@@ -126,7 +131,13 @@ private:
     std::vector<std::unique_ptr<RmlEventListener>> m_grid_listeners;    // #edit-body mouse listeners
     fieldwidgets::Listeners m_form_listeners;                           // id/name/area_tag/category fields
     fieldwidgets::Listeners m_inspector_listeners;
+    fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
     std::vector<Rml::Element*> m_palette_icon_elements; // aligned with m_palette
+
+    // Reorder (drag-drop) finalizes here, one frame after the drag gesture
+    // itself -- see fieldwidgets::WireDragReorder's doc comment for why.
+    // Drained once at the top of OnRender.
+    std::function<void()> m_pending_action;
 
     // -- Palette --
     std::vector<PaletteEntry> m_palette;
@@ -161,9 +172,12 @@ private:
     // so the footprint that gets saved is exactly whatever was touched.
     static constexpr int kEditCols = 24;
     static constexpr int kEditRows = 24;
-    float m_grid_x = 0.0f;
-    float m_grid_y = 0.0f;
-    float m_grid_cell = 0.0f;
+
+    // World units for m_preview_canvas -- 1 cell = kBaseCellPx world-pixels
+    // at zoom 1.0. The canvas' own pan/zoom then scales this to screen space.
+    static constexpr float kBaseCellPx = 48.0f;
+    PreviewCanvas m_preview_canvas;
+    bool m_grid_valid = false;
 
     int m_output_w = 0;
     int m_output_h = 0;

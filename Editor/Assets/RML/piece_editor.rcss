@@ -73,15 +73,6 @@
     padding: 2px 0 6px 0;
 }
 
-.prefab-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 3px 0;
-}
-
 .prefab-name {
     display: inline-block;
     flex: 1 1 auto;

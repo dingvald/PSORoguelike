@@ -295,7 +295,13 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
   `RL_APP_ASSETS_DIR` fix), and the Editor now compiles `App/Source/Components/` and
   `App/Source/Render/` directly (App is a `ConsoleApp`, can't be linked) so content editors can
   enumerate/preview real entity prefabs. Catch2 coverage in
-  `Core-Test/Source/DungeonPieceSchemaTests.cpp`.
+  `Core-Test/Source/DungeonPieceSchemaTests.cpp`. Follow-up fix (alongside 4.4's Prefab Editor
+  work below): `Grid` (M3.1) had never actually caught up to "each cell a stack of stamped entity
+  prefabs" above — it only ever held one `entt::entity` per cell. `Grid` (`Core/Source/Engine/
+  World/Grid.h`) now stores `std::vector<std::vector<entt::entity>>`, preserving stamp/insertion
+  order per cell; `TileRenderer.cpp` was updated to iterate `GetEntities` (switched `sort` to
+  `stable_sort` so same-layer stamps keep their authored order). Catch2 coverage in
+  `Core-Test/Source/GridTests.cpp`.
 - **4.2 Piece editor:** Engine: none new. Editor: **Piece editor layer**. **Done:**
   `Editor/Source/Layers/PieceEditorLayer` — List/Edit shell consistent with the other content
   editors (mirrors `FeatureEditorLayer`'s shell almost directly, closer than expected once
@@ -349,13 +355,29 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
   both editors `<link>`, factored out to avoid the per-screen copy-paste UnnamedRoguelike's own
   editor layers each keep) now makes `body` transparent. Verified live in the running Editor
   with throwaway fixture pieces/entities (per this file's own verification precedent) — removed
-  once confirmed working, not kept.
+  once confirmed working, not kept. Follow-up: the Dungeon/Piece editors' preview panes were
+  refactored out into shared, content-agnostic chrome — `PreviewCanvas`
+  (`Editor/Source/UI/PreviewCanvas.{h,cpp}`: pan/zoom/auto-fit camera over arbitrary world bounds)
+  and `PreviewWindowChrome` (`Editor/Source/UI/PreviewWindowChrome.{h,cpp}`: the bordered/resizable
+  `#preview-window` DOM + zoom toolbar) — both now shared with the new Prefab Editor (see M5
+  status note below) rather than each editor hand-rolling its own grid-panel layout math.
+  `ComponentSchema` also gained an `authorable` bool (`Core/Source/Engine/ECS/ComponentSchema.h`)
+  gating whether a component may appear in entity JSON / an editor's "add component" picker at
+  all — `Position` and `PrefabIdComponent` are registered `authorable=false` (engine-derived-only,
+  never hand-authored), threaded through `EntitySchemaEmitter`'s JSON-schema emission so authoring
+  either's key is now a hard validation failure.
 - **4.5 Fixed area unlock order:** Engine: Forest→Caves→Mines→Ruins gating hook, consumed by
   the hub in M10. Editor: ordering field on the M3.2 area editor. UI: none yet.
 
 ## M5 — Entity & Stat Framework
 
-**Status:** Not started
+**Status:** Not started, though a generic **Prefab Editor** already exists ahead of schedule
+(`Editor/Source/Layers/PrefabEditorLayer`) — browse/create/edit/delete the entity-prefab JSON
+files under `App/Assets/Data/Entities/`, rendering one Inspector-style card per currently-registered
+*authorable* component (`RenderableComponent`, `SocketComponent` today; see the M4.4 follow-up note
+above for the `authorable` flag and shared `PreviewCanvas`/`PreviewWindowChrome` it builds on). It's
+deliberately generic and stats-free so far, per its own class doc comment — 5.1/5.2 below land as
+additional hand-wired sections on this same layer, not a rewrite.
 
 - **5.1 Core stat components:** Engine: ATP/ATA/MST/DFP/EVP/LCK components, four-race tagging
   (Native/A.Beast/Machine/Dark) on enemy prefabs. Editor/UI: none yet (needs 5.2's authoring

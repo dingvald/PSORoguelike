@@ -4,6 +4,8 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
+#include <vector>
 
 namespace Rml {
 class ElementDocument;
@@ -13,19 +15,24 @@ namespace psr {
 
 class Event;
 class KeyPressedEvent;
+class RmlClickListener;
 
 // The Editor's entry-point layer: a small RmlUi main menu that will list
 // sub-editors as they're built (Area, Piece, Entity, Item -- see roadmap
 // M3.2/M4.2/M5.2/M8.1). Each sub-editor milestone appends its own row id +
 // TransitionTo<>() case in ConfirmSelection() below -- Pieces (M4.2) is the
-// first.
+// first. Prefabs is the generic, stats-free entity-prefab editor (an early
+// slice of M5.2, ahead of the M5.1 stat components).
 //
-// Keyboard-only for this milestone -- mouse click wiring (RmlClickListener)
-// is M2.2 scope, added once there's more than one row worth clicking.
+// Both keyboard (Up/Down/Enter/Space) and mouse (hover selects, click
+// confirms, via RmlClickListener) drive the same MoveSelection()/
+// ConfirmSelection() pair -- theme.rcss's .menu-row:hover rule was already
+// giving every row a hover affordance despite no click ever being wired up.
 class EditorMenuLayer : public Layer
 {
 public:
     EditorMenuLayer();
+    ~EditorMenuLayer() override;
 
     void OnAttach() override;
     void OnDetach() override;
@@ -36,19 +43,23 @@ private:
 
     void RefreshSelectionHighlight();
     void MoveSelection(int delta);
+    void SelectIndex(int index);
     void ConfirmSelection();
 
     Rml::ElementDocument* m_document = nullptr;
     int m_selected_index = 0;
+    std::vector<std::unique_ptr<RmlClickListener>> m_listeners;
 
     enum Row
     {
         RowPieces = 0,
         RowDungeons = 1,
-        RowExit = 2,
-        RowCount = 3
+        RowPrefabs = 2,
+        RowExit = 3,
+        RowCount = 4
     };
-    static constexpr std::array<const char*, RowCount> kRowIds = {"menu-pieces", "menu-dungeons", "menu-exit"};
+    static constexpr std::array<const char*, RowCount> kRowIds = {"menu-pieces", "menu-dungeons", "menu-prefabs",
+                                                                   "menu-exit"};
 };
 
 } // namespace psr

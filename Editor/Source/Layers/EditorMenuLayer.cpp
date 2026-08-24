@@ -3,6 +3,8 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/DungeonEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
+#include "Layers/PrefabEditorLayer.h"
+#include "UI/RmlClickListener.h"
 
 #include <EditorFilepaths.h>
 
@@ -20,6 +22,7 @@ namespace {
 } // namespace
 
 EditorMenuLayer::EditorMenuLayer() : Layer("EditorMenuLayer") {}
+EditorMenuLayer::~EditorMenuLayer() = default;
 
 void EditorMenuLayer::OnAttach()
 {
@@ -38,11 +41,24 @@ void EditorMenuLayer::OnAttach()
 
     m_selected_index = RowPieces;
     RefreshSelectionHighlight();
+
+    for (std::size_t i = 0; i < kRowIds.size(); ++i)
+    {
+        Rml::Element* row = m_document->GetElementById(kRowIds[i]);
+        if (!row)
+            continue;
+        const int index = static_cast<int>(i);
+        auto listener = std::make_unique<RmlClickListener>([this, index] { SelectIndex(index); });
+        listener->Attach(*row);
+        m_listeners.push_back(std::move(listener));
+    }
+
     m_document->Show();
 }
 
 void EditorMenuLayer::OnDetach()
 {
+    m_listeners.clear();
     if (m_document)
     {
         m_document->Close();
@@ -95,6 +111,13 @@ void EditorMenuLayer::MoveSelection(int delta)
     RefreshSelectionHighlight();
 }
 
+void EditorMenuLayer::SelectIndex(int index)
+{
+    m_selected_index = index;
+    RefreshSelectionHighlight();
+    ConfirmSelection();
+}
+
 void EditorMenuLayer::ConfirmSelection()
 {
     switch (m_selected_index)
@@ -104,6 +127,9 @@ void EditorMenuLayer::ConfirmSelection()
         break;
     case RowDungeons:
         TransitionTo<DungeonEditorLayer>();
+        break;
+    case RowPrefabs:
+        TransitionTo<PrefabEditorLayer>();
         break;
     case RowExit:
         RequestQuit();

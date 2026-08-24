@@ -40,7 +40,7 @@ p { display: block; }
     background-color: #262932;
     color: #e6e8ec;
     border: 1px #33363f;
-    padding: 0.5em 1em;
+    padding: 0.3em 0.7em;
     text-align: center;
 }
 .btn:hover { background-color: #2f333e; border-color: #454a56; }

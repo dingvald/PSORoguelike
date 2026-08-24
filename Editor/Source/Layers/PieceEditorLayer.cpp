@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <utility>
 
 namespace psr {
 
@@ -138,6 +139,7 @@ void PieceEditorLayer::OnDetach()
 {
     m_inspector_listeners.clear();
     m_form_listeners.clear();
+    m_preview_chrome_listeners.clear();
     m_grid_listeners.clear();
     m_palette_listeners.clear();
     m_list_listeners.clear();
@@ -210,6 +212,9 @@ void PieceEditorLayer::LoadDocuments()
                         ShowScreen(Mode::List);
                         RefreshPieceList();
                     });
+    if (Rml::Element* preview_window = m_editor->GetElementById("preview-window"))
+        for (auto& listener : previewwindow::Build(*preview_window, m_preview_canvas))
+            m_preview_chrome_listeners.push_back(std::move(listener));
 
     m_editor->Show();
     WireGridInteraction();
@@ -541,26 +546,49 @@ void PieceEditorLayer::RefreshInspector()
     if (!prefab_list)
         return;
 
-    std::string markup;
+    std::vector<std::string> content;
+    content.reserve(cell->prefabs.size());
     for (const PieceCellPrefab& prefab : cell->prefabs)
     {
         const PaletteEntry* entry = PaletteFor(prefab.prefab_id);
         const std::string label = entry ? entry->id_string : std::string{"(unknown)"};
-        markup += "<div class=\"prefab-row\"><span class=\"prefab-name\">" + EscapeRml(label) + "</span>";
+        std::string row = "<span class=\"prefab-name\">" + EscapeRml(label) + "</span>";
         if (entry && entry->is_socket)
-            markup += "<div class=\"prefab-edge field-row\"></div>";
-        markup += "<span class=\"btn remove\">x</span></div>";
+            row += "<div class=\"prefab-edge field-row\"></div>";
+        content.push_back(std::move(row));
     }
-    if (cell->prefabs.empty())
-        markup = "<div class=\"list-empty\">No entities on this cell.</div>";
-    prefab_list->SetInnerRML(markup);
 
-    Rml::ElementList rows;
-    prefab_list->QuerySelectorAll(rows, ".prefab-row");
-    for (std::size_t i = 0; i < rows.size() && i < cell->prefabs.size(); ++i)
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *prefab_list, content, "<div class=\"list-empty\">No entities on this cell.</div>",
+        [this, offset](std::size_t index)
+        {
+            PieceCell* c = FindCell(offset);
+            if (!c)
+                return;
+            if (index < c->prefabs.size())
+                c->prefabs.erase(c->prefabs.begin() + static_cast<std::ptrdiff_t>(index));
+            if (c->prefabs.empty())
+                EraseCell(offset);
+            MarkDirty();
+            RefreshInspector();
+        },
+        [this, offset](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, offset, from, to]
+            {
+                PieceCell* c = FindCell(offset);
+                if (!c)
+                    return;
+                fieldwidgets::MoveElement(c->prefabs, from, to);
+                MarkDirty();
+                RefreshInspector();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < cell->prefabs.size(); ++i)
     {
         const std::size_t index = i;
-        if (Rml::Element* edge_row = rows[i]->QuerySelector(".prefab-edge"))
+        if (Rml::Element* edge_row = result.rows[i]->QuerySelector(".prefab-edge"))
             keep(fieldwidgets::BuildEnumField(*edge_row, "edge", EdgeOptions(), EdgeToString(cell->prefabs[i].edge),
                                               [this, offset, index](std::string v)
                                               {
@@ -570,26 +598,10 @@ void PieceEditorLayer::RefreshInspector()
                                                   c->prefabs[index].edge = EdgeFromString(v);
                                                   MarkDirty();
                                               }));
-
-        Rml::Element* remove_button = rows[i]->QuerySelector(".remove");
-        if (!remove_button)
-            continue;
-        auto listener = std::make_unique<RmlClickListener>(
-            [this, offset, index]
-            {
-                PieceCell* c = FindCell(offset);
-                if (!c)
-                    return;
-                if (index < c->prefabs.size())
-                    c->prefabs.erase(c->prefabs.begin() + static_cast<std::ptrdiff_t>(index));
-                if (c->prefabs.empty())
-                    EraseCell(offset);
-                MarkDirty();
-                RefreshInspector();
-            });
-        listener->Attach(*remove_button);
-        m_inspector_listeners.push_back(std::move(listener));
     }
+
+    for (auto& listener : result.listeners)
+        m_inspector_listeners.push_back(std::move(listener));
 }
 
 void PieceEditorLayer::SaveDraft()
@@ -724,9 +736,8 @@ void PieceEditorLayer::InitializeRenderer(SDL_Renderer& renderer)
     m_renderer_initialized = true;
 }
 
-bool PieceEditorLayer::GridLayout()
+bool PieceEditorLayer::UpdatePreviewCanvas()
 {
-    m_grid_cell = 0.0f;
     if (!m_editor)
         return false;
     Rml::Element* panel = m_editor->GetElementById("grid-panel");
@@ -737,25 +748,29 @@ bool PieceEditorLayer::GridLayout()
     if (size.x <= 0.0f || size.y <= 0.0f)
         return false;
 
-    float cell = std::min(size.x / static_cast<float>(kEditCols), size.y / static_cast<float>(kEditRows));
-    cell = std::clamp(cell, 8.0f, 56.0f);
-
-    m_grid_cell = cell;
-    m_grid_x = offset.x + (size.x - cell * static_cast<float>(kEditCols)) * 0.5f;
-    m_grid_y = offset.y + (size.y - cell * static_cast<float>(kEditRows)) * 0.5f;
+    const SDL_FRect panel_rect{offset.x, offset.y, size.x, size.y};
+    const SDL_FRect content_bounds{0.0f, 0.0f, static_cast<float>(kEditCols) * kBaseCellPx,
+                                    static_cast<float>(kEditRows) * kBaseCellPx};
+    m_preview_canvas.Update(panel_rect, content_bounds);
     return true;
 }
 
-std::optional<Vec2> PieceEditorLayer::CellUnder(float mouse_x, float mouse_y) const
+SDL_FRect PieceEditorLayer::CellBox(Vec2 cell) const
 {
-    if (m_grid_cell <= 0.0f)
+    return m_preview_canvas.WorldToScreen(SDL_FRect{static_cast<float>(cell.x) * kBaseCellPx,
+                                                     static_cast<float>(cell.y) * kBaseCellPx, kBaseCellPx,
+                                                     kBaseCellPx});
+}
+
+std::optional<Vec2> PieceEditorLayer::CellUnder(float screen_x, float screen_y) const
+{
+    if (!m_grid_valid)
         return std::nullopt;
-    const float local_x = mouse_x - m_grid_x;
-    const float local_y = mouse_y - m_grid_y;
-    if (local_x < 0.0f || local_y < 0.0f)
+    const SDL_FPoint world = m_preview_canvas.ScreenToWorld(SDL_FPoint{screen_x, screen_y});
+    if (world.x < 0.0f || world.y < 0.0f)
         return std::nullopt;
-    const int cell_x = static_cast<int>(local_x / m_grid_cell);
-    const int cell_y = static_cast<int>(local_y / m_grid_cell);
+    const int cell_x = static_cast<int>(world.x / kBaseCellPx);
+    const int cell_y = static_cast<int>(world.y / kBaseCellPx);
     if (cell_x >= kEditCols || cell_y >= kEditRows)
         return std::nullopt;
     return Vec2{cell_x, cell_y};
@@ -763,7 +778,9 @@ std::optional<Vec2> PieceEditorLayer::CellUnder(float mouse_x, float mouse_y) co
 
 void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, int output_h)
 {
-    const bool have_grid = GridLayout();
+    const bool have_grid = UpdatePreviewCanvas();
+    m_grid_valid = have_grid;
+    RefreshZoomReadout();
 
     const bool gpu_ready = m_tile_atlas && m_tile_atlas->IsLoaded() && m_gpu_pipeline && m_gpu_pipeline->IsLoaded();
     const Vec2 atlas_size = gpu_ready ? m_tile_atlas->GetSize() : Vec2{0, 0};
@@ -777,9 +794,7 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                 if (cell.offset.x < 0 || cell.offset.y < 0 || cell.offset.x >= kEditCols ||
                     cell.offset.y >= kEditRows)
                     continue;
-                const SDL_FRect box{m_grid_x + static_cast<float>(cell.offset.x) * m_grid_cell,
-                                    m_grid_y + static_cast<float>(cell.offset.y) * m_grid_cell, m_grid_cell,
-                                    m_grid_cell};
+                const SDL_FRect box = CellBox(cell.offset);
                 for (const PieceCellPrefab& prefab : cell.prefabs)
                 {
                     const PaletteEntry* entry = PaletteFor(prefab.prefab_id);
@@ -829,15 +844,12 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
         for (int y = 0; y < kEditRows; ++y)
             for (int x = 0; x < kEditCols; ++x)
             {
-                const SDL_FRect box{m_grid_x + static_cast<float>(x) * m_grid_cell,
-                                    m_grid_y + static_cast<float>(y) * m_grid_cell, m_grid_cell, m_grid_cell};
+                const SDL_FRect box = CellBox(Vec2{x, y});
                 SDL_RenderRect(&renderer, &box);
             }
         if (m_selected_cell)
         {
-            const SDL_FRect box{m_grid_x + static_cast<float>(m_selected_cell->x) * m_grid_cell,
-                                m_grid_y + static_cast<float>(m_selected_cell->y) * m_grid_cell, m_grid_cell,
-                                m_grid_cell};
+            const SDL_FRect box = CellBox(*m_selected_cell);
             SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 255);
             SDL_RenderRect(&renderer, &box);
         }
@@ -846,6 +858,15 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
 
 void PieceEditorLayer::OnRender(SDL_Renderer* renderer)
 {
+    // Drains a reorder requested by fieldwidgets::WireDragReorder, if any --
+    // see its doc comment for why this can't run synchronously from the
+    // "dragdrop" handler itself.
+    if (m_pending_action)
+    {
+        const std::function<void()> action = std::exchange(m_pending_action, nullptr);
+        action();
+    }
+
     if (!renderer)
         return;
 
@@ -885,6 +906,11 @@ void PieceEditorLayer::WireGridInteraction()
     auto up = std::make_unique<RmlEventListener>("mouseup", [this](Rml::Event& event) { HandleGridMouseUp(event); });
     up->Attach(*target);
     m_grid_listeners.push_back(std::move(up));
+
+    auto scroll = std::make_unique<RmlEventListener>(
+        "mousescroll", [this](Rml::Event& event) { HandleGridMouseScroll(event); });
+    scroll->Attach(*target);
+    m_grid_listeners.push_back(std::move(scroll));
 }
 
 void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
@@ -892,6 +918,10 @@ void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
     const int button = event.GetParameter<int>("button", -1);
     const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+
+    // Middle-button drag pans the preview -- handled independently of the
+    // cell hit-test below, which is only about left/right-click painting.
+    m_preview_canvas.OnMouseDown(mouse_x, mouse_y, button);
 
     const std::optional<Vec2> cell = CellUnder(mouse_x, mouse_y);
     if (!cell)
@@ -918,10 +948,12 @@ void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
 
 void PieceEditorLayer::HandleGridMouseMove(Rml::Event& event)
 {
-    if (!m_painting)
-        return;
     const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+    m_preview_canvas.OnMouseMove(mouse_x, mouse_y);
+
+    if (!m_painting)
+        return;
     const std::optional<Vec2> cell = CellUnder(mouse_x, mouse_y);
     if (!cell)
         return;
@@ -933,10 +965,37 @@ void PieceEditorLayer::HandleGridMouseMove(Rml::Event& event)
 
 void PieceEditorLayer::HandleGridMouseUp(Rml::Event& event)
 {
-    if (event.GetParameter<int>("button", -1) == 0 && m_painting)
+    const int button = event.GetParameter<int>("button", -1);
+    m_preview_canvas.OnMouseUp(button);
+    if (button == 0 && m_painting)
     {
         m_painting = false;
         RefreshInspector();
+    }
+}
+
+void PieceEditorLayer::HandleGridMouseScroll(Rml::Event& event)
+{
+    const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+    const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+    const float wheel_delta = event.GetParameter<float>("wheel_delta", 0.0f);
+    m_preview_canvas.OnMouseScroll(mouse_x, mouse_y, wheel_delta);
+    event.StopPropagation();
+}
+
+void PieceEditorLayer::RefreshZoomReadout()
+{
+    if (!m_editor)
+        return;
+    if (Rml::Element* readout = m_editor->GetElementById("zoom-readout"))
+    {
+        // Only touch the DOM when the value actually changes: SetInnerRML
+        // destroys and recreates the text node every call, and doing that
+        // unconditionally every frame never gives the new node a chance to
+        // survive a layout pass -- it renders as a permanent zero-size box.
+        const std::string text = std::to_string(m_preview_canvas.ZoomPercent()) + "%";
+        if (readout->GetInnerRML() != text)
+            readout->SetInnerRML(text);
     }
 }
 

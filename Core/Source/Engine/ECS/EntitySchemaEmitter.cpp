@@ -33,13 +33,17 @@ namespace {
         return ObjectSchemaFromFields(component.fields, alloc);
     }
 
-    // The "components" object: keyed strictly by the registered component ids,
-    // each value validated against that component's body schema.
+    // The "components" object: keyed strictly by the registered *authorable*
+    // component ids, each value validated against that component's body
+    // schema. Non-authorable components (e.g. Position) are omitted entirely,
+    // so authoring their key at all is a validation failure, not just hidden
+    // from the editor.
     Value ComponentsSchema(const EntitySchemaModel& model, Allocator& alloc)
     {
         Value properties{rapidjson::kObjectType};
         for (const ComponentSchema& component : model.components)
-            properties.AddMember(Key(component.id, alloc), ComponentBodySchema(component, alloc), alloc);
+            if (component.authorable)
+                properties.AddMember(Key(component.id, alloc), ComponentBodySchema(component, alloc), alloc);
 
         Value node = TypedObject("object", alloc);
         node.AddMember("additionalProperties", false, alloc);

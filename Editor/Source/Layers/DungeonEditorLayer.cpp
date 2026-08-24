@@ -29,6 +29,7 @@
 #include <array>
 #include <cstddef>
 #include <random>
+#include <utility>
 
 namespace psr {
 
@@ -104,11 +105,11 @@ void DungeonEditorLayer::OnAttach()
 
 void DungeonEditorLayer::OnDetach()
 {
-    m_lock_row_button_listeners.clear();
-    m_piece_row_button_listeners.clear();
     m_lock_row_listeners.clear();
     m_piece_row_listeners.clear();
     m_form_listeners.clear();
+    m_preview_chrome_listeners.clear();
+    m_preview_listeners.clear();
     m_list_listeners.clear();
     m_listeners.clear();
 
@@ -200,8 +201,12 @@ void DungeonEditorLayer::LoadDocuments()
                         ShowScreen(Mode::List);
                         RefreshDungeonList();
                     });
+    if (Rml::Element* preview_window = m_editor->GetElementById("preview-window"))
+        for (auto& listener : previewwindow::Build(*preview_window, m_preview_canvas))
+            m_preview_chrome_listeners.push_back(std::move(listener));
 
     m_editor->Show();
+    WirePreviewInteraction();
 }
 
 void DungeonEditorLayer::WireButtonClick(const char* element_id, std::function<void()> on_click)
@@ -214,6 +219,64 @@ void DungeonEditorLayer::WireButtonClick(const char* element_id, std::function<v
     auto listener = std::make_unique<RmlClickListener>(std::move(on_click));
     listener->Attach(*element);
     m_listeners.push_back(std::move(listener));
+}
+
+void DungeonEditorLayer::WirePreviewInteraction()
+{
+    if (!m_editor)
+        return;
+    Rml::Element* target = m_editor->GetElementById("edit-body");
+    if (!target)
+        return;
+
+    auto down = std::make_unique<RmlEventListener>(
+        "mousedown", [this](Rml::Event& event) { HandlePreviewMouseDown(event); });
+    down->Attach(*target);
+    m_preview_listeners.push_back(std::move(down));
+
+    auto move = std::make_unique<RmlEventListener>(
+        "mousemove", [this](Rml::Event& event) { HandlePreviewMouseMove(event); });
+    move->Attach(*target);
+    m_preview_listeners.push_back(std::move(move));
+
+    auto up =
+        std::make_unique<RmlEventListener>("mouseup", [this](Rml::Event& event) { HandlePreviewMouseUp(event); });
+    up->Attach(*target);
+    m_preview_listeners.push_back(std::move(up));
+
+    auto scroll = std::make_unique<RmlEventListener>(
+        "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
+    scroll->Attach(*target);
+    m_preview_listeners.push_back(std::move(scroll));
+}
+
+void DungeonEditorLayer::HandlePreviewMouseDown(Rml::Event& event)
+{
+    const int button = event.GetParameter<int>("button", -1);
+    const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+    const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+    m_preview_canvas.OnMouseDown(mouse_x, mouse_y, button);
+}
+
+void DungeonEditorLayer::HandlePreviewMouseMove(Rml::Event& event)
+{
+    const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+    const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+    m_preview_canvas.OnMouseMove(mouse_x, mouse_y);
+}
+
+void DungeonEditorLayer::HandlePreviewMouseUp(Rml::Event& event)
+{
+    m_preview_canvas.OnMouseUp(event.GetParameter<int>("button", -1));
+}
+
+void DungeonEditorLayer::HandlePreviewMouseScroll(Rml::Event& event)
+{
+    const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+    const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+    const float wheel_delta = event.GetParameter<float>("wheel_delta", 0.0f);
+    m_preview_canvas.OnMouseScroll(mouse_x, mouse_y, wheel_delta);
+    event.StopPropagation();
 }
 
 void DungeonEditorLayer::ShowScreen(Mode mode)
@@ -457,19 +520,34 @@ void DungeonEditorLayer::RefreshPieceRefRows()
     if (!m_editor)
         return;
     m_piece_row_listeners.clear();
-    m_piece_row_button_listeners.clear();
 
     Rml::Element* list = m_editor->GetElementById("piece-ref-list");
     if (!list)
         return;
 
-    std::string markup;
-    for (std::size_t i = 0; i < m_draft.pieces.size(); ++i)
-        markup += "<div class=\"ref-row\"><div class=\"ref-id field-row\"></div><div class=\"ref-weight "
-                  "field-row\"></div><div class=\"ref-max field-row\"></div><span class=\"btn remove\">x</span></div>";
-    if (m_draft.pieces.empty())
-        markup = "<div class=\"list-empty\">No pieces referenced yet.</div>";
-    list->SetInnerRML(markup);
+    const std::vector<std::string> content(
+        m_draft.pieces.size(),
+        "<div class=\"ref-id field-row\"></div><div class=\"ref-weight field-row\"></div><div class=\"ref-max "
+        "field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No pieces referenced yet.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_draft.pieces.size())
+                m_draft.pieces.erase(m_draft.pieces.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshPieceRefRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_draft.pieces, from, to);
+                MarkDirty();
+                RefreshPieceRefRows();
+            };
+        });
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
     {
@@ -477,14 +555,12 @@ void DungeonEditorLayer::RefreshPieceRefRows()
             m_piece_row_listeners.push_back(std::move(listener));
     };
 
-    Rml::ElementList rows;
-    list->QuerySelectorAll(rows, ".ref-row");
-    for (std::size_t i = 0; i < rows.size() && i < m_draft.pieces.size(); ++i)
+    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.pieces.size(); ++i)
     {
         const std::size_t index = i;
         const DungeonPieceRef& ref = m_draft.pieces[i];
 
-        if (Rml::Element* row = rows[i]->QuerySelector(".ref-id"))
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-id"))
             keep(fieldwidgets::BuildNameIdField(*row, "piece_id", ref.piece_id, LabelFor(ref.piece_id),
                                                 [this, index](std::uint32_t id, std::string)
                                                 {
@@ -492,7 +568,7 @@ void DungeonEditorLayer::RefreshPieceRefRows()
                                                         m_draft.pieces[index].piece_id = id;
                                                     MarkDirty();
                                                 }));
-        if (Rml::Element* row = rows[i]->QuerySelector(".ref-weight"))
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-weight"))
             keep(fieldwidgets::BuildFloatField(*row, "weight", ref.weight,
                                                [this, index](float v)
                                                {
@@ -500,7 +576,7 @@ void DungeonEditorLayer::RefreshPieceRefRows()
                                                        m_draft.pieces[index].weight = v;
                                                    MarkDirty();
                                                }));
-        if (Rml::Element* row = rows[i]->QuerySelector(".ref-max"))
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-max"))
             keep(fieldwidgets::BuildIntField(*row, "max_occurrences", ref.max_occurrences,
                                              [this, index](int v)
                                              {
@@ -508,21 +584,10 @@ void DungeonEditorLayer::RefreshPieceRefRows()
                                                      m_draft.pieces[index].max_occurrences = v;
                                                  MarkDirty();
                                              }));
-
-        if (Rml::Element* remove_button = rows[i]->QuerySelector(".remove"))
-        {
-            auto listener = std::make_unique<RmlClickListener>(
-                [this, index]
-                {
-                    if (index < m_draft.pieces.size())
-                        m_draft.pieces.erase(m_draft.pieces.begin() + static_cast<std::ptrdiff_t>(index));
-                    MarkDirty();
-                    RefreshPieceRefRows();
-                });
-            listener->Attach(*remove_button);
-            m_piece_row_button_listeners.push_back(std::move(listener));
-        }
     }
+
+    for (auto& listener : result.listeners)
+        m_piece_row_listeners.push_back(std::move(listener));
 }
 
 void DungeonEditorLayer::RefreshLockRows()
@@ -530,19 +595,32 @@ void DungeonEditorLayer::RefreshLockRows()
     if (!m_editor)
         return;
     m_lock_row_listeners.clear();
-    m_lock_row_button_listeners.clear();
 
     Rml::Element* list = m_editor->GetElementById("lock-list");
     if (!list)
         return;
 
-    std::string markup;
-    for (std::size_t i = 0; i < m_draft.locks.size(); ++i)
-        markup += "<div class=\"lock-row\"><div class=\"lock-type field-row\"></div><div class=\"lock-count "
-                  "field-row\"></div><span class=\"btn remove\">x</span></div>";
-    if (m_draft.locks.empty())
-        markup = "<div class=\"list-empty\">No locks configured.</div>";
-    list->SetInnerRML(markup);
+    const std::vector<std::string> content(
+        m_draft.locks.size(), "<div class=\"lock-type field-row\"></div><div class=\"lock-count field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No locks configured.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_draft.locks.size())
+                m_draft.locks.erase(m_draft.locks.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshLockRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_draft.locks, from, to);
+                MarkDirty();
+                RefreshLockRows();
+            };
+        });
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
     {
@@ -550,14 +628,12 @@ void DungeonEditorLayer::RefreshLockRows()
             m_lock_row_listeners.push_back(std::move(listener));
     };
 
-    Rml::ElementList rows;
-    list->QuerySelectorAll(rows, ".lock-row");
-    for (std::size_t i = 0; i < rows.size() && i < m_draft.locks.size(); ++i)
+    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.locks.size(); ++i)
     {
         const std::size_t index = i;
         const DungeonLockConfig& lock = m_draft.locks[i];
 
-        if (Rml::Element* row = rows[i]->QuerySelector(".lock-type"))
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".lock-type"))
             keep(fieldwidgets::BuildStringField(*row, "lock_type", lock.lock_type,
                                                 [this, index](std::string v)
                                                 {
@@ -565,7 +641,7 @@ void DungeonEditorLayer::RefreshLockRows()
                                                         m_draft.locks[index].lock_type = std::move(v);
                                                     MarkDirty();
                                                 }));
-        if (Rml::Element* row = rows[i]->QuerySelector(".lock-count"))
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".lock-count"))
             keep(fieldwidgets::BuildIntField(*row, "count", lock.count,
                                              [this, index](int v)
                                              {
@@ -573,21 +649,10 @@ void DungeonEditorLayer::RefreshLockRows()
                                                      m_draft.locks[index].count = v;
                                                  MarkDirty();
                                              }));
-
-        if (Rml::Element* remove_button = rows[i]->QuerySelector(".remove"))
-        {
-            auto listener = std::make_unique<RmlClickListener>(
-                [this, index]
-                {
-                    if (index < m_draft.locks.size())
-                        m_draft.locks.erase(m_draft.locks.begin() + static_cast<std::ptrdiff_t>(index));
-                    MarkDirty();
-                    RefreshLockRows();
-                });
-            listener->Attach(*remove_button);
-            m_lock_row_button_listeners.push_back(std::move(listener));
-        }
     }
+
+    for (auto& listener : result.listeners)
+        m_lock_row_listeners.push_back(std::move(listener));
 }
 
 void DungeonEditorLayer::SaveDraft()
@@ -716,15 +781,18 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
 
     const int cols = max_x - min_x + 1;
     const int rows = max_y - min_y + 1;
-    float cell = std::min(panel_size.x / static_cast<float>(cols), panel_size.y / static_cast<float>(rows));
-    cell = std::clamp(cell, 2.0f, 56.0f);
-    const float grid_x = panel_offset.x + (panel_size.x - cell * static_cast<float>(cols)) * 0.5f;
-    const float grid_y = panel_offset.y + (panel_size.y - cell * static_cast<float>(rows)) * 0.5f;
+
+    const SDL_FRect panel_rect{panel_offset.x, panel_offset.y, panel_size.x, panel_size.y};
+    const SDL_FRect content_bounds{0.0f, 0.0f, static_cast<float>(cols) * kBaseCellPx,
+                                    static_cast<float>(rows) * kBaseCellPx};
+    m_preview_canvas.Update(panel_rect, content_bounds);
+    RefreshZoomReadout();
 
     const auto cell_box = [&](Vec2 world) -> SDL_FRect
     {
-        return SDL_FRect{grid_x + static_cast<float>(world.x - min_x) * cell,
-                         grid_y + static_cast<float>(world.y - min_y) * cell, cell, cell};
+        return m_preview_canvas.WorldToScreen(SDL_FRect{static_cast<float>(world.x - min_x) * kBaseCellPx,
+                                                         static_cast<float>(world.y - min_y) * kBaseCellPx,
+                                                         kBaseCellPx, kBaseCellPx});
     };
 
     const bool gpu_ready = m_tile_atlas && m_tile_atlas->IsLoaded() && m_gpu_pipeline && m_gpu_pipeline->IsLoaded();
@@ -803,8 +871,33 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
     }
 }
 
+void DungeonEditorLayer::RefreshZoomReadout()
+{
+    if (!m_editor)
+        return;
+    if (Rml::Element* readout = m_editor->GetElementById("zoom-readout"))
+    {
+        // Only touch the DOM when the value actually changes: SetInnerRML
+        // destroys and recreates the text node every call, and doing that
+        // unconditionally every frame never gives the new node a chance to
+        // survive a layout pass -- it renders as a permanent zero-size box.
+        const std::string text = std::to_string(m_preview_canvas.ZoomPercent()) + "%";
+        if (readout->GetInnerRML() != text)
+            readout->SetInnerRML(text);
+    }
+}
+
 void DungeonEditorLayer::OnRender(SDL_Renderer* renderer)
 {
+    // Drains a reorder requested by fieldwidgets::WireDragReorder, if any --
+    // see its doc comment for why this can't run synchronously from the
+    // "dragdrop" handler itself.
+    if (m_pending_action)
+    {
+        const std::function<void()> action = std::exchange(m_pending_action, nullptr);
+        action();
+    }
+
     if (!renderer)
         return;
 
