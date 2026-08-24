@@ -371,17 +371,35 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 
 ## M5 — Entity & Stat Framework
 
-**Status:** Not started, though a generic **Prefab Editor** already exists ahead of schedule
+**Status:** 5.1 done. A generic **Prefab Editor** already exists ahead of schedule
 (`Editor/Source/Layers/PrefabEditorLayer`) — browse/create/edit/delete the entity-prefab JSON
 files under `App/Assets/Data/Entities/`, rendering one Inspector-style card per currently-registered
-*authorable* component (`RenderableComponent`, `SocketComponent` today; see the M4.4 follow-up note
-above for the `authorable` flag and shared `PreviewCanvas`/`PreviewWindowChrome` it builds on). It's
-deliberately generic and stats-free so far, per its own class doc comment — 5.1/5.2 below land as
-additional hand-wired sections on this same layer, not a rewrite.
+*authorable* component (see the M4.4 follow-up note above for the `authorable` flag and shared
+`PreviewCanvas`/`PreviewWindowChrome` it builds on). 5.1's stat/race sections below were added as
+additional hand-wired cards on this same layer, per its own class doc comment, not a rewrite.
 
 - **5.1 Core stat components:** Engine: ATP/ATA/MST/DFP/EVP/LCK components, four-race tagging
-  (Native/A.Beast/Machine/Dark) on enemy prefabs. Editor/UI: none yet (needs 5.2's authoring
-  UI).
+  (Native/A.Beast/Machine/Dark) on enemy prefabs. Editor: wired into the Prefab Editor now (pulled
+  forward from 5.2, per the user's brief) rather than deferred to a dedicated entity/enemy editor
+  pass. **Done:** `StatsComponent` (`Core/Source/Engine/ECS/StatsComponent.h`) is a single struct
+  of six `int` fields (`atp`/`ata`/`mst`/`dfp`/`evp`/`lck`, all defaulting to `0` — no balance
+  numbers are authored here per CLAUDE.md's division of labor). `RaceComponent`
+  (`Core/Source/Engine/ECS/RaceComponent.h`) holds a single `race_id` field — deliberately a
+  `NameId` (a string hashed via `entt::hashed_string`, resolved through `NameIdRegistry`), not a
+  compile-time `enum class`, per the user's explicit brief: new races can be added or removed
+  purely as authored data, no engine recompile, the same convention already used for
+  `texture_id`/`fallback_prefab_id`. Both register through the normal
+  `ComponentSchemaRegistrar` pipeline (authorable, `FieldKind::Integer` ×6 and `FieldKind::NameId`
+  respectively) with zero new schema plumbing — the registrar's existing `is_integral_v`/
+  `is_same_v<..., std::uint32_t>` branches already cover both shapes. Registered alongside the
+  other App components in `App/Source/Components/RegisterComponents.cpp`. `PrefabEditorLayer`
+  gained "Stats" and "Race" Inspector cards (`kComponentKinds`, `ReadStatsBody`/`WriteStatsBody`,
+  `RefreshEditForm`'s field wiring) using the existing `BuildIntField`/`BuildNameIdField` widgets —
+  no new widget types. Verified live in the running Editor (added both cards to the `test` prefab,
+  edited values, saved, confirmed the JSON round-trip, e.g. `"race": { "race_id": "native" }`) —
+  the test prefab itself was reverted afterward, per this file's own throwaway-fixture convention.
+  Catch2 coverage in `Core-Test/Source/StatsRaceComponentTests.cpp` (schema shape/authorable, plus
+  a `JsonEntityLoader` round-trip asserting `race_id` hashes and registers its label correctly).
 - **5.2 Entity/enemy editor:** Engine: enemy prefab schema (stats, race, sprite ref, spawn
   weight). Editor: **Entity editor layer** — stat field forms, race picker, sprite picker
   (mirrors `EntityEditorLayer` + `EntityFieldForms`). UI: none (authoring only).

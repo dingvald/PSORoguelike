@@ -2,7 +2,9 @@
 
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
+#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/SocketComponent.h"
+#include "Engine/ECS/StatsComponent.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
@@ -37,20 +39,22 @@ class RmlEventListener;
 
 // The Prefab Editor: browse/create/delete entity prefabs -- the JSON files
 // under App/Assets/Data/Entities/ that PieceEditorLayer's palette stamps into
-// piece cells (see Core/Engine/Dungeon/DungeonPiece.h). Deliberately generic
-// and stats-free: one form section per currently-registered *authorable*
-// component with editor support (RenderableComponent, SocketComponent), not
-// an enemy-specific "Entity editor" with stat fields -- those land with
-// roadmap M5.1/M5.2 as additional sections here, not a rewrite. Position and
-// PrefabIdComponent are never exposed; both are non-authorable per their own
-// doc comments (engine-derived-only: spawn position, clone-source id).
+// piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
+// currently-registered *authorable* component with editor support
+// (RenderableComponent, SocketComponent, StatsComponent, RaceComponent) --
+// not a bespoke enemy-specific "Entity editor"; a dedicated stat-forms/race-
+// picker pass (roadmap M5.2) can still build further UI on these same
+// sections later. Position and PrefabIdComponent are never exposed; both are
+// non-authorable per their own doc comments (engine-derived-only: spawn
+// position, clone-source id).
 //
 // Unlike PieceEditorLayer/DungeonEditorLayer, a draft is held as a raw
 // rapidjson::Document (not a typed C++ struct) and only its known
-// "components".{renderable,socket} members are rewritten on save -- every
-// other member (including a future component this build doesn't know about)
-// round-trips untouched. There is no reusable Core "Entity" struct the way
-// DungeonPiece/Dungeon exist; a prefab is purely entt::meta-driven data.
+// "components".{renderable,socket,stats,race} members are rewritten on save
+// -- every other member (including a future component this build doesn't
+// know about) round-trips untouched. There is no reusable Core "Entity"
+// struct the way DungeonPiece/Dungeon exist; a prefab is purely entt::meta-
+// driven data.
 class PrefabEditorLayer : public Layer
 {
 public:
@@ -85,7 +89,7 @@ private:
 
     // -- Draft load/save (JSON <-> typed fields) --
     void LoadDraftFromDocument(rapidjson::Document document);
-    void ApplyDraftToDocument(); // rewrites only components.{renderable,socket}
+    void ApplyDraftToDocument(); // rewrites only components.{renderable,socket,stats,race}
     void SaveDraft();
 
     // -- Edit mode: form --
@@ -152,11 +156,12 @@ private:
 
     // -- Edit state: known/editable components --
     // Presence AND display order of a prefab's components (a subset of
-    // {"renderable","socket"}) -- rendered as one Inspector-style card per
-    // entry, in this order. Populated from components' JSON member order on
-    // load (rapidjson preserves insertion order) and rewritten back in this
-    // same order on save (see ApplyDraftToDocument), so drag-reorder persists
-    // to disk without any new schema.
+    // {"renderable","socket","stats","race"}) -- rendered as one
+    // Inspector-style card per entry, in this order. Populated from
+    // components' JSON member order on load (rapidjson preserves insertion
+    // order) and rewritten back in this same order on save (see
+    // ApplyDraftToDocument), so drag-reorder persists to disk without any new
+    // schema.
     std::vector<std::string> m_component_order;
     bool HasComponent(std::string_view key) const;
 
@@ -164,6 +169,9 @@ private:
     std::string m_renderable_texture_name;
     SocketComponent m_socket;
     std::string m_socket_fallback_name;
+    StatsComponent m_stats;
+    RaceComponent m_race;
+    std::string m_race_name;
 
     // -- Shared render resources (lazy) --
     bool m_renderer_initialized = false;

@@ -246,6 +246,52 @@ namespace {
         return object;
     }
 
+    int ReadInt(const rapidjson::Value& object, const char* key, int fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsInt())
+            return fallback;
+        return it->value.GetInt();
+    }
+
+    StatsComponent ReadStatsBody(const rapidjson::Value& body)
+    {
+        StatsComponent stats;
+        stats.atp = ReadInt(body, "atp", 0);
+        stats.ata = ReadInt(body, "ata", 0);
+        stats.mst = ReadInt(body, "mst", 0);
+        stats.dfp = ReadInt(body, "dfp", 0);
+        stats.evp = ReadInt(body, "evp", 0);
+        stats.lck = ReadInt(body, "lck", 0);
+        return stats;
+    }
+
+    rapidjson::Value WriteStatsBody(const StatsComponent& stats, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("atp", stats.atp, allocator);
+        object.AddMember("ata", stats.ata, allocator);
+        object.AddMember("mst", stats.mst, allocator);
+        object.AddMember("dfp", stats.dfp, allocator);
+        object.AddMember("evp", stats.evp, allocator);
+        object.AddMember("lck", stats.lck, allocator);
+        return object;
+    }
+
+    RaceComponent ReadRaceBody(const rapidjson::Value& body)
+    {
+        RaceComponent race;
+        race.race_id = ReadNameId(body, "race_id", 0);
+        return race;
+    }
+
+    rapidjson::Value WriteRaceBody(const RaceComponent& race, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("race_id", WriteNameId(race.race_id, allocator), allocator);
+        return object;
+    }
+
     // Per-kind chrome for an Inspector-style component card: the accent dot
     // colour (reusing existing theme.rcss/palette accents, not a new
     // palette), the card's title, and its body markup -- the same fixed-id
@@ -261,7 +307,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 2> kComponentKinds = {
+    constexpr std::array<ComponentKind, 4> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -272,7 +318,15 @@ namespace {
         {"socket", "Socket", "#4caf82",
          "<div id=\"field-fallback-prefab\" class=\"field-row\"></div>"
          "<h3>Tags<span id=\"add-tag\" class=\"btn\">Add Tag</span></h3>"
-         "<div id=\"tag-list\" class=\"ref-scroll\"></div>"}}};
+         "<div id=\"tag-list\" class=\"ref-scroll\"></div>"},
+        {"stats", "Stats", "#e8a33d",
+         "<div id=\"field-atp\" class=\"field-row\"></div>"
+         "<div id=\"field-ata\" class=\"field-row\"></div>"
+         "<div id=\"field-mst\" class=\"field-row\"></div>"
+         "<div id=\"field-dfp\" class=\"field-row\"></div>"
+         "<div id=\"field-evp\" class=\"field-row\"></div>"
+         "<div id=\"field-lck\" class=\"field-row\"></div>"},
+        {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -619,7 +673,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "socket")
+        if (key == "renderable" || key == "socket" || key == "stats" || key == "race")
             m_component_order.emplace_back(key);
     }
 
@@ -628,6 +682,11 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 
     m_socket = components.HasMember("socket") ? ReadSocketBody(components["socket"]) : SocketComponent{};
     m_socket_fallback_name = LabelFor(m_socket.fallback_prefab_id);
+
+    m_stats = components.HasMember("stats") ? ReadStatsBody(components["stats"]) : StatsComponent{};
+
+    m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
+    m_race_name = LabelFor(m_race.race_id);
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -821,6 +880,60 @@ void PrefabEditorLayer::RefreshEditForm()
                                                 }
                                                 MarkDirty();
                                             }));
+    if (Rml::Element* row = m_editor->GetElementById("field-atp"))
+        keep(fieldwidgets::BuildIntField(*row, "atp", m_stats.atp,
+                                         [this](int v)
+                                         {
+                                             m_stats.atp = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ata"))
+        keep(fieldwidgets::BuildIntField(*row, "ata", m_stats.ata,
+                                         [this](int v)
+                                         {
+                                             m_stats.ata = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-mst"))
+        keep(fieldwidgets::BuildIntField(*row, "mst", m_stats.mst,
+                                         [this](int v)
+                                         {
+                                             m_stats.mst = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-dfp"))
+        keep(fieldwidgets::BuildIntField(*row, "dfp", m_stats.dfp,
+                                         [this](int v)
+                                         {
+                                             m_stats.dfp = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-evp"))
+        keep(fieldwidgets::BuildIntField(*row, "evp", m_stats.evp,
+                                         [this](int v)
+                                         {
+                                             m_stats.evp = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-lck"))
+        keep(fieldwidgets::BuildIntField(*row, "lck", m_stats.lck,
+                                         [this](int v)
+                                         {
+                                             m_stats.lck = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-race-id"))
+        keep(fieldwidgets::BuildNameIdField(*row, "race_id", m_race.race_id, m_race_name,
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_race.race_id = id;
+                                                if (!name.empty())
+                                                {
+                                                    NameIdRegistry::Register(id, name);
+                                                    m_race_name = std::move(name);
+                                                }
+                                                MarkDirty();
+                                            }));
 
     if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
     {
@@ -922,7 +1035,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "socket"})
+    for (const char* key : {"renderable", "socket", "stats", "race"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -933,6 +1046,10 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteRenderableBody(m_renderable, allocator);
         else if (key == "socket")
             body = WriteSocketBody(m_socket, allocator);
+        else if (key == "stats")
+            body = WriteStatsBody(m_stats, allocator);
+        else if (key == "race")
+            body = WriteRaceBody(m_race, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);
