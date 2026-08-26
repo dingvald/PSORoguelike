@@ -5,7 +5,7 @@
             "texture_id": "floor",
             "texture_size": { "x": 16, "y": 24 },
             "uv": { "x": 0, "y": 0 },
-            "color_1": "#ffffffff",
+            "color_1": "#8fd616ff",
             "color_2": "#ffffffff",
             "render_layer": 0
         }

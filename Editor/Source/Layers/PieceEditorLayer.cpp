@@ -785,7 +785,13 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
     const bool gpu_ready = m_tile_atlas && m_tile_atlas->IsLoaded() && m_gpu_pipeline && m_gpu_pipeline->IsLoaded();
     const Vec2 atlas_size = gpu_ready ? m_tile_atlas->GetSize() : Vec2{0, 0};
 
-    std::vector<TileVertex> vertices;
+    // Kept as two separate vertex batches (rather than one combined draw)
+    // because only grid_vertices lives inside "#grid-panel" -- palette icons
+    // sit in the side "#palette-list" instead, and clipping the whole draw to
+    // the panel rect (see below) would clip them out entirely rather than
+    // just the grid content it's meant to contain.
+    std::vector<TileVertex> grid_vertices;
+    std::vector<TileVertex> palette_vertices;
     if (gpu_ready && atlas_size.x > 0 && atlas_size.y > 0)
     {
         if (have_grid)
@@ -803,8 +809,8 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                     const RenderableTile& r = entry->renderable;
                     if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x,
                                                                                    r.texture_size.y, r.uv.x, r.uv.y))
-                        AppendSpriteQuad(vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size, r.color_1,
-                                         r.color_2, output_w, output_h);
+                        AppendSpriteQuad(grid_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size,
+                                         r.color_1, r.color_2, output_w, output_h);
                 }
             }
 
@@ -828,18 +834,24 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                         m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x, r.texture_size.y, r.uv.x, r.uv.y))
                 {
                     const SDL_FRect box{pos.x, pos.y, size.x, size.y};
-                    AppendSpriteQuad(vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size, r.color_1,
-                                     r.color_2, output_w, output_h);
+                    AppendSpriteQuad(palette_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size,
+                                     r.color_1, r.color_2, output_w, output_h);
                 }
             }
         }
     }
 
-    if (!vertices.empty())
-        m_gpu_pipeline->Draw(renderer, *m_tile_atlas->GetGpuTexture(), vertices, output_w, output_h);
-
     if (have_grid)
     {
+        // Clip the grid-panel content (cell sprites, grid lines, selected-cell
+        // highlight) to the panel's on-screen rect so it can't bleed into the
+        // side column when the preview window is shrunk (via its resize
+        // handle) smaller than the grid's current pan/zoom fit.
+        const PreviewCanvasClipScope clip_scope(renderer, m_preview_canvas.PanelRect());
+
+        if (!grid_vertices.empty())
+            m_gpu_pipeline->Draw(renderer, *m_tile_atlas->GetGpuTexture(), grid_vertices, output_w, output_h);
+
         SDL_SetRenderDrawColor(&renderer, 70, 70, 84, 255);
         for (int y = 0; y < kEditRows; ++y)
             for (int x = 0; x < kEditCols; ++x)
@@ -854,6 +866,9 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
             SDL_RenderRect(&renderer, &box);
         }
     }
+
+    if (!palette_vertices.empty())
+        m_gpu_pipeline->Draw(renderer, *m_tile_atlas->GetGpuTexture(), palette_vertices, output_w, output_h);
 }
 
 void PieceEditorLayer::OnRender(SDL_Renderer* renderer)
@@ -978,7 +993,7 @@ void PieceEditorLayer::HandleGridMouseScroll(Rml::Event& event)
 {
     const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
-    const float wheel_delta = event.GetParameter<float>("wheel_delta", 0.0f);
+    const float wheel_delta = event.GetParameter<float>("wheel_delta_y", 0.0f);
     m_preview_canvas.OnMouseScroll(mouse_x, mouse_y, wheel_delta);
     event.StopPropagation();
 }

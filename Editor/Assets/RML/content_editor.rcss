@@ -140,7 +140,18 @@ scrollbarvertical sliderbar:hover { background-color: #454a56; }
 }
 
 .side-column {
-    flex: 0 0 360px;
+    /* 380px, not 360px: a .field-row's label(130px) + gap(6px) + input(200px)
+       = 336px needs to fit inside this column's content box regardless of
+       whether a nested scrollable region (e.g. Piece's "#cell-inspector"-
+       owning .side-top) happens to be showing its own ~10px scrollbar that
+       frame. At 360px, content width was 344px unscrolled but only 334px
+       with that inner scrollbar showing -- narrower than a field-row's
+       336px, so the row would flex-wrap (label above input) only when the
+       inner content was tall enough to scroll, and not otherwise: the exact
+       inconsistent "sometimes beside, sometimes under the header" layout
+       this was bumped to fix. The extra 20px keeps field-rows on one line
+       either way. */
+    flex: 0 0 380px;
     height: 100%;
     box-sizing: border-box;
     display: flex;

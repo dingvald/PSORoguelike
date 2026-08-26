@@ -74,6 +74,17 @@ namespace fieldwidgets {
     Listeners BuildEnumField(Rml::Element& row, const std::string& label, const std::vector<std::string>& options,
                              const std::string& initial, std::function<void(std::string)> on_commit);
 
+    // BuildEnumField's sibling for option sets keyed by something other than
+    // their own display text -- e.g. picking an entry out of a NameId-indexed
+    // library (pieces, prefabs, ...) by its authored name while committing
+    // the hashed id, the same way BuildNameIdField's typed-text field does.
+    // options pairs are (id, display label); the label is escaped internally,
+    // so callers pass raw authored text. If initial_id doesn't match any
+    // option's id (e.g. a stale/unauthored reference), nothing is selected.
+    Listeners BuildIdEnumField(Rml::Element& row, const std::string& label,
+                               const std::vector<std::pair<std::uint32_t, std::string>>& options,
+                               std::uint32_t initial_id, std::function<void(std::uint32_t)> on_commit);
+
     // A hex text field + live swatch + "Pick..." button. on_open_picker is called
     // with the field's current value and a callback to invoke with the picked
     // result (see ColorPickerPopup) -- this toolkit doesn't own the picker popup.

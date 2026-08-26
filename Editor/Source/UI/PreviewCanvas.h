@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <cmath>
+
 namespace psr {
 
 // Shared pan/zoom camera for the SDL/GPU-drawn preview canvas every content
@@ -32,6 +34,13 @@ public:
 
     SDL_FRect WorldToScreen(const SDL_FRect& world_rect) const;
     SDL_FPoint ScreenToWorld(SDL_FPoint screen_point) const;
+
+    // The panel's on-screen rect as of the last Update() call -- feed to
+    // PreviewCanvasClipScope so panel content (grid cells, sprites) can't
+    // bleed past the panel's edge when it's smaller than the content's
+    // current pan/zoom fit (e.g. right after the user drags the preview
+    // window's resize handle smaller).
+    const SDL_FRect& PanelRect() const { return m_panel_rect; }
 
     float GetZoom() const { return m_zoom; }
     int ZoomPercent() const { return static_cast<int>(m_zoom * 100.0f + 0.5f); }
@@ -64,6 +73,33 @@ private:
 
     bool m_panning = false;
     SDL_FPoint m_pan_last_screen{};
+};
+
+// Clips all SDL rendering (both plain SDL_Render* calls and
+// TileGpuPipeline::Draw, which composites through SDL_RenderTexture -- both
+// read the same SDL_Renderer clip-rect state) to a PreviewCanvas panel's
+// on-screen rect for the guard's lifetime, restoring the previous clip on
+// destruction. Construct it around exactly the draw calls that paint inside
+// a "#grid-panel" (grid lines, cell sprites) -- not around unrelated UI drawn
+// elsewhere in the same OnRender pass (e.g. Piece's side palette icons),
+// which would otherwise be clipped out entirely since they sit outside the
+// panel rect on screen.
+class PreviewCanvasClipScope
+{
+public:
+    PreviewCanvasClipScope(SDL_Renderer& renderer, const SDL_FRect& panel_rect) : m_renderer(renderer)
+    {
+        const SDL_Rect clip{static_cast<int>(std::floor(panel_rect.x)), static_cast<int>(std::floor(panel_rect.y)),
+                            static_cast<int>(std::ceil(panel_rect.w)), static_cast<int>(std::ceil(panel_rect.h))};
+        SDL_SetRenderClipRect(&m_renderer, &clip);
+    }
+    ~PreviewCanvasClipScope() { SDL_SetRenderClipRect(&m_renderer, nullptr); }
+
+    PreviewCanvasClipScope(const PreviewCanvasClipScope&) = delete;
+    PreviewCanvasClipScope& operator=(const PreviewCanvasClipScope&) = delete;
+
+private:
+    SDL_Renderer& m_renderer;
 };
 
 } // namespace psr

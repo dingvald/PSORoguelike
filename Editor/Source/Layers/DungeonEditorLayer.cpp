@@ -4,7 +4,6 @@
 #include "Engine/Dungeon/DungeonLibraryFile.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
-#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/Events/Event.h"
@@ -62,15 +61,6 @@ namespace {
         path /= segment;
         path += ".json";
         return path;
-    }
-
-    // The authored label for a NameId field, recovered via NameIdRegistry
-    // (empty if never seen this process, e.g. a fresh/unauthored id).
-    std::string LabelFor(std::uint32_t id)
-    {
-        if (std::optional<std::string> label = NameIdRegistry::Find(id))
-            return *label;
-        return {};
     }
 } // namespace
 
@@ -274,7 +264,7 @@ void DungeonEditorLayer::HandlePreviewMouseScroll(Rml::Event& event)
 {
     const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
-    const float wheel_delta = event.GetParameter<float>("wheel_delta", 0.0f);
+    const float wheel_delta = event.GetParameter<float>("wheel_delta_y", 0.0f);
     m_preview_canvas.OnMouseScroll(mouse_x, mouse_y, wheel_delta);
     event.StopPropagation();
 }
@@ -555,14 +545,18 @@ void DungeonEditorLayer::RefreshPieceRefRows()
             m_piece_row_listeners.push_back(std::move(listener));
     };
 
+    std::vector<std::pair<std::uint32_t, std::string>> piece_options = {{0, "-- Select Piece --"}};
+    for (const DungeonPiece& piece : m_pieces.All())
+        piece_options.emplace_back(piece.id, piece.name.empty() ? piece.id_string : piece.name);
+
     for (std::size_t i = 0; i < result.rows.size() && i < m_draft.pieces.size(); ++i)
     {
         const std::size_t index = i;
         const DungeonPieceRef& ref = m_draft.pieces[i];
 
         if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-id"))
-            keep(fieldwidgets::BuildNameIdField(*row, "piece_id", ref.piece_id, LabelFor(ref.piece_id),
-                                                [this, index](std::uint32_t id, std::string)
+            keep(fieldwidgets::BuildIdEnumField(*row, "piece_id", piece_options, ref.piece_id,
+                                                [this, index](std::uint32_t id)
                                                 {
                                                     if (index < m_draft.pieces.size())
                                                         m_draft.pieces[index].piece_id = id;
@@ -787,6 +781,11 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
                                     static_cast<float>(rows) * kBaseCellPx};
     m_preview_canvas.Update(panel_rect, content_bounds);
     RefreshZoomReadout();
+
+    // Everything below draws inside the panel -- clip so a preview window
+    // shrunk (via its resize handle) smaller than the content's current
+    // pan/zoom fit doesn't bleed sprites/grid lines into the side column.
+    const PreviewCanvasClipScope clip_scope(renderer, m_preview_canvas.PanelRect());
 
     const auto cell_box = [&](Vec2 world) -> SDL_FRect
     {

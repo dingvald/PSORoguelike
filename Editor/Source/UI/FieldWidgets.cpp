@@ -1,6 +1,7 @@
 #include "UI/FieldWidgets.h"
 
 #include "UI/RmlClickListener.h"
+#include "UI/RmlText.h"
 
 #include <RmlUi/Core.h>
 
@@ -261,6 +262,33 @@ Listeners BuildEnumField(Rml::Element& row, const std::string& label, const std:
     Listeners out;
     auto listener = std::make_unique<RmlEventListener>("change", [select, on_commit = std::move(on_commit)](Rml::Event&)
                                                        { on_commit(select->GetValue()); });
+    listener->Attach(*select);
+    out.push_back(std::move(listener));
+    return out;
+}
+
+Listeners BuildIdEnumField(Rml::Element& row, const std::string& label,
+                           const std::vector<std::pair<std::uint32_t, std::string>>& options,
+                           std::uint32_t initial_id, std::function<void(std::uint32_t)> on_commit)
+{
+    row.SetInnerRML("<span class=\"field-label\">" + label + "</span><select class=\"field-input\"></select>");
+    auto* select = rmlui_dynamic_cast<Rml::ElementFormControlSelect*>(row.QuerySelector("select"));
+    if (!select)
+        return {};
+    for (const auto& [id, display_label] : options)
+        select->Add(EscapeRml(display_label), std::to_string(id));
+    select->SetValue(std::to_string(initial_id));
+
+    Listeners out;
+    auto listener = std::make_unique<RmlEventListener>(
+        "change",
+        [select, on_commit = std::move(on_commit)](Rml::Event&)
+        {
+            const std::string value = select->GetValue();
+            if (value.empty())
+                return;
+            on_commit(static_cast<std::uint32_t>(std::stoul(value)));
+        });
     listener->Attach(*select);
     out.push_back(std::move(listener));
     return out;

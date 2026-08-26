@@ -68,7 +68,7 @@ input.checkbox-input:checked {
    so the base rule's width:200px was silently winning over these on any
    input carrying both classes (e.g. BuildVec2Field's x/y inputs,
    BuildColorField's hex input) -- functionally invisible until a narrow
-   container (PrefabEditorLayer's 360px side-column) made the resulting
+   container (PrefabEditorLayer's 380px side-column) made the resulting
    200px-wide sub-fields overflow off the window entirely. */
 input.field-input-small {
     width: 70px;

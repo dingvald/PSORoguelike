@@ -516,7 +516,7 @@ void PrefabEditorLayer::HandlePreviewMouseScroll(Rml::Event& event)
 {
     const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
-    const float wheel_delta = event.GetParameter<float>("wheel_delta", 0.0f);
+    const float wheel_delta = event.GetParameter<float>("wheel_delta_y", 0.0f);
     m_preview_canvas.OnMouseScroll(mouse_x, mouse_y, wheel_delta);
     event.StopPropagation();
 }
@@ -1142,6 +1142,10 @@ void PrefabEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int 
                                     static_cast<float>(m_renderable.texture_size.y)};
     m_preview_canvas.Update(panel_rect, content_bounds);
     RefreshZoomReadout();
+
+    // Clip so a preview window shrunk (via its resize handle) smaller than
+    // the sprite's current pan/zoom fit doesn't bleed into the side column.
+    const PreviewCanvasClipScope clip_scope(renderer, m_preview_canvas.PanelRect());
 
     const SDL_FRect box = m_preview_canvas.WorldToScreen(content_bounds);
 
