@@ -25,4 +25,5 @@ group ""
 
 group "Tests"
 	include "Core-Test/Build-Core-Test.lua"
+	include "App-Test/Build-App-Test.lua"
 group ""

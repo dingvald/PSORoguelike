@@ -1,5 +1,8 @@
 #include "Components/RegisterComponents.h"
 
+#include "Components/BlocksMovementComponent.h"
+#include "Components/EnergyComponent.h"
+#include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/Position.h"
@@ -14,6 +17,9 @@ EntitySchemaModel RegisterComponents(Registry& registry)
 {
     ComponentSchemaRegistrar reg{registry.GetMetaContext()};
 
+    BlocksMovementComponent::Register(reg);
+    EnergyComponent::Register(reg);
+    PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);

@@ -371,7 +371,7 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 
 ## M5 — Entity & Stat Framework
 
-**Status:** 5.1 done. A generic **Prefab Editor** already exists ahead of schedule
+**Status:** 5.1/5.2 done. A generic **Prefab Editor** already exists ahead of schedule
 (`Editor/Source/Layers/PrefabEditorLayer`) — browse/create/edit/delete the entity-prefab JSON
 files under `App/Assets/Data/Entities/`, rendering one Inspector-style card per currently-registered
 *authorable* component (see the M4.4 follow-up note above for the `authorable` flag and shared
@@ -402,7 +402,18 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   a `JsonEntityLoader` round-trip asserting `race_id` hashes and registers its label correctly).
 - **5.2 Entity/enemy editor:** Engine: enemy prefab schema (stats, race, sprite ref, spawn
   weight). Editor: **Entity editor layer** — stat field forms, race picker, sprite picker
-  (mirrors `EntityEditorLayer` + `EntityFieldForms`). UI: none (authoring only).
+  (mirrors `EntityEditorLayer` + `EntityFieldForms`). UI: none (authoring only). **Done:** no new
+  code — per the user's explicit brief, stayed folded into the existing Prefab Editor rather than
+  building a separate `EntityEditorLayer`/`EntityFieldForms` (same call as 5.1), and that layer
+  already had every field this bullet asks for before 5.2 was even reached: stat field forms +
+  race picker landed with 5.1, and the renderable card's texture picker/UV/color fields (sprite
+  ref) predate 5.1 as part of the Prefab Editor's original base. **Spawn weight was deliberately
+  deferred**, per the user's explicit brief — no spawn/population system exists yet to consume it
+  (M4's dungeon generation only hand-stamps specific prefabs into piece cells; there's no
+  random-encounter mechanic to weight against), so adding the field now would mean guessing at a
+  shape for data nothing reads. Revisit alongside whatever milestone actually introduces enemy
+  population/spawning. Content authoring (the actual Forest enemies) is the user's own work
+  through this editor, per `CLAUDE.md`'s division of labor — not done by Claude.
 - **5.3 Rare enemies & tier reskins:** Engine: rare-variant flag (alt palette + stat multiplier
   + guaranteed drop hook), tier-based roster substitution (e.g. Garanz→Baranz on Ultimate, not
   just stat scaling). Editor: rare-variant toggle + tier-substitution mapping on the entity
@@ -410,13 +421,58 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
 
 ## M6 — Turn-Based Scheduler & Movement
 
-**Status:** Not started
+**Status:** 6.1/6.2 done (engine/systems only — see the UI deferral note below)
 
 - **6.1 Energy-based turn scheduler:** Engine: turn queue keyed on energy cost, variable
   per-action costs (exact numbers explicitly deferred per GDD). Editor: none (numeric
-  balancing pass, not structural). UI: turn-order indicator.
+  balancing pass, not structural). UI: turn-order indicator. **Done:** ported from
+  `UnnamedRoguelike`'s proven pattern — `TurnQueue` (`Core/Source/Engine/Turns/TurnQueue.h/.cpp`)
+  is a dependency-light energy scheduler (generic over `entt::entity`, no Registry/World
+  coupling) keyed on an absolute "time to next reach `action_threshold`" per actor, cached for
+  O(log n) `NextActor`/`Enqueue`/`Remove`/`Requeue`, ties broken by insertion order. Alongside it,
+  a generic Action framework ported the same way: `IAction`/`ActionResult`/`ActionExecutor`
+  (`Core/Source/Engine/Actions/`) — `ResolveAction` follows an `ActionResult::fallback` chain,
+  applying only the final cost (the seam M7 combat's bump-to-attack will reuse). App-side,
+  `TurnCoordinator` (`App/Source/Systems/TurnCoordinator.{h,cpp}`) drives the loop: `EnergyComponent`
+  (`App/Source/Components/EnergyComponent.h`, `authorable=false`) is the persisted scheduling
+  energy, with `TurnQueue` membership following its construct/destroy lifecycle via
+  `Registry::OnConstruct`/`OnDestroy`. Deliberately simplified vs. the source: no AI controller
+  seam is wired to real AI yet (`TurnCoordinator::SetNpcDecision` is the documented hook a future
+  AI session plugs into — every non-player actor Waits by default this round) and no
+  `QueuedActionsComponent` mid-turn draining exists yet (nothing in this round's scope produces a
+  multi-step fallback chain). Catch2 coverage in `Core-Test/Source/TurnQueueTests.cpp` /
+  `ActionExecutorTests.cpp`; App-side coverage (new `App-Test` project, see below) in
+  `TurnCoordinatorTests.cpp`.
 - **6.2 Grid movement & input:** Engine: tile-to-tile movement resolution, keyboard/mouse turn
-  command mapping. Editor: none. UI: movement/action cursor, valid-move tile highlight.
+  command mapping. Editor: none. UI: movement/action cursor, valid-move tile highlight — **deferred
+  this round, per the user's explicit choice** (no turn-order indicator or move-cursor/highlight
+  yet; revisit once a real mission/dungeon flow exists to display them in). **Done:** `MoveAction`/
+  `WaitAction` (`App/Source/Actions/`) implement `IAction` against this project's flat, non-chunked
+  `Grid` (no z-step/chunk-boundary/fall-through-pit complexity from the source, since none of that
+  applies here) — an out-of-bounds or `BlocksMovementComponent`-blocked target tile is a free
+  no-op (no bump-to-attack fallback yet, since M7 combat doesn't exist). Costs are flat
+  (`kMoveCost`/`kWaitCost` = 100 = the default action threshold, no per-entity speed multiplier) per
+  the GDD's explicit deferral of exact per-action costs to a future balancing pass. Unlike the
+  source (which only tweens attacks), **movement itself animates** per the user's explicit choice:
+  `Position` still snaps instantly (so turn logic never waits on animation), but `MoveAction`
+  emplaces a `TweenComponent` (`App/Source/Components/TweenComponent.h`, deliberately **not**
+  meta-registered — transient render-only state) that `TweenSystem`
+  (`App/Source/Systems/TweenSystem.{h,cpp}`) eases toward `{0,0}` every frame, consumed by
+  `RegistryRenderableLookup::GetRenderOffset` (the seam M3.1 had already reserved for this).
+  Input: `ActionMap<TKey>`/`InputBuffer<TKey>` (`Core/Source/Engine/Input/`, DAS-style held-key
+  repeat) are generic, engine-agnostic ports; `App/Source/Content/KeyBindings.{h,cpp}` binds the
+  default 4-directional arrow keys + Space-to-wait (diagonals deferred — nothing in the GDD commits
+  to 8-directional movement). No gameplay `Layer` wires any of this to the live SDL event loop
+  yet, per the user's explicit choice and the roadmap's own Phase-A sequencing (the debug mission
+  launcher, which will do that wiring, comes after M7.1) — `TurnCoordinator::PressKey`/`ReleaseKey`
+  are ready for that layer to call once it exists. Verified via unit tests only this round (no
+  throwaway smoke-test layer, per the user's explicit choice) — a new **`App-Test`** project
+  (`App-Test/Build-App-Test.lua`, registered in `Build.lua`) was added since none existed before,
+  mirroring `Core-Test`'s Catch2 setup and reusing the same "compile App's pure-logic subfolders
+  directly" trick `Editor/Build-Editor.lua` already established (App is a `ConsoleApp`, can't be
+  linked). Catch2 coverage in `App-Test/Source/MoveActionTests.cpp` / `WaitActionTests.cpp` /
+  `TweenSystemTests.cpp`; `Core-Test/Source/ActionMapTests.cpp` / `InputBufferTests.cpp` /
+  `EasingTests.cpp` cover the new Core-level primitives.
 
 ## M7 — Combat System
 

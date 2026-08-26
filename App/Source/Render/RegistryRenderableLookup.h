@@ -13,6 +13,7 @@ public:
     explicit RegistryRenderableLookup(Registry& registry);
 
     std::optional<RenderableTile> GetRenderableTile(entt::entity entity) const override;
+    Vec2f GetRenderOffset(entt::entity entity) const override;
 
 private:
     Registry* m_registry;
