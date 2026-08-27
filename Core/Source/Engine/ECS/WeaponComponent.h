@@ -71,6 +71,15 @@ struct WeaponComponent
     std::uint32_t suffix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::vector<RaceBonusEntry> race_bonuses;
 
+    // Which Photon Arts/Techniques this weapon grants (NameIds into
+    // PhotonArtLibrary/TechniqueLibrary respectively) -- weapon-attached, not
+    // character-learned, per PhotonArt.h/Technique.h's own doc comments. A
+    // Saber/Handgun would list photon_art_ids; a Wand/Cane would list
+    // technique_ids -- the engine doesn't enforce which weapon category may
+    // carry which list, that's a content-authoring convention.
+    std::vector<std::uint32_t> photon_art_ids;
+    std::vector<std::uint32_t> technique_ids;
+
     static void Register(ComponentSchemaRegistrar& reg)
     {
         reg.Component<WeaponComponent>("weapon")
@@ -80,7 +89,9 @@ struct WeaponComponent
             .Data<&WeaponComponent::grind_level>("grind_level")
             .Data<&WeaponComponent::prefix_affix_id>("prefix_affix_id")
             .Data<&WeaponComponent::suffix_affix_id>("suffix_affix_id")
-            .Data<&WeaponComponent::race_bonuses>("race_bonuses");
+            .Data<&WeaponComponent::race_bonuses>("race_bonuses")
+            .Data<&WeaponComponent::photon_art_ids>("photon_art_ids")
+            .Data<&WeaponComponent::technique_ids>("technique_ids");
     }
 };
 

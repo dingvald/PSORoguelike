@@ -1,0 +1,185 @@
+#include "States/TargetSelectionState.h"
+
+#include "Components/RenderableComponent.h"
+#include "Components/SelectedTargetComponent.h"
+#include "Engine/ECS/Position.h"
+#include "Engine/Events/Event.h"
+#include "Engine/Events/KeyEvent.h"
+#include "Systems/TurnCoordinator.h"
+
+#include <entt/core/hashed_string.hpp>
+
+#include <SDL3/SDL_keycode.h>
+
+#include <algorithm>
+#include <cstdlib>
+#include <optional>
+
+namespace psr {
+
+namespace {
+
+    constexpr const char* kCursorPrefabId = "ui.target_select_cursor";
+
+    // Mirrors KeyBindings.cpp's arrow-key-to-offset mapping -- kept local
+    // rather than shared, since MoveAction's own bindings are constructed
+    // once as fixed Vec2 offsets baked into each ActionMap entry, not
+    // resolved from a raw key code at call time the way this cursor needs.
+    std::optional<Vec2> ResolveDirectionKey(int key_code)
+    {
+        switch (key_code)
+        {
+        case SDLK_UP:
+            return Vec2{0, -1};
+        case SDLK_DOWN:
+            return Vec2{0, 1};
+        case SDLK_LEFT:
+            return Vec2{-1, 0};
+        case SDLK_RIGHT:
+            return Vec2{1, 0};
+        default:
+            return std::nullopt;
+        }
+    }
+
+    // Flattens color to a mid-grey of the same alpha -- mirrors
+    // UnnamedRoguelike's own TargetSelectionState::Greyed helper, the visual
+    // "out of range" signal for the cursor sprite.
+    Color Greyed(Color color)
+    {
+        const auto grey = static_cast<std::uint8_t>((color.r + color.g + color.b) / 3);
+        return Color{grey, grey, grey, color.a};
+    }
+
+} // namespace
+
+void TargetSelectionState::Begin(TargetRequest request, entt::entity actor)
+{
+    m_request = request;
+    m_actor = actor;
+}
+
+void TargetSelectionState::OnEnter(GameplayContext& context)
+{
+    m_origin = context.registry.GetComponent<Position>(m_actor).tile;
+    m_confirmed = false;
+    m_cancelled = false;
+
+    switch (m_request.mode)
+    {
+    case TargetingMode::SelfTarget:
+    case TargetingMode::TargetSquare:
+        m_cursor = m_origin;
+        break;
+    case TargetingMode::Directional:
+        m_cursor = m_origin + Vec2{0, -1}; // default facing: up
+        break;
+    }
+
+    m_cursor_entity = context.registry.CreateEntity(entt::hashed_string::value(kCursorPrefabId));
+    context.grid.AddEntity(m_cursor, m_cursor_entity);
+
+    if (const RenderableComponent* renderable = context.registry.TryGetComponent<RenderableComponent>(m_cursor_entity))
+        m_base_color = renderable->color_1;
+
+    UpdateCursorVisual(context);
+}
+
+void TargetSelectionState::OnExit(GameplayContext& context)
+{
+    if (m_cursor_entity == entt::null)
+        return;
+    context.grid.RemoveEntity(m_cursor, m_cursor_entity);
+    context.registry.DestroyEntity(m_cursor_entity);
+    m_cursor_entity = entt::null;
+}
+
+StateTransition TargetSelectionState::Update(GameplayContext& context, float /*delta_time*/)
+{
+    if (m_cancelled)
+        return StateTransition::Pop();
+
+    if (m_confirmed)
+    {
+        context.registry.GetOrEmplace<SelectedTargetComponent>(m_actor).tile = m_cursor;
+        context.turn_coordinator.SetPendingAction(m_request.action);
+        return StateTransition::Pop();
+    }
+
+    return StateTransition::None();
+}
+
+bool TargetSelectionState::HandleEvent(Event& event, GameplayContext& context)
+{
+    EventDispatcher dispatcher(event);
+    dispatcher.Dispatch<KeyPressedEvent>(
+        [this, &context](KeyPressedEvent& key_event)
+        {
+            const int key = key_event.GetKeyCode();
+            if (key == SDLK_ESCAPE)
+            {
+                m_cancelled = true;
+                return true;
+            }
+            if (key == SDLK_SPACE)
+            {
+                if (IsReachable(m_cursor))
+                    m_confirmed = true;
+                return true;
+            }
+            if (std::optional<Vec2> direction = ResolveDirectionKey(key))
+            {
+                MoveCursor(context, *direction);
+                return true;
+            }
+            return false;
+        });
+    return event.handled;
+}
+
+bool TargetSelectionState::IsReachable(Vec2 tile) const
+{
+    switch (m_request.mode)
+    {
+    case TargetingMode::SelfTarget:
+        return tile == m_origin;
+    case TargetingMode::Directional:
+        return true; // whichever cardinal neighbour is currently selected is always a valid pick
+    case TargetingMode::TargetSquare:
+    {
+        const Vec2 delta = tile - m_origin;
+        const int chebyshev = std::max(std::abs(delta.x), std::abs(delta.y));
+        return chebyshev <= m_request.range;
+    }
+    }
+    return false;
+}
+
+void TargetSelectionState::MoveCursor(GameplayContext& context, Vec2 direction)
+{
+    if (m_request.mode == TargetingMode::SelfTarget)
+        return; // fixed at origin
+
+    const Vec2 new_cursor =
+        m_request.mode == TargetingMode::Directional ? m_origin + direction : m_cursor + direction;
+    if (!context.grid.Contains(new_cursor))
+        return;
+
+    context.grid.RemoveEntity(m_cursor, m_cursor_entity);
+    m_cursor = new_cursor;
+    context.grid.AddEntity(m_cursor, m_cursor_entity);
+    UpdateCursorVisual(context);
+}
+
+void TargetSelectionState::UpdateCursorVisual(GameplayContext& context)
+{
+    RenderableComponent* renderable = context.registry.TryGetComponent<RenderableComponent>(m_cursor_entity);
+    if (!renderable)
+        return;
+
+    const Color color = IsReachable(m_cursor) ? m_base_color : Greyed(m_base_color);
+    renderable->color_1 = color;
+    renderable->color_2 = color;
+}
+
+} // namespace psr

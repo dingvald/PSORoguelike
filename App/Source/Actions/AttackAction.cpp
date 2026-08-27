@@ -2,7 +2,7 @@
 
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
-#include "Components/BlocksMovementComponent.h"
+#include "Combat/TargetResolution.h"
 #include "Components/EquipmentComponent.h"
 #include "Engine/Combat/CombatMath.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -16,70 +16,6 @@
 #include <vector>
 
 namespace psr {
-
-namespace {
-    // A tile blocks the attack line but is never itself a target: something
-    // occupies it that blocks movement and carries no HealthComponent (a
-    // wall/obstacle, as opposed to a hostile actor -- see MoveAction's own
-    // BlocksMovementComponent check for the movement-side equivalent).
-    bool IsWallTile(Registry& registry, const Grid& grid, Vec2 tile)
-    {
-        for (entt::entity occupant : grid.GetEntities(tile))
-            if (registry.HasComponent<BlocksMovementComponent>(occupant) &&
-                !registry.HasComponent<HealthComponent>(occupant))
-                return true;
-        return false;
-    }
-
-    std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction,
-                                         const WeaponComponent& weapon)
-    {
-        std::vector<Vec2> tiles;
-        switch (weapon.range_shape)
-        {
-        case WeaponRangeShape::SingleTarget:
-        {
-            const Vec2 tile = origin + direction;
-            if (grid.Contains(tile))
-                tiles.push_back(tile);
-            break;
-        }
-        case WeaponRangeShape::Line:
-        {
-            for (int i = 1; i <= weapon.range; ++i)
-            {
-                const Vec2 tile = origin + direction * i;
-                if (!grid.Contains(tile))
-                    break;
-                if (IsWallTile(registry, grid, tile))
-                    break;
-                tiles.push_back(tile);
-            }
-            break;
-        }
-        case WeaponRangeShape::Cone3:
-        {
-            const Vec2 perpendicular{-direction.y, direction.x};
-            for (Vec2 tile :
-                 {origin + direction, origin + direction + perpendicular, origin + direction - perpendicular})
-                if (grid.Contains(tile))
-                    tiles.push_back(tile);
-            break;
-        }
-        case WeaponRangeShape::Surrounding:
-        {
-            for (Vec2 offset : {Vec2{1, 0}, Vec2{-1, 0}, Vec2{0, 1}, Vec2{0, -1}})
-            {
-                const Vec2 tile = origin + offset;
-                if (grid.Contains(tile))
-                    tiles.push_back(tile);
-            }
-            break;
-        }
-        }
-        return tiles;
-    }
-} // namespace
 
 AttackAction::AttackAction(Grid& grid, const AffixLibrary& affixes, Vec2 direction, std::mt19937& rng)
     : m_grid(&grid), m_affixes(&affixes), m_direction(direction), m_rng(&rng)
@@ -98,7 +34,8 @@ ActionResult AttackAction::Perform(Entity actor)
         return ActionResult(0);
 
     const Vec2 origin = actor.Get<Position>().tile;
-    const std::vector<Vec2> target_tiles = ResolveTargetTiles(*m_grid, registry, origin, m_direction, *weapon);
+    const std::vector<Vec2> target_tiles =
+        ResolveTargetTiles(*m_grid, registry, origin, m_direction, weapon->range_shape, weapon->range);
 
     const StatsComponent attacker_stats = ComputeEffectiveStats(actor, *m_affixes);
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);

@@ -14,4 +14,6 @@ public:
     static const std::filesystem::path PiecesPath;
     static const std::filesystem::path DungeonsPath;
     static const std::filesystem::path EntitiesPath;
+    static const std::filesystem::path PhotonArtsPath;
+    static const std::filesystem::path TechniquesPath;
 };

@@ -32,6 +32,9 @@ void TurnCoordinator::ReleaseKey(int key_code) { m_input_buffer.Release(key_code
 
 TurnStep TurnCoordinator::Step(float delta_time)
 {
+    if (m_pending_target_request.action)
+        return TurnStep::TargetingRequested;
+
     UpdateTweens(*m_registry, delta_time);
 
     m_input_buffer.Update(delta_time);
@@ -47,13 +50,20 @@ TurnStep TurnCoordinator::Step(float delta_time)
         IAction* action = nullptr;
         if (is_player)
         {
-            if (!m_pending_key)
-                return TurnStep::AwaitingInput;
+            if (m_pending_action)
+            {
+                action = std::exchange(m_pending_action, nullptr);
+            }
+            else
+            {
+                if (!m_pending_key)
+                    return TurnStep::AwaitingInput;
 
-            action = m_key_bindings.Resolve(*m_pending_key);
-            m_pending_key.reset();
-            if (!action)
-                return TurnStep::AwaitingInput; // unbound key -- nothing to resolve this call
+                action = m_key_bindings.Resolve(*m_pending_key);
+                m_pending_key.reset();
+                if (!action)
+                    return TurnStep::AwaitingInput; // unbound key -- nothing to resolve this call
+            }
         }
         else
         {

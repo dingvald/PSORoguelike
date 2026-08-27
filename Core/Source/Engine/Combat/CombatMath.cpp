@@ -26,6 +26,13 @@ int ComputeDamage(int attacker_atp, int defender_dfp, float variance_roll)
     return std::max(1, damage);
 }
 
+int ComputeTechniqueDamage(int attacker_mst, int defender_dfp, float variance_roll)
+{
+    const float raw = static_cast<float>(attacker_mst) - static_cast<float>(defender_dfp) / 2.0f;
+    const int damage = static_cast<int>(std::lround(raw * variance_roll));
+    return std::max(1, damage);
+}
+
 int ApplyRaceBonus(int damage, const std::vector<RaceBonusEntry>& race_bonuses, std::uint32_t defender_race_id)
 {
     for (const RaceBonusEntry& bonus : race_bonuses)

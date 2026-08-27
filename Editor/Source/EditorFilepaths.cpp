@@ -11,3 +11,5 @@ const std::filesystem::path EditorFilepaths::PiecesPath = EditorFilepaths::DataP
 const std::filesystem::path EditorFilepaths::DungeonsPath = EditorFilepaths::DataPath / "Dungeons";
 const std::filesystem::path EditorFilepaths::EntitiesPath = EditorFilepaths::DataPath / "Entities";
 const std::filesystem::path EditorFilepaths::AffixesPath = EditorFilepaths::DataPath / "Affixes";
+const std::filesystem::path EditorFilepaths::PhotonArtsPath = EditorFilepaths::DataPath / "PhotonArts";
+const std::filesystem::path EditorFilepaths::TechniquesPath = EditorFilepaths::DataPath / "Techniques";

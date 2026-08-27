@@ -22,6 +22,13 @@ float ComputeHitChance(int attacker_ata, int defender_evp);
 // zero.
 int ComputeDamage(int attacker_atp, int defender_dfp, float variance_roll);
 
+// Technique damage: identical shape to ComputeDamage, keyed on mst instead of
+// atp -- MST (StatsComponent's "technique/magic power" field) has had no
+// consumer until now. Kept as a separate function rather than reusing
+// ComputeDamage(mst, ...) so the two stay independently tunable if their
+// formulas ever diverge.
+int ComputeTechniqueDamage(int attacker_mst, int defender_dfp, float variance_roll);
+
 // Multiplies damage by (1 + bonus_percent / 100) for the race_bonuses entry
 // matching defender_race_id, if any; unchanged otherwise.
 int ApplyRaceBonus(int damage, const std::vector<RaceBonusEntry>& race_bonuses, std::uint32_t defender_race_id);
