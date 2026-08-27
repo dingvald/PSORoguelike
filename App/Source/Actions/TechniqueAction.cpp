@@ -6,7 +6,9 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/CombatMath.h"
+#include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/Technique.h"
+#include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
@@ -58,7 +60,12 @@ ActionResult TechniqueAction::Perform(Entity actor)
     TPComponent* tp = actor.TryGet<TPComponent>();
     if (!tp || tp->current_tp < technique->tp_cost)
         return ActionResult(0);
+
+    BeforeTechniqueCastEvent before_cast{m_technique_id};
+    actor.Dispatch(before_cast);
     tp->current_tp -= technique->tp_cost;
+    AfterTechniqueCastEvent after_cast{m_technique_id};
+    actor.Dispatch(after_cast);
 
     const Vec2 origin = actor.Get<Position>().tile;
     const Vec2 selected_tile =
@@ -80,11 +87,21 @@ ActionResult TechniqueAction::Perform(Entity actor)
         {
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
             {
-                const int damage = static_cast<int>(
+                int damage = static_cast<int>(
                     std::lround(ComputeTechniqueDamage(attacker_stats.mst, attacker_stats.dfp, variance_roll(*m_rng)) *
                                 multiplier));
+
+                BeforeDamageEvent before{actor, damage};
+                actor.Dispatch(before);
+                damage = before.incoming_damage;
+
                 health->current_hp = std::max(0, health->current_hp - damage);
-                if (health->current_hp == 0)
+                const bool defeated = health->current_hp == 0;
+
+                AfterDamageEvent after{actor, damage, defeated};
+                actor.Dispatch(after);
+
+                if (defeated)
                     registry.DestroyEntity(actor.Handle());
             }
         }
@@ -124,9 +141,18 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 ComputeTechniqueDamage(attacker_stats.mst, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
             damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
 
+            BeforeDamageEvent before{target, damage};
+            actor.Dispatch(before);
+            damage = before.incoming_damage;
+
             HealthComponent& health = target.Get<HealthComponent>();
             health.current_hp = std::max(0, health.current_hp - damage);
-            if (health.current_hp == 0)
+            const bool defeated = health.current_hp == 0;
+
+            AfterDamageEvent after{target, damage, defeated};
+            actor.Dispatch(after);
+
+            if (defeated)
             {
                 m_grid->RemoveEntity(tile, occupant);
                 registry.DestroyEntity(occupant);

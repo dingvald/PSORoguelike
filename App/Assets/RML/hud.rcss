@@ -1,0 +1,129 @@
+body {
+    font-family: "Pixel Code";
+    color: #eee;
+    background-color: transparent;
+    width: 100%;
+    height: 100%;
+}
+
+#bars {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 260px;
+    padding: 0.6em 0.8em;
+    background-color: rgba(10, 8, 12, 190);
+    border: 2px #f6470a;
+}
+
+.bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.4em;
+}
+
+.bar-label {
+    display: block;
+    width: 28px;
+    font-size: 0.8em;
+    color: #f6470a;
+    font-weight: bold;
+}
+
+.bar-track {
+    display: block;
+    width: 140px;
+    height: 12px;
+    background-color: rgba(0, 0, 0, 160);
+    border: 1px #555;
+}
+
+.bar-fill {
+    display: block;
+    height: 100%;
+    width: 0%;
+}
+
+.bar-fill.hp {
+    background-color: #d43f3f;
+}
+
+.bar-fill.secondary {
+    background-color: #3aa0ff;
+}
+
+.bar-text {
+    display: block;
+    width: 70px;
+    text-align: right;
+    font-size: 0.75em;
+    color: #ddd;
+}
+
+#hotbar {
+    display: flex;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    width: 632px;
+    margin-left: -316px;
+}
+
+.hotbar-slot {
+    display: block;
+    width: 56px;
+    height: 56px;
+    margin-right: 8px;
+    text-align: center;
+    background-color: rgba(10, 8, 12, 190);
+    border: 2px #444;
+}
+
+.hotbar-slot.slot-technique {
+    border: 2px #3aa0ff;
+}
+
+.hotbar-slot.slot-photon-art {
+    border: 2px #f6470a;
+}
+
+.hotbar-slot.slot-item {
+    border: 2px #4caf50;
+}
+
+.slot-key {
+    display: block;
+    margin-top: 0.2em;
+    font-size: 0.7em;
+    color: #999;
+}
+
+.slot-name {
+    display: block;
+    padding: 0 0.2em;
+    font-size: 0.65em;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#event-log {
+    display: block;
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 320px;
+    height: 160px;
+    padding: 0.5em 0.6em;
+    background-color: rgba(10, 8, 12, 190);
+    border: 2px #f6470a;
+    overflow-y: auto;
+    font-size: 0.8em;
+    color: #ddd;
+}
+
+.log-line {
+    display: block;
+    margin-bottom: 0.2em;
+}

@@ -6,7 +6,9 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/CombatMath.h"
+#include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/PhotonArt.h"
+#include "Engine/Combat/PhotonArtCastEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
@@ -58,7 +60,12 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     PPComponent* pp = actor.TryGet<PPComponent>();
     if (!pp || pp->current_pp < art->pp_cost)
         return ActionResult(0);
+
+    BeforePhotonArtCastEvent before_cast{m_photon_art_id};
+    actor.Dispatch(before_cast);
     pp->current_pp -= art->pp_cost;
+    AfterPhotonArtCastEvent after_cast{m_photon_art_id};
+    actor.Dispatch(after_cast);
 
     const Vec2 origin = actor.Get<Position>().tile;
     const Vec2 selected_tile =
@@ -80,10 +87,20 @@ ActionResult PhotonArtAction::Perform(Entity actor)
         {
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
             {
-                const int damage = static_cast<int>(std::lround(
+                int damage = static_cast<int>(std::lround(
                     ComputeDamage(attacker_stats.atp, attacker_stats.dfp, variance_roll(*m_rng)) * multiplier));
+
+                BeforeDamageEvent before{actor, damage};
+                actor.Dispatch(before);
+                damage = before.incoming_damage;
+
                 health->current_hp = std::max(0, health->current_hp - damage);
-                if (health->current_hp == 0)
+                const bool defeated = health->current_hp == 0;
+
+                AfterDamageEvent after{actor, damage, defeated};
+                actor.Dispatch(after);
+
+                if (defeated)
                     registry.DestroyEntity(actor.Handle());
             }
         }
@@ -133,6 +150,10 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                     ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
                 damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
 
+                BeforeDamageEvent before{target, damage};
+                actor.Dispatch(before);
+                damage = before.incoming_damage;
+
                 HealthComponent& health = target.Get<HealthComponent>();
                 health.current_hp = std::max(0, health.current_hp - damage);
 
@@ -143,7 +164,11 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                             attacker_health->max_hp, attacker_health->current_hp + damage * art->drain_percent / 100);
                 }
 
-                if (health.current_hp == 0)
+                const bool defeated = health.current_hp == 0;
+                AfterDamageEvent after{target, damage, defeated};
+                actor.Dispatch(after);
+
+                if (defeated)
                 {
                     m_grid->RemoveEntity(tile, occupant);
                     registry.DestroyEntity(occupant);

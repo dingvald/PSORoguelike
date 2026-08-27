@@ -2,6 +2,7 @@
 
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
@@ -13,6 +14,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
+
+// Tag type identifying this test file's subscriptions to EventHandlerComponent
+// -- never instantiated, only used as Subscribe/Unsubscribe's TOwner key.
+struct DamageEventProbe
+{
+};
 
 // A weapon with generous ATP/ATA so hits are overwhelmingly likely (though
 // never guaranteed -- ComputeHitChance clamps at 0.95) and damage is well
@@ -199,4 +206,37 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
     const int damage_without_bonus = RunAttack(other_race);
 
     REQUIRE(damage_with_bonus > damage_without_bonus);
+}
+
+TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit, and on a kill", "[AttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
+    const entt::entity enemy_handle = enemy.Handle();
+
+    int damage_events = 0;
+    bool saw_defeat = false;
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterDamageEvent, DamageEventProbe>(
+        [&](psr::Entity, psr::AfterDamageEvent& event)
+        {
+            ++damage_events;
+            if (event.target_defeated)
+                saw_defeat = true;
+        });
+
+    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    for (int attempt = 0; attempt < 50 && registry.IsValid(enemy_handle); ++attempt)
+        action.Perform(actor);
+
+    REQUIRE_FALSE(registry.IsValid(enemy_handle));
+    REQUIRE(damage_events > 0);
+    REQUIRE(saw_defeat);
 }

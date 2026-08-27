@@ -2,6 +2,7 @@
 
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EnergyComponent.h"
+#include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
@@ -28,6 +29,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     BlocksMovementComponent::Register(reg);
     EnergyComponent::Register(reg);
     HealthComponent::Register(reg);
+    HotbarComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PPComponent::Register(reg);

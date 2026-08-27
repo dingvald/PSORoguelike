@@ -1,0 +1,35 @@
+<rml>
+    <head>
+        <title>PSORoguelike HUD</title>
+        <link type="text/rcss" href="hud.rcss"/>
+    </head>
+    <body>
+        <div id="bars">
+            <div class="bar-row">
+                <span class="bar-label">HP</span>
+                <div class="bar-track"><div id="hp-fill" class="bar-fill hp"></div></div>
+                <span id="hp-text" class="bar-text"></span>
+            </div>
+            <div id="secondary-row" class="bar-row">
+                <span id="secondary-label" class="bar-label"></span>
+                <div class="bar-track"><div id="secondary-fill" class="bar-fill secondary"></div></div>
+                <span id="secondary-text" class="bar-text"></span>
+            </div>
+        </div>
+
+        <div id="hotbar">
+            <div id="hotbar-slot-0" class="hotbar-slot"><span class="slot-key">1</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-1" class="hotbar-slot"><span class="slot-key">2</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-2" class="hotbar-slot"><span class="slot-key">3</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-3" class="hotbar-slot"><span class="slot-key">4</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-4" class="hotbar-slot"><span class="slot-key">5</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-5" class="hotbar-slot"><span class="slot-key">6</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-6" class="hotbar-slot"><span class="slot-key">7</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-7" class="hotbar-slot"><span class="slot-key">8</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-8" class="hotbar-slot"><span class="slot-key">9</span><span class="slot-name"></span></div>
+            <div id="hotbar-slot-9" class="hotbar-slot"><span class="slot-key">0</span><span class="slot-name"></span></div>
+        </div>
+
+        <div id="event-log"></div>
+    </body>
+</rml>

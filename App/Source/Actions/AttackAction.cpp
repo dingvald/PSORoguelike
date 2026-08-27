@@ -5,6 +5,7 @@
 #include "Combat/TargetResolution.h"
 #include "Components/EquipmentComponent.h"
 #include "Engine/Combat/CombatMath.h"
+#include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
@@ -73,9 +74,18 @@ ActionResult AttackAction::Perform(Entity actor)
                 int damage = ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng));
                 damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
 
+                BeforeDamageEvent before{target, damage};
+                actor.Dispatch(before);
+                damage = before.incoming_damage;
+
                 HealthComponent& health = target.Get<HealthComponent>();
                 health.current_hp = std::max(0, health.current_hp - damage);
-                if (health.current_hp == 0)
+                const bool defeated = health.current_hp == 0;
+
+                AfterDamageEvent after{target, damage, defeated};
+                actor.Dispatch(after);
+
+                if (defeated)
                 {
                     m_grid->RemoveEntity(tile, occupant);
                     registry.DestroyEntity(occupant);

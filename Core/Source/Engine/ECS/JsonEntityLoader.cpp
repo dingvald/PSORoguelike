@@ -211,6 +211,7 @@ void JsonEntityLoader::Populate(entt::registry& prefab_registry,
     for (const JsonDirectoryEntry& entry : m_entries)
     {
         std::uint32_t prefab_id = entt::hashed_string::value(entry.id.c_str());
+        NameIdRegistry::Register(prefab_id, entry.id);
 
         if (out_prefab_ids.contains(prefab_id))
             throw EntityLoaderError("JsonEntityLoader: duplicate prefab id for '" + entry.id + "'");

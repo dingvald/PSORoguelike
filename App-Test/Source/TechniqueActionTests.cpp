@@ -3,6 +3,8 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/SelectedTargetComponent.h"
+#include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -18,6 +20,12 @@
 namespace {
 
 constexpr std::uint32_t kTechniqueId = 1;
+
+// Tag type identifying this test file's subscriptions to EventHandlerComponent
+// -- never instantiated, only used as Subscribe/Unsubscribe's TOwner key.
+struct TechniqueEventProbe
+{
+};
 
 entt::entity MakeWeapon(psr::Registry& registry, bool grants_technique = true)
 {
@@ -301,4 +309,42 @@ TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
     const int damage_without_bonus = RunCast(other_race);
 
     REQUIRE(damage_with_bonus > damage_without_bonus);
+}
+
+TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEvent on a self-target cast",
+          "[TechniqueAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::Technique technique;
+    technique.tp_cost = 5;
+    technique.effect_family = psr::EffectFamily::Damage;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/0, /*tp=*/10);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::HealthComponent health;
+    health.current_hp = 100;
+    health.max_hp = 100;
+    actor.Emplace<psr::HealthComponent>(health);
+
+    int cast_events = 0;
+    int damage_events = 0;
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterTechniqueCastEvent, TechniqueEventProbe>(
+        [&](psr::Entity, psr::AfterTechniqueCastEvent& event)
+        {
+            ++cast_events;
+            REQUIRE(event.technique_id == kTechniqueId);
+        });
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterDamageEvent, TechniqueEventProbe>(
+        [&](psr::Entity, psr::AfterDamageEvent&) { ++damage_events; });
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+    action.Perform(actor);
+
+    REQUIRE(cast_events == 1);
+    REQUIRE(damage_events == 1);
 }

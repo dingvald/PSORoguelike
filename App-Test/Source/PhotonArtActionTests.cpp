@@ -3,6 +3,8 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/SelectedTargetComponent.h"
+#include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/PhotonArtCastEvent.h"
 #include "Engine/Combat/PhotonArtLibrary.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -18,6 +20,12 @@
 namespace {
 
 constexpr std::uint32_t kArtId = 1;
+
+// Tag type identifying this test file's subscriptions to EventHandlerComponent
+// -- never instantiated, only used as Subscribe/Unsubscribe's TOwner key.
+struct PhotonArtEventProbe
+{
+};
 
 // A weapon that grants kArtId, generous ATP/ATA so hits are overwhelmingly
 // likely (though never guaranteed -- ComputeHitChance clamps at 0.95),
@@ -265,4 +273,72 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
     // Same rng seed and call sequence -- the only difference is the tier
     // multiplier, so the hit/miss outcome is identical between runs.
     REQUIRE(boosted_damage > base_damage);
+}
+
+TEST_CASE("PhotonArtAction dispatches AfterPhotonArtCastEvent and AfterDamageEvent on a self-target Damage cast",
+          "[PhotonArtAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::PhotonArt art;
+    art.pp_cost = 5;
+    art.effect_family = psr::EffectFamily::Damage;
+    psr::PhotonArtLibrary arts = MakeLibrary(art);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::HealthComponent health;
+    health.current_hp = 100;
+    health.max_hp = 100;
+    actor.Emplace<psr::HealthComponent>(health);
+
+    int cast_events = 0;
+    int damage_events = 0;
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterPhotonArtCastEvent, PhotonArtEventProbe>(
+        [&](psr::Entity, psr::AfterPhotonArtCastEvent& event)
+        {
+            ++cast_events;
+            REQUIRE(event.photon_art_id == kArtId);
+        });
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterDamageEvent, PhotonArtEventProbe>(
+        [&](psr::Entity, psr::AfterDamageEvent&) { ++damage_events; });
+
+    psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
+    action.Perform(actor);
+
+    REQUIRE(cast_events == 1);
+    REQUIRE(damage_events == 1);
+}
+
+TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDamageEvent", "[PhotonArtAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::PhotonArt art;
+    art.pp_cost = 5;
+    art.effect_family = psr::EffectFamily::Drain;
+    art.drain_percent = 100;
+    psr::PhotonArtLibrary arts = MakeLibrary(art);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::HealthComponent health;
+    health.current_hp = 90;
+    health.max_hp = 100;
+    actor.Emplace<psr::HealthComponent>(health);
+
+    int damage_events = 0;
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterDamageEvent, PhotonArtEventProbe>(
+        [&](psr::Entity, psr::AfterDamageEvent&) { ++damage_events; });
+
+    psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
+    action.Perform(actor);
+
+    REQUIRE(damage_events == 0);
 }

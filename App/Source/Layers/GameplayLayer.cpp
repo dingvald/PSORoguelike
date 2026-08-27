@@ -5,6 +5,7 @@
 #include "ApplicationFilepaths.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Content/KeyBindings.h"
@@ -26,6 +27,10 @@
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
+#include "Layers/HudLayer.h"
+#include "Messages/HotbarSlotActivatedMessage.h"
+#include "Messages/HotbarStateMessage.h"
+#include "Messages/HudReadyMessage.h"
 #include "States/GameState.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -33,6 +38,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keycode.h>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -80,6 +86,16 @@ namespace {
             registry.DestroyEntity(instance);
         }
         return sockets;
+    }
+
+    // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9.
+    std::optional<int> KeyCodeToHotbarSlot(int key_code)
+    {
+        if (key_code >= SDLK_1 && key_code <= SDLK_9)
+            return key_code - SDLK_1;
+        if (key_code == SDLK_0)
+            return 9;
+        return std::nullopt;
     }
 
 } // namespace
@@ -139,12 +155,56 @@ void GameplayLayer::OnAttach()
 
     m_registry.Emplace<EnergyComponent>(m_player); // enqueues the player into the turn queue
 
+    // Default hotbar loadout: first 4 weapon-granted Techniques into slots
+    // 0-3, first 4 Photon Arts into slots 4-7 (mirrors the old placeholder
+    // cast trigger's fixed key ranges, now captured as data instead of
+    // re-derived by key range on every press). Typically all-empty today --
+    // nothing sets EquipmentComponent::weapon on the player yet (see its own
+    // doc comment). Slots 8-9 are always Item stubs so the HUD always has one
+    // of each slot type to render -- item activation is a deliberate no-op,
+    // there is no inventory system yet.
+    HotbarComponent hotbar;
+    if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
+        equipment && equipment->weapon != entt::null)
+    {
+        if (const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon))
+        {
+            std::size_t slot = 0;
+            for (std::uint32_t technique_id : weapon->technique_ids)
+            {
+                if (slot >= 4)
+                    break;
+                hotbar.slots[slot++] = HotbarSlot{HotbarSlotType::Technique, technique_id};
+            }
+            slot = 4;
+            for (std::uint32_t photon_art_id : weapon->photon_art_ids)
+            {
+                if (slot >= 8)
+                    break;
+                hotbar.slots[slot++] = HotbarSlot{HotbarSlotType::PhotonArt, photon_art_id};
+            }
+        }
+    }
+    hotbar.slots[8].type = HotbarSlotType::Item;
+    hotbar.slots[9].type = HotbarSlotType::Item;
+    m_registry.Emplace<HotbarComponent>(m_player, hotbar);
+
+    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_player);
+    m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
+
+    Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
+    Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
+
+    PushOverlay<HudLayer>();
+
     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player};
     m_state_machine.Push(m_exploring_state, context);
 }
 
 void GameplayLayer::OnUpdate(float delta_time)
 {
+    HandleQueuedMessages();
+
     if (!m_turn_coordinator || !m_grid)
         return;
 
@@ -182,62 +242,104 @@ void GameplayLayer::OnRender(SDL_Renderer* renderer)
     m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height);
 }
 
-bool GameplayLayer::TryBeginCast(int key_code)
+bool GameplayLayer::TryActivateSlot(int slot_index)
 {
-    int slot = -1;
-    bool is_technique = false;
-    if (key_code >= SDLK_1 && key_code <= SDLK_4)
-        slot = key_code - SDLK_1;
-    else if (key_code >= SDLK_5 && key_code <= SDLK_8)
-    {
-        slot = key_code - SDLK_5;
-        is_technique = true;
-    }
-    else
+    if (!m_registry.IsValid(m_player) || slot_index < 0 ||
+        slot_index >= static_cast<int>(HotbarComponent::kSlotCount))
         return false;
 
-    if (!m_registry.IsValid(m_player))
+    const HotbarComponent* hotbar = m_registry.TryGetComponent<HotbarComponent>(m_player);
+    if (!hotbar)
         return false;
-    const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
-    if (!equipment || equipment->weapon == entt::null)
-        return false;
-    const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon);
-    if (!weapon)
-        return false;
+    const HotbarSlot& slot = hotbar->slots[static_cast<std::size_t>(slot_index)];
 
-    if (is_technique)
+    switch (slot.type)
     {
-        if (slot >= static_cast<int>(weapon->technique_ids.size()))
-            return false;
-        const std::uint32_t technique_id = weapon->technique_ids[static_cast<std::size_t>(slot)];
-        const Technique* technique = m_techniques.Find(technique_id);
+    case HotbarSlotType::Technique:
+    {
+        const Technique* technique = m_techniques.Find(slot.id);
         if (!technique)
             return false;
         const TPComponent* tp = m_registry.TryGetComponent<TPComponent>(m_player);
         if (!tp || tp->current_tp < technique->tp_cost)
             return false;
 
-        m_pending_cast_action =
-            std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, technique_id, m_rng);
+        m_pending_cast_action = std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, slot.id, m_rng);
         m_turn_coordinator->RequestTargeting(TargetRequest{m_pending_cast_action.get(), technique->targeting_mode,
                                                            technique->range_shape, technique->range});
         return true;
     }
+    case HotbarSlotType::PhotonArt:
+    {
+        const PhotonArt* art = m_photon_arts.Find(slot.id);
+        if (!art)
+            return false;
+        const PPComponent* pp = m_registry.TryGetComponent<PPComponent>(m_player);
+        if (!pp || pp->current_pp < art->pp_cost)
+            return false;
 
-    if (slot >= static_cast<int>(weapon->photon_art_ids.size()))
+        m_pending_cast_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, slot.id, m_rng);
+        m_turn_coordinator->RequestTargeting(
+            TargetRequest{m_pending_cast_action.get(), art->targeting_mode, art->range_shape, art->range});
+        return true;
+    }
+    case HotbarSlotType::Item:
+    case HotbarSlotType::Empty:
+    default:
         return false;
-    const std::uint32_t photon_art_id = weapon->photon_art_ids[static_cast<std::size_t>(slot)];
-    const PhotonArt* art = m_photon_arts.Find(photon_art_id);
-    if (!art)
-        return false;
-    const PPComponent* pp = m_registry.TryGetComponent<PPComponent>(m_player);
-    if (!pp || pp->current_pp < art->pp_cost)
-        return false;
+    }
+}
 
-    m_pending_cast_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, photon_art_id, m_rng);
-    m_turn_coordinator->RequestTargeting(
-        TargetRequest{m_pending_cast_action.get(), art->targeting_mode, art->range_shape, art->range});
-    return true;
+void GameplayLayer::OnHotbarSlotActivated(const HotbarSlotActivatedMessage& message)
+{
+    // Same guard the key-press path already implicitly has via OnEvent below --
+    // don't let a stray click activate an ability while target-select is
+    // already in progress.
+    if (m_state_machine.Top() == &m_exploring_state)
+        TryActivateSlot(message.slot_index);
+}
+
+void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
+{
+    PublishHotbarState();
+    if (m_combat_log_bridge)
+        m_combat_log_bridge->PublishPlayerStatus();
+}
+
+void GameplayLayer::PublishHotbarState()
+{
+    if (!m_registry.IsValid(m_player))
+        return;
+    const HotbarComponent* hotbar = m_registry.TryGetComponent<HotbarComponent>(m_player);
+    if (!hotbar)
+        return;
+
+    HotbarStateMessage state;
+    for (std::size_t i = 0; i < HotbarComponent::kSlotCount; ++i)
+    {
+        const HotbarSlot& slot = hotbar->slots[i];
+        HotbarStateMessage::SlotView view;
+        view.type = slot.type;
+        switch (slot.type)
+        {
+        case HotbarSlotType::Technique:
+            if (const Technique* technique = m_techniques.Find(slot.id))
+                view.name = technique->name;
+            break;
+        case HotbarSlotType::PhotonArt:
+            if (const PhotonArt* art = m_photon_arts.Find(slot.id))
+                view.name = art->name;
+            break;
+        case HotbarSlotType::Item:
+            view.name = "(item)";
+            break;
+        case HotbarSlotType::Empty:
+        default:
+            break;
+        }
+        state.slots[i] = view;
+    }
+    Publish(state);
 }
 
 void GameplayLayer::OnEvent(Event& event)
@@ -245,14 +347,17 @@ void GameplayLayer::OnEvent(Event& event)
     if (!m_turn_coordinator || !m_grid)
         return;
 
-    // Placeholder cast trigger only intercepts keys while the player is free
-    // to act (Exploring on top, not already mid-target-select) -- see class
-    // doc comment.
+    // Hotbar key-press trigger only intercepts keys while the player is free
+    // to act (Exploring on top, not already mid-target-select).
     if (m_state_machine.Top() == &m_exploring_state)
     {
         EventDispatcher dispatcher(event);
-        dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& key_event)
-                                             { return TryBeginCast(key_event.GetKeyCode()); });
+        dispatcher.Dispatch<KeyPressedEvent>(
+            [this](KeyPressedEvent& key_event)
+            {
+                const std::optional<int> slot = KeyCodeToHotbarSlot(key_event.GetKeyCode());
+                return slot.has_value() && TryActivateSlot(*slot);
+            });
     }
 
     if (event.handled)
