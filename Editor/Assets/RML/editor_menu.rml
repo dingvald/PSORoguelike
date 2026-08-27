@@ -14,6 +14,7 @@
                     <li id="menu-dungeons" class="menu-row">Dungeons</li>
                     <li id="menu-prefabs" class="menu-row">Prefabs</li>
                     <li id="menu-affixes" class="menu-row">Affixes</li>
+                    <li id="menu-drop-tables" class="menu-row">Drop Tables</li>
                     <li id="menu-exit" class="menu-row">Exit</li>
                 </ul>
             </div>

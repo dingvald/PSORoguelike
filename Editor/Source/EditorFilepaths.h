@@ -22,4 +22,5 @@ public:
     static const std::filesystem::path AffixesPath;
     static const std::filesystem::path PhotonArtsPath;
     static const std::filesystem::path TechniquesPath;
+    static const std::filesystem::path DropTablesPath;
 };

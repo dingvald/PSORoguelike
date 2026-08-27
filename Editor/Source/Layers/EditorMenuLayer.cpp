@@ -2,6 +2,7 @@
 
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/AffixEditorLayer.h"
+#include "Layers/DropTableEditorLayer.h"
 #include "Layers/DungeonEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
 #include "Layers/PrefabEditorLayer.h"
@@ -134,6 +135,9 @@ void EditorMenuLayer::ConfirmSelection()
         break;
     case RowAffixes:
         TransitionTo<AffixEditorLayer>();
+        break;
+    case RowDropTables:
+        TransitionTo<DropTableEditorLayer>();
         break;
     case RowExit:
         RequestQuit();

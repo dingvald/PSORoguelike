@@ -18,13 +18,16 @@
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
+#include "Engine/ECS/MesetaComponent.h"
 #include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
+#include "Engine/ECS/SectionIdComponent.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
+#include "Engine/Items/DropTableLibraryFile.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "States/GameState.h"
 
@@ -109,6 +112,7 @@ void GameplayLayer::OnAttach()
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
+    m_drop_tables = LoadDropTableLibrary(ApplicationFilepaths::DropTablesPath);
 
     const DungeonLibrary dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
     const Dungeon* dungeon = dungeons.Find(entt::hashed_string::value(kDungeonId));
@@ -130,9 +134,18 @@ void GameplayLayer::OnAttach()
     m_turn_coordinator.emplace(m_registry);
     m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng);
 
+    // Needs a live Grid&, so constructed after m_grid.emplace() above.
+    m_loot_drop_system.emplace(m_registry, *m_grid, m_drop_tables, m_rng);
+
     m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
+    m_registry.Emplace<MesetaComponent>(m_player);
+    // Not overwriting an authored SectionIdComponent if player.json already
+    // has one (see SectionIdComponent's own doc comment on why one might be
+    // authored as a template default ahead of M10.3's real character
+    // creation); only emplaces the default (None) when the prefab has none.
+    m_registry.GetOrEmplace<SectionIdComponent>(m_player);
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 

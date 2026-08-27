@@ -590,7 +590,7 @@ tracking) plus the deliberate-failure check above.
 
 ## M8 — Itemization & Economy
 
-**Status:** 8.1 done (pulled forward, see the Phase-A note above)
+**Status:** 8.1/8.2 done (8.1 pulled forward, see the Phase-A note above)
 
 - **8.1 Item & equipment schema:** Engine: weapon/armor/material components + inventory/equip
   slots. Editor: **Item editor layer** — weapon stats, race-bonus %, equip-slot config. UI:
@@ -662,6 +662,80 @@ tracking) plus the deliberate-failure check above.
 - **8.2 Drop tables & Section ID:** Engine: per-enemy common+rare tables, Section-ID weighting
   (10 IDs), boss guaranteed tables, Meseta currency. Editor: drop-table editor (weighted entry
   list per enemy/boss, Section ID weight matrix). UI: loot-drop toast, Meseta HUD counter.
+  **Done (worked autonomously overnight; not built/run — no Windows/MSVC/vcpkg toolchain was
+  available in that session, so this needs a build + live-Editor/App smoke-test before merging,
+  unlike every earlier "Done" note in this file which was verified live):** a new
+  `Core/Source/Engine/Items/` file family (`DropEntry`/`DropTable`/`DropTableError`/
+  `DropTableSchema`/`DropTableSchemaEmitter`/`DropTableLibrary`/`DropTableLibraryFile`) follows
+  the `PhotonArt`/`Affix` bespoke-content-type pattern exactly — one `DropTable` per file under
+  `App/Assets/Data/DropTables/*.json`, referenced from an enemy/boss prefab via the new
+  `DropTableComponent::drop_table_id` NameId (mirrors `RaceComponent::race_id`). `SectionId`
+  (`Core/Source/Engine/ECS/SectionId.h`) is the ten PSO ids plus a `None` sentinel (value 0, this
+  codebase's usual "0 = none" convention) for "not chosen yet" — character creation (M10.3) isn't
+  built yet to make a real choice, so the new `SectionIdComponent` is authored as a template
+  default (`None`) the same way `WeaponComponent::grind_level` is, and `GameplayLayer` only
+  `GetOrEmplace`s it onto the player so an authored default on `player.json` isn't clobbered.
+  `DropEntry` (shared by `DropTable::common_entries`/`::rare_entries`, one struct not two, mirrors
+  `PhotonArtTier`'s reuse across tiers) carries `item_prefab_id`/`weight` plus a single
+  `favored_section_id` field rather than a per-entry list of per-section weight overrides — a
+  deliberate scope simplification (avoids a two-level nested repeatable array in the editor UI,
+  a materially bigger and riskier UI-engineering task to get right without the ability to run it)
+  that still captures the real GDD mechanic: `None` is unbiased and always eligible, a matching
+  section gets a weight bonus (`Engine/Items/DropResolution.cpp`'s `kSectionIdMatchBonus`, a
+  placeholder multiplier per this doc's own "deferred to a future balancing pass" precedent), and
+  a non-matching non-`None` entry is excluded outright — PSO itself section-locks some rare/board
+  items the same way, not just uniformly biasing every entry's weight. `DropResolution.h/.cpp`
+  (`ResolveDrop`) is the pure, `Core-Test`-covered roll: an independent meseta roll when
+  `meseta_max > 0`; `boss_guaranteed_rare` or a `rare_chance_percent` roll picks the rare table,
+  falling back to common if the rare list has no entry eligible for the roller's Section ID rather
+  than dropping nothing. New `MesetaComponent` (not authorable — a running total starting at 0,
+  mirrors `EnergyComponent`'s "engine-managed" convention) and `App/Source/Systems/
+  LootDropSystem` apply a roll on death: **deliberately not wired via `AttackAction`/
+  `PhotonArtAction`/`TechniqueAction`** (the "Photon Arts & Techniques" work the user flagged as
+  already in progress in a separate session, and — as of this pass — still visibly mid-flight
+  itself: no `photon_art_editor.rml`/`technique_editor.rml`/`TechniqueEditorLayer` exist yet, and
+  `EditorMenuLayer` doesn't route to `PhotonArtEditorLayer` either) — instead `LootDropSystem`
+  hooks entt's *entity-level* destroy signal (`registry.on_destroy<entt::entity>()`, via
+  `Registry::OnDestroy<entt::entity, ...>`, not a per-component one) so it fires before any of the
+  dying entity's component pools are cleared, keeping `Position`/`DropTableComponent` safely
+  readable regardless of destroy-internal pool ordering — the same reasoning that already has
+  `AttackAction` et al. capture a tile before calling `DestroyEntity` rather than reading it back
+  afterward. This keeps the whole feature decoupled from — and additive to — whatever the other
+  session lands, at the cost of not routing loot through "who actually landed the killing blow"
+  (moot for now: single-player, per `docs/GDD.md`'s own scope decision, so Meseta always credits
+  whichever entity carries both `MesetaComponent` and `PlayerControlledComponent`). A rolled item
+  entry is spawned as a real `GroundItemComponent`-tagged entity in the `Grid` at the death tile —
+  visibly on the ground, matching PSO's "walk over a dropped item" — but not pickup-able yet: no
+  inventory/pickup system exists (M8.1's own deferral), the same "engine lands, interaction UI
+  deferred" precedent M7.1 already set for HP bars/combat log. Editor: `PrefabEditorLayer` gained
+  "Loot" (`DropTableComponent`, a `BuildIdEnumField` picker sourced from a new `m_drop_tables`
+  library member, mirrors the weapon affix pickers) and "Section ID" (`SectionIdComponent`, a
+  plain `BuildEnumField`) Inspector cards, following the exact same
+  read-body/write-body/`kComponentKinds`-entry/`RefreshEditForm`-wiring recipe every other card
+  already uses. A new standalone `Editor/Source/Layers/DropTableEditorLayer` (wired into
+  `EditorMenuLayer` as a new "Drop Tables" row) follows the `PhotonArtEditorLayer`/
+  `DungeonEditorLayer` List/Edit template — two repeatable entry lists (common/rare), each row an
+  item picker (scans `App/Assets/Data/Entities` for options, tolerant of a missing/empty
+  directory) + weight + favored-Section-ID dropdown, using `DungeonEditorLayer`'s deferred-
+  `m_pending_action`-drained-in-`OnRender` reorder pattern rather than `PhotonArtEditorLayer`'s
+  own synchronous one (which appears to violate `WireDragReorder`'s own "never rebuild
+  synchronously" doc comment — an existing issue, not touched here). UI: loot-drop toast / Meseta
+  HUD counter **deliberately deferred**, matching every earlier milestone's identical UI-bullet
+  deferral reasoning — no HUD exists in `GameplayLayer` yet to host them in. `App/Assets/Data/
+  DropTables/` ships with only a `.gitkeep` (no sample content authored — real drop tables are the
+  user's own work through the new editor, per `CLAUDE.md`'s division of labor), same reasoning
+  `PhotonArts`/`Techniques`/`Affixes` shipping without seed content already established; unlike
+  those two libraries, `GameplayLayer::OnAttach` unconditionally loading `DropTablesPath` won't
+  throw on a bare checkout, since the directory itself (just no `.json` inside it) is enough to
+  satisfy `LoadJsonDirectory`. Catch2 coverage in `Core-Test/Source/DropTableSchemaTests.cpp`
+  (schema shape, save/load round-trip, unknown-enum-name and schema-version-mismatch error paths,
+  mirroring `AffixSchemaTests.cpp`) and `Core-Test/Source/DropResolutionTests.cpp` (meseta range,
+  rare-chance boundary via `rare_chance_percent=0`/`boss_guaranteed_rare`, Section-ID gating/
+  fallback, empty-table no-drop) plus `App-Test/Source/LootDropSystemTests.cpp` (Meseta credited
+  on a matching death, no-ops for a missing/unknown `DropTableComponent` and for a non-`HealthComponent`
+  destroy). **Not verified live** (Editor round-trip, in-game kill-credits-Meseta/spawns-loot) for
+  the reason stated at the top of this note — flagged explicitly rather than silently claimed, per
+  this project's own verification convention.
 - **8.3 Photon crystals / stat materials:** Engine: consumable permanent-stat-boost items
   (Power/Mind/HP Material, etc.). Editor: material-effect fields on the item editor. UI:
   use-item confirmation + stat-gain feedback.

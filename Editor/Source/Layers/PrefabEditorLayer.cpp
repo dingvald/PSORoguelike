@@ -7,6 +7,7 @@
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Items/AffixLibraryFile.h"
+#include "Engine/Items/DropTableLibraryFile.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Persistence/JsonFile.h"
 #include "Layers/EditorMenuLayer.h"
@@ -309,6 +310,20 @@ namespace {
         return object;
     }
 
+    DropTableComponent ReadLootBody(const rapidjson::Value& body)
+    {
+        DropTableComponent loot;
+        loot.drop_table_id = ReadNameId(body, "drop_table_id", 0);
+        return loot;
+    }
+
+    rapidjson::Value WriteLootBody(const DropTableComponent& loot, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("drop_table_id", WriteNameId(loot.drop_table_id, allocator), allocator);
+        return object;
+    }
+
     // Mirrors PieceLibraryFile.cpp's ReadEnum/EnumName: a JSON string mapped
     // against psr::EnumNames<E>::kValues, falling back rather than throwing
     // (this editor is more forgiving of stale/hand-edited files than the
@@ -354,6 +369,20 @@ namespace {
             if (name == text)
                 return value;
         return fallback;
+    }
+
+    SectionIdComponent ReadSectionIdBody(const rapidjson::Value& body)
+    {
+        SectionIdComponent section;
+        section.section_id = ReadEnum<SectionId>(body, "section_id", section.section_id);
+        return section;
+    }
+
+    rapidjson::Value WriteSectionIdBody(const SectionIdComponent& section, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("section_id", StringValue(std::string{EnumName(section.section_id)}, allocator), allocator);
+        return object;
     }
 
     std::vector<RaceBonusEntry> ReadRaceBonuses(const rapidjson::Value& object, const char* key)
@@ -461,7 +490,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 9> kComponentKinds = {
+    constexpr std::array<ComponentKind, 11> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -497,7 +526,9 @@ namespace {
          "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
          "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
         {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-        {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"}}};
+        {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
+        {"loot", "Loot", "#e89d5d", "<div id=\"field-drop-table\" class=\"field-row\"></div>"},
+        {"section_id", "Section ID", "#5de8d3", "<div id=\"field-section-id\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -532,6 +563,16 @@ void PrefabEditorLayer::OnAttach()
     catch (const std::exception& error)
     {
         m_affixes = AffixLibrary{};
+        m_error = error.what();
+    }
+
+    try
+    {
+        m_drop_tables = LoadDropTableLibrary(EditorFilepaths::DropTablesPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_drop_tables = DropTableLibrary{};
         m_error = error.what();
     }
 
@@ -856,7 +897,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "health" ||
-            key == "weapon" || key == "armor" || key == "mod" || key == "rarity")
+            key == "weapon" || key == "armor" || key == "mod" || key == "rarity" || key == "loot" ||
+            key == "section_id")
             m_component_order.emplace_back(key);
     }
 
@@ -876,6 +918,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
+    m_loot = components.HasMember("loot") ? ReadLootBody(components["loot"]) : DropTableComponent{};
+    m_section_id = components.HasMember("section_id") ? ReadSectionIdBody(components["section_id"]) : SectionIdComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1218,6 +1262,28 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-drop-table"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> drop_table_options = {{0, "-- Select Drop Table --"}};
+        for (const DropTable& table : m_drop_tables.All())
+            drop_table_options.emplace_back(table.id, table.name.empty() ? table.id_string : table.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "drop_table_id", drop_table_options, m_loot.drop_table_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_loot.drop_table_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+
+    if (Rml::Element* row = m_editor->GetElementById("field-section-id"))
+        keep(fieldwidgets::BuildEnumField(*row, "section_id", EnumOptions<SectionId>(),
+                                          EnumToString(m_section_id.section_id),
+                                          [this](std::string v)
+                                          {
+                                              m_section_id.section_id = EnumFromString(v, SectionId::None);
+                                              MarkDirty();
+                                          }));
+
     if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1396,7 +1462,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity"})
+    for (const char* key :
+        {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "loot", "section_id"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1421,6 +1488,10 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteModBody(allocator);
         else if (key == "rarity")
             body = WriteRarityBody(m_rarity, allocator);
+        else if (key == "loot")
+            body = WriteLootBody(m_loot, allocator);
+        else if (key == "section_id")
+            body = WriteSectionIdBody(m_section_id, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

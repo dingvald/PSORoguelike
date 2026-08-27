@@ -11,3 +11,4 @@ const std::filesystem::path ApplicationFilepaths::DungeonsPath = ApplicationFile
 const std::filesystem::path ApplicationFilepaths::EntitiesPath = ApplicationFilepaths::DataPath / "Entities";
 const std::filesystem::path ApplicationFilepaths::PhotonArtsPath = ApplicationFilepaths::DataPath / "PhotonArts";
 const std::filesystem::path ApplicationFilepaths::TechniquesPath = ApplicationFilepaths::DataPath / "Techniques";
+const std::filesystem::path ApplicationFilepaths::DropTablesPath = ApplicationFilepaths::DataPath / "DropTables";

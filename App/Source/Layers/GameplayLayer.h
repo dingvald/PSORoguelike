@@ -5,6 +5,7 @@
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
 #include "Engine/Items/AffixLibrary.h"
+#include "Engine/Items/DropTableLibrary.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/Camera.h"
 #include "Engine/Render/TextureAtlas.h"
@@ -15,6 +16,7 @@
 #include "States/ExploringState.h"
 #include "States/GameStateMachine.h"
 #include "States/TargetSelectionState.h"
+#include "Systems/LootDropSystem.h"
 #include "Systems/TurnCoordinator.h"
 
 #include <entt/entt.hpp>
@@ -75,6 +77,7 @@ private:
     AffixLibrary m_affixes; // empty: no enemies spawn yet, so MoveAction's attack fallback never triggers
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
+    DropTableLibrary m_drop_tables;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -87,6 +90,11 @@ private:
     // is driven by that construction order, see TurnCoordinator.cpp).
     // Declared after m_registry so it's destroyed first.
     std::optional<TurnCoordinator> m_turn_coordinator;
+
+    // Same non-movable/binds-to-own-address reasoning as m_turn_coordinator
+    // above (see LootDropSystem's own class doc comment) -- also declared
+    // after m_registry so it's destroyed first.
+    std::optional<LootDropSystem> m_loot_drop_system;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action

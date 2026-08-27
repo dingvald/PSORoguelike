@@ -1,0 +1,50 @@
+<rml>
+    <head>
+        <title>Drop Table Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Drop Tables</h1>
+                <span id="new-drop-table" class="btn action">New Drop Table</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="drop-table-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-drop-table" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div class="scroll-panel">
+                <h3>Id</h3>
+                <div id="field-id" class="field-row"></div>
+                <h3>Name</h3>
+                <div id="field-name" class="field-row"></div>
+                <h3>Rare chance (%)</h3>
+                <div id="field-rare-chance" class="field-row"></div>
+                <h3>Boss guaranteed rare</h3>
+                <div id="field-boss-guaranteed" class="field-row"></div>
+                <h3>Meseta range</h3>
+                <div id="field-meseta-min" class="field-row"></div>
+                <div id="field-meseta-max" class="field-row"></div>
+                <h3>Common entries &mdash; item/weight/favored Section ID
+                    <span id="add-common-entry" class="btn">Add Entry</span>
+                </h3>
+                <div id="common-entry-list" class="ref-scroll"></div>
+                <h3>Rare entries &mdash; item/weight/favored Section ID
+                    <span id="add-rare-entry" class="btn">Add Entry</span>
+                </h3>
+                <div id="rare-entry-list" class="ref-scroll"></div>
+            </div>
+        </div>
+    </body>
+</rml>

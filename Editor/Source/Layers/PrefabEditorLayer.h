@@ -3,13 +3,16 @@
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
+#include "Engine/ECS/DropTableComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/RarityComponent.h"
+#include "Engine/ECS/SectionIdComponent.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/ECS/StatsComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 #include "Engine/Items/AffixLibrary.h"
+#include "Engine/Items/DropTableLibrary.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
@@ -48,10 +51,11 @@ class RmlEventListener;
 // currently-registered *authorable* component with editor support
 // (RenderableComponent, SocketComponent, StatsComponent, RaceComponent,
 // HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
-// RarityComponent) -- not a
+// RarityComponent, DropTableComponent, SectionIdComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
+// M8.2's Loot/Section ID cards follow the identical precedent.
 // Position and PrefabIdComponent are never exposed; both are non-authorable
 // per their own doc comments (engine-derived-only: spawn position,
 // clone-source id).
@@ -186,10 +190,16 @@ private:
     WeaponComponent m_weapon;
     ArmorComponent m_armor;
     RarityComponent m_rarity;
+    DropTableComponent m_loot;
+    SectionIdComponent m_section_id;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
     AffixLibrary m_affixes;
+
+    // Drop Table library (App/Assets/Data/DropTables), loaded once in
+    // OnAttach -- backs the Loot card's BuildIdEnumField picker.
+    DropTableLibrary m_drop_tables;
 
     // -- Shared render resources (lazy) --
     bool m_renderer_initialized = false;
