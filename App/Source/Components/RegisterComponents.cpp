@@ -6,6 +6,7 @@
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
+#include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/ModComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
@@ -24,6 +25,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
     EnergyComponent::Register(reg);
+    HealthComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);

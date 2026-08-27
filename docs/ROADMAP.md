@@ -476,12 +476,56 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
 
 ## M7 — Combat System
 
-**Status:** Not started
+**Status:** 7.1 done
 
 - **7.1 Melee/ranged resolution:** Engine: Hunter melee (adjacent/cone/line shapes, ATP-vs-ATA
   tradeoff), Ranger ranged (range/spread/hits-per-turn), four-race damage bonus from 5.1.
   Editor: weapon-type fields (range shape, ATP/ATA split) added to the item schema/editor
-  (M8.1). UI: HP/action bars, target/range-preview overlay, combat log.
+  (M8.1). UI: HP/action bars, target/range-preview overlay, combat log. **Done:** a new
+  `HealthComponent` (`Core/Source/Engine/ECS/HealthComponent.h` -- `current_hp`/`max_hp`, same
+  shape as `StatsComponent`) fills the gap M8.1 left open: nothing could be damaged or killed
+  before this, since no HP concept existed anywhere. `Core/Source/Engine/Combat/CombatMath.h/
+  .cpp` holds the pure formula: `ComputeHitChance` (ATA-vs-EVP ratio, clamped to [0.05, 0.95] so
+  a hit is never guaranteed or impossible), `ComputeDamage` (ATP minus half DFP, a small
+  \[0.9, 1.1\] random variance band, floored at 1), and `ApplyRaceBonus` (the 5.1 four-race %
+  bonus). Per the user's explicit brief, this is shaped after PSO's known ATA/EVP and ATP/DFP
+  mechanics, not a claimed bit-exact reproduction of PSO's original (undocumented) constants --
+  real per-entity numbers stay authored `StatsComponent` data, same deferral every other
+  milestone here already makes; `grind_level`'s stat contribution is left unconsumed for the
+  same reason (no single documented universal per-grind formula to port faithfully).
+  `App/Source/Combat/EffectiveStats.h/.cpp` (`ComputeEffectiveStats`) sums an actor's base
+  `StatsComponent` with its equipped weapon/armor entities' `StatsComponent` bonus (read via
+  `EquipmentComponent`) plus its weapon's prefix/suffix affix flat bonuses -- finally giving
+  M8.1's Affix library a real consumer. `App/Source/Combat/Hostility.h` (`IsHostile`) is a
+  placeholder player-vs-everyone-else rule, mirroring `TurnCoordinator`'s own existing
+  simplification, until a real faction system exists. `App/Source/Actions/AttackAction.h/.cpp`
+  is the new `IAction`: resolves target tiles from the wielded weapon's `WeaponRangeShape`
+  (`SingleTarget` the one adjacent tile; `Line` pierces every hostile target up to `range`,
+  stopping only at a wall -- a `BlocksMovementComponent` occupant with no `HealthComponent`;
+  `Cone3` the forward tile plus its two perpendicular neighbours; `Surrounding` all four
+  cardinal-adjacent tiles), rolls `hits_per_turn` hit/damage checks per hostile occupant found,
+  and destroys (`Registry::DestroyEntity`) anything reduced to 0 HP -- which automatically drops
+  it from `TurnQueue` via `TurnCoordinator`'s existing `OnDestroy<EnergyComponent>` listener, no
+  new death-handling wiring needed. `MoveAction` (M6.2) is extended, not replaced: bumping into a
+  hostile `HealthComponent`-carrying occupant now returns an `AttackAction` via
+  `ActionResult::fallback` instead of a bare no-op -- the exact seam M6.1's `ResolveAction`
+  reserved for this; a non-attackable/non-hostile blocker still no-ops as before. `MoveAction`'s
+  (and `CreateDefaultKeyBindings`'s) constructor grew an `AffixLibrary&`/`std::mt19937&` pair to
+  thread through to that fallback. Editor: a "Health" Inspector card was added to
+  `PrefabEditorLayer` (mirrors the existing "Stats" card, two `BuildIntField`s), per CLAUDE.md's
+  "every feature needs a UI/editor answer" -- HP is authored content like any other stat. UI:
+  HP/action bars, target/range-preview overlay, and combat log are **deliberately deferred this
+  round**, per the user's explicit choice matching M6.2's own precedent -- no gameplay `Layer`
+  exists yet to host them in; revisit once the Phase-A debug mission launcher lands. Likewise
+  out of scope: PP/TP costs and Photon Arts/Techniques (7.2), status effects (7.3), and the debug
+  mission launcher itself (a separate Phase A item) -- nothing here wires `AttackAction`/
+  `MoveAction` into a live input loop or spawns real entities, so verification stayed unit-test-
+  only (no throwaway smoke-test layer), same reasoning M6.2 already gives for logic that's fully
+  unit-testable without a live gameplay layer. Catch2 coverage in
+  `Core-Test/Source/HealthComponentTests.cpp` / `CombatMathTests.cpp` and
+  `App-Test/Source/AttackActionTests.cpp` (weapon-less/target-less/non-hostile no-ops, lethal
+  resolution and destroy, `hits_per_turn` multiplicity, race-bonus application) plus new
+  bump-to-attack cases in `App-Test/Source/MoveActionTests.cpp`.
 - **7.2 Photon Arts (PP) & Techniques (TP):** Engine: separate PP (Hunter/Ranger) and TP
   (Force) pools; Photon Art as a chosen PP-cost attack option (not a hidden proc, per GDD's
   turn-based adaptation); Technique spell system with elemental damage + status, tiered by use.

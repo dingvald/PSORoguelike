@@ -279,6 +279,22 @@ namespace {
         return object;
     }
 
+    HealthComponent ReadHealthBody(const rapidjson::Value& body)
+    {
+        HealthComponent health;
+        health.current_hp = ReadInt(body, "current_hp", 0);
+        health.max_hp = ReadInt(body, "max_hp", 0);
+        return health;
+    }
+
+    rapidjson::Value WriteHealthBody(const HealthComponent& health, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("current_hp", health.current_hp, allocator);
+        object.AddMember("max_hp", health.max_hp, allocator);
+        return object;
+    }
+
     RaceComponent ReadRaceBody(const rapidjson::Value& body)
     {
         RaceComponent race;
@@ -445,7 +461,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 8> kComponentKinds = {
+    constexpr std::array<ComponentKind, 9> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -465,6 +481,9 @@ namespace {
          "<div id=\"field-evp\" class=\"field-row\"></div>"
          "<div id=\"field-lck\" class=\"field-row\"></div>"},
         {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
+        {"health", "Health", "#5de88f",
+         "<div id=\"field-current-hp\" class=\"field-row\"></div>"
+         "<div id=\"field-max-hp\" class=\"field-row\"></div>"},
         {"weapon", "Weapon", "#e85d5d",
          "<div id=\"field-range-shape\" class=\"field-row\"></div>"
          "<div id=\"field-range\" class=\"field-row\"></div>"
@@ -836,8 +855,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "weapon" ||
-            key == "armor" || key == "mod" || key == "rarity")
+        if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "health" ||
+            key == "weapon" || key == "armor" || key == "mod" || key == "rarity")
             m_component_order.emplace_back(key);
     }
 
@@ -851,6 +870,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 
     m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
     m_race_name = LabelFor(m_race.race_id);
+
+    m_health = components.HasMember("health") ? ReadHealthBody(components["health"]) : HealthComponent{};
 
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
@@ -1102,6 +1123,21 @@ void PrefabEditorLayer::RefreshEditForm()
                                                 }
                                                 MarkDirty();
                                             }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-current-hp"))
+        keep(fieldwidgets::BuildIntField(*row, "current_hp", m_health.current_hp,
+                                         [this](int v)
+                                         {
+                                             m_health.current_hp = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-max-hp"))
+        keep(fieldwidgets::BuildIntField(*row, "max_hp", m_health.max_hp,
+                                         [this](int v)
+                                         {
+                                             m_health.max_hp = v;
+                                             MarkDirty();
+                                         }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-range-shape"))
         keep(fieldwidgets::BuildEnumField(*row, "range_shape", EnumOptions<WeaponRangeShape>(),
@@ -1360,7 +1396,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "socket", "stats", "race", "weapon", "armor", "mod", "rarity"})
+    for (const char* key : {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1375,6 +1411,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteStatsBody(m_stats, allocator);
         else if (key == "race")
             body = WriteRaceBody(m_race, allocator);
+        else if (key == "health")
+            body = WriteHealthBody(m_health, allocator);
         else if (key == "weapon")
             body = WriteWeaponBody(m_weapon, allocator);
         else if (key == "armor")

@@ -3,6 +3,7 @@
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
+#include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/SocketComponent.h"
@@ -46,7 +47,8 @@ class RmlEventListener;
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
 // (RenderableComponent, SocketComponent, StatsComponent, RaceComponent,
-// WeaponComponent, ArmorComponent, ModComponent, RarityComponent) -- not a
+// HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
+// RarityComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -180,6 +182,7 @@ private:
     StatsComponent m_stats;
     RaceComponent m_race;
     std::string m_race_name;
+    HealthComponent m_health;
     WeaponComponent m_weapon;
     ArmorComponent m_armor;
     RarityComponent m_rarity;

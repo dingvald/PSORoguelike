@@ -13,6 +13,7 @@ project "App-Test"
       -- already uses for Components/Render. main.cpp and anything touching
       -- Layer/SDL/RmlUi (HelloWorldLayer, the GPU render pipeline) is out of scope.
       "../App/Source/Actions/**.h", "../App/Source/Actions/**.cpp",
+      "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",
       "../App/Source/Systems/**.h", "../App/Source/Systems/**.cpp",
