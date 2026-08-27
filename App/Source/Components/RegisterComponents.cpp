@@ -15,6 +15,7 @@
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/RaceComponent.h"
+#include "Engine/ECS/RareVariantComponent.h"
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/SectionIdComponent.h"
 #include "Engine/ECS/SocketComponent.h"
@@ -41,6 +42,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);
+    RareVariantComponent::Register(reg);
     RarityComponent::Register(reg);
     RenderableComponent::Register(reg);
     SectionIdComponent::Register(reg);

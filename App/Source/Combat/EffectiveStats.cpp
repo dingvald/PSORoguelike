@@ -1,8 +1,11 @@
 #include "Combat/EffectiveStats.h"
 
 #include "Components/EquipmentComponent.h"
+#include "Engine/ECS/RareVariantComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/WeaponComponent.h"
+
+#include <cmath>
 
 namespace psr {
 
@@ -15,6 +18,16 @@ namespace {
         total.dfp += bonus.dfp;
         total.evp += bonus.evp;
         total.lck += bonus.lck;
+    }
+
+    void ApplyRareVariantMultiplier(StatsComponent& total, float multiplier)
+    {
+        total.atp = static_cast<int>(std::lround(total.atp * multiplier));
+        total.ata = static_cast<int>(std::lround(total.ata * multiplier));
+        total.mst = static_cast<int>(std::lround(total.mst * multiplier));
+        total.dfp = static_cast<int>(std::lround(total.dfp * multiplier));
+        total.evp = static_cast<int>(std::lround(total.evp * multiplier));
+        total.lck = static_cast<int>(std::lround(total.lck * multiplier));
     }
 
     void AddEquippedStats(StatsComponent& total, Registry& registry, entt::entity item)
@@ -82,6 +95,9 @@ StatsComponent ComputeEffectiveStats(Entity actor, const AffixLibrary& affixes)
             AddAffixBonus(total, affixes, weapon->suffix_affix_id);
         }
     }
+
+    if (const RareVariantComponent* rare = actor.TryGet<RareVariantComponent>(); rare && rare->is_rare)
+        ApplyRareVariantMultiplier(total, rare->stat_multiplier);
 
     return total;
 }

@@ -373,7 +373,8 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 
 ## M5 — Entity & Stat Framework
 
-**Status:** 5.1/5.2 done. A generic **Prefab Editor** already exists ahead of schedule
+**Status:** 5.1/5.2 done, 5.3 partially done (rare-variant flag; tier-based roster substitution
+deferred, see 5.3's own note below). A generic **Prefab Editor** already exists ahead of schedule
 (`Editor/Source/Layers/PrefabEditorLayer`) — browse/create/edit/delete the entity-prefab JSON
 files under `App/Assets/Data/Entities/`, rendering one Inspector-style card per currently-registered
 *authorable* component (see the M4.4 follow-up note above for the `authorable` flag and shared
@@ -419,7 +420,39 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
 - **5.3 Rare enemies & tier reskins:** Engine: rare-variant flag (alt palette + stat multiplier
   + guaranteed drop hook), tier-based roster substitution (e.g. Garanz→Baranz on Ultimate, not
   just stat scaling). Editor: rare-variant toggle + tier-substitution mapping on the entity
-  editor. UI: none yet — rare/boss visual callouts land with combat UI in M7.
+  editor. UI: none yet — rare/boss visual callouts land with combat UI in M7. **Rare-variant half
+  done (worked autonomously overnight; not built/run — see M8.2's identical caveat above for
+  why):** new `Core/Source/Engine/ECS/RareVariantComponent.h` (`is_rare` bool + `stat_multiplier`
+  float, authorable, folded into the Prefab Editor as a "Rare Variant" card per the identical
+  recipe M8.2's Loot/Section ID cards just established). Deliberately **not** a new engine
+  mechanism for the "alt palette" and "guaranteed... drop" halves of this bullet's own wording:
+  a rare variant is authored as its own separate prefab (e.g. `rag_rappy_rare.json`), so "alt
+  palette" is just that prefab's existing `RenderableComponent` authored with different colors,
+  and "guaranteed... drop" is that same prefab's existing `DropTableComponent` (M8.2) pointing at
+  a `DropTable` with `boss_guaranteed_rare` set — both already-existing mechanisms, not new
+  plumbing this component needs to add. `stat_multiplier` is wired into
+  `App/Source/Combat/EffectiveStats.cpp`'s `ComputeEffectiveStats` (scales the *computed* total —
+  base stats plus equipment plus affixes — when `is_rare` is true), which `AttackAction`/
+  `PhotonArtAction`/`TechniqueAction` already call for every hit, so a rare variant is
+  immediately, actually stronger in combat, not just flagged as one. Deliberately does **not**
+  scale `HealthComponent::max_hp` — unlike ATP/ATA/MST/DFP/EVP/LCK, HP is never live-computed
+  anywhere in the combat pipeline (cloned verbatim from the prefab at spawn), so a rare variant's
+  own prefab just authors a higher `current_hp`/`max_hp` directly instead, the same way it
+  authors a different palette directly — adding a second scaling hook for one field with no
+  existing "effective HP" concept to hang it on would be speculative. **Tier-based roster
+  substitution deliberately deferred, not attempted:** it has nothing to consume it yet — the
+  difficulty-tier system itself (M10.2, "Normal→Hard→Very Hard→Ultimate... per-character
+  clear-gating") is still "Not started", so an authored substitution mapping would round-trip as
+  data nobody reads, the same "no consumer yet" reasoning M5.2 already used to defer
+  `spawn_weight`; revisit once M10.2 exists to actually select a tier a substitution could react
+  to. UI (rare/boss visual callouts) stays deferred with the rest of combat HUD work, per this
+  bullet's own original scope and M7.1's identical precedent. Catch2 coverage in
+  `Core-Test/Source/RareVariantComponentTests.cpp` (schema shape/authorable, `JsonEntityLoader`
+  round-trip) and `App-Test/Source/EffectiveStatsTests.cpp` (unmodified with no equipment/rare
+  variant, `is_rare=false` leaves stat_multiplier inert, `is_rare=true` scales every stat, and the
+  multiplier applies to the base+equipment *sum* rather than only the base). **Not verified live**
+  (Prefab Editor card round-trip, an authored rare variant actually hitting harder in a live
+  fight) for the same reason as M8.2's note above.
 
 ## M6 — Turn-Based Scheduler & Movement
 

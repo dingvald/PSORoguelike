@@ -385,6 +385,38 @@ namespace {
         return object;
     }
 
+    bool ReadBool(const rapidjson::Value& object, const char* key, bool fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsBool())
+            return fallback;
+        return it->value.GetBool();
+    }
+
+    float ReadFloat(const rapidjson::Value& object, const char* key, float fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsNumber())
+            return fallback;
+        return it->value.GetFloat();
+    }
+
+    RareVariantComponent ReadRareVariantBody(const rapidjson::Value& body)
+    {
+        RareVariantComponent rare;
+        rare.is_rare = ReadBool(body, "is_rare", rare.is_rare);
+        rare.stat_multiplier = ReadFloat(body, "stat_multiplier", rare.stat_multiplier);
+        return rare;
+    }
+
+    rapidjson::Value WriteRareVariantBody(const RareVariantComponent& rare, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("is_rare", rare.is_rare, allocator);
+        object.AddMember("stat_multiplier", rare.stat_multiplier, allocator);
+        return object;
+    }
+
     std::vector<RaceBonusEntry> ReadRaceBonuses(const rapidjson::Value& object, const char* key)
     {
         std::vector<RaceBonusEntry> bonuses;
@@ -490,7 +522,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 11> kComponentKinds = {
+    constexpr std::array<ComponentKind, 12> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -528,7 +560,10 @@ namespace {
         {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
         {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
         {"loot", "Loot", "#e89d5d", "<div id=\"field-drop-table\" class=\"field-row\"></div>"},
-        {"section_id", "Section ID", "#5de8d3", "<div id=\"field-section-id\" class=\"field-row\"></div>"}}};
+        {"section_id", "Section ID", "#5de8d3", "<div id=\"field-section-id\" class=\"field-row\"></div>"},
+        {"rare_variant", "Rare Variant", "#e85dc7",
+         "<div id=\"field-is-rare\" class=\"field-row\"></div>"
+         "<div id=\"field-stat-multiplier\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -898,7 +933,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "health" ||
             key == "weapon" || key == "armor" || key == "mod" || key == "rarity" || key == "loot" ||
-            key == "section_id")
+            key == "section_id" || key == "rare_variant")
             m_component_order.emplace_back(key);
     }
 
@@ -920,6 +955,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
     m_loot = components.HasMember("loot") ? ReadLootBody(components["loot"]) : DropTableComponent{};
     m_section_id = components.HasMember("section_id") ? ReadSectionIdBody(components["section_id"]) : SectionIdComponent{};
+    m_rare_variant =
+        components.HasMember("rare_variant") ? ReadRareVariantBody(components["rare_variant"]) : RareVariantComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1284,6 +1321,21 @@ void PrefabEditorLayer::RefreshEditForm()
                                               MarkDirty();
                                           }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-is-rare"))
+        keep(fieldwidgets::BuildBoolField(*row, "is_rare", m_rare_variant.is_rare,
+                                          [this](bool v)
+                                          {
+                                              m_rare_variant.is_rare = v;
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-stat-multiplier"))
+        keep(fieldwidgets::BuildFloatField(*row, "stat_multiplier", m_rare_variant.stat_multiplier,
+                                           [this](float v)
+                                           {
+                                               m_rare_variant.stat_multiplier = v;
+                                               MarkDirty();
+                                           }));
+
     if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1462,8 +1514,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key :
-        {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "loot", "section_id"})
+    for (const char* key : {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity",
+                            "loot", "section_id", "rare_variant"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1492,6 +1544,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteLootBody(m_loot, allocator);
         else if (key == "section_id")
             body = WriteSectionIdBody(m_section_id, allocator);
+        else if (key == "rare_variant")
+            body = WriteRareVariantBody(m_rare_variant, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

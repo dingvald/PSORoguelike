@@ -6,6 +6,7 @@
 #include "Engine/ECS/DropTableComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/RaceComponent.h"
+#include "Engine/ECS/RareVariantComponent.h"
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/SectionIdComponent.h"
 #include "Engine/ECS/SocketComponent.h"
@@ -51,7 +52,7 @@ class RmlEventListener;
 // currently-registered *authorable* component with editor support
 // (RenderableComponent, SocketComponent, StatsComponent, RaceComponent,
 // HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
-// RarityComponent, DropTableComponent, SectionIdComponent) -- not a
+// RarityComponent, DropTableComponent, SectionIdComponent, RareVariantComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -192,6 +193,7 @@ private:
     RarityComponent m_rarity;
     DropTableComponent m_loot;
     SectionIdComponent m_section_id;
+    RareVariantComponent m_rare_variant;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
