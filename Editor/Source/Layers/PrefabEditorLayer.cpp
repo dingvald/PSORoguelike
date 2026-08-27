@@ -417,6 +417,22 @@ namespace {
         return object;
     }
 
+    MaterialComponent ReadMaterialBody(const rapidjson::Value& body)
+    {
+        MaterialComponent material;
+        material.stat = ReadEnum<MaterialStat>(body, "stat", material.stat);
+        material.amount = ReadInt(body, "amount", material.amount);
+        return material;
+    }
+
+    rapidjson::Value WriteMaterialBody(const MaterialComponent& material, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("stat", StringValue(std::string{EnumName(material.stat)}, allocator), allocator);
+        object.AddMember("amount", material.amount, allocator);
+        return object;
+    }
+
     std::vector<RaceBonusEntry> ReadRaceBonuses(const rapidjson::Value& object, const char* key)
     {
         std::vector<RaceBonusEntry> bonuses;
@@ -522,7 +538,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 12> kComponentKinds = {
+    constexpr std::array<ComponentKind, 13> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -563,7 +579,10 @@ namespace {
         {"section_id", "Section ID", "#5de8d3", "<div id=\"field-section-id\" class=\"field-row\"></div>"},
         {"rare_variant", "Rare Variant", "#e85dc7",
          "<div id=\"field-is-rare\" class=\"field-row\"></div>"
-         "<div id=\"field-stat-multiplier\" class=\"field-row\"></div>"}}};
+         "<div id=\"field-stat-multiplier\" class=\"field-row\"></div>"},
+        {"material", "Material", "#8de8e0",
+         "<div id=\"field-material-stat\" class=\"field-row\"></div>"
+         "<div id=\"field-material-amount\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -933,7 +952,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "health" ||
             key == "weapon" || key == "armor" || key == "mod" || key == "rarity" || key == "loot" ||
-            key == "section_id" || key == "rare_variant")
+            key == "section_id" || key == "rare_variant" || key == "material")
             m_component_order.emplace_back(key);
     }
 
@@ -957,6 +976,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_section_id = components.HasMember("section_id") ? ReadSectionIdBody(components["section_id"]) : SectionIdComponent{};
     m_rare_variant =
         components.HasMember("rare_variant") ? ReadRareVariantBody(components["rare_variant"]) : RareVariantComponent{};
+    m_material = components.HasMember("material") ? ReadMaterialBody(components["material"]) : MaterialComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1336,6 +1356,21 @@ void PrefabEditorLayer::RefreshEditForm()
                                                MarkDirty();
                                            }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-material-stat"))
+        keep(fieldwidgets::BuildEnumField(*row, "stat", EnumOptions<MaterialStat>(), EnumToString(m_material.stat),
+                                          [this](std::string v)
+                                          {
+                                              m_material.stat = EnumFromString(v, MaterialStat::Atp);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-material-amount"))
+        keep(fieldwidgets::BuildIntField(*row, "amount", m_material.amount,
+                                         [this](int v)
+                                         {
+                                             m_material.amount = v;
+                                             MarkDirty();
+                                         }));
+
     if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1515,7 +1550,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // otherwise only affected by add/remove, never by in-place value
     // updates.
     for (const char* key : {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity",
-                            "loot", "section_id", "rare_variant"})
+                            "loot", "section_id", "rare_variant", "material"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1546,6 +1581,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteSectionIdBody(m_section_id, allocator);
         else if (key == "rare_variant")
             body = WriteRareVariantBody(m_rare_variant, allocator);
+        else if (key == "material")
+            body = WriteMaterialBody(m_material, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

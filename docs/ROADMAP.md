@@ -771,7 +771,30 @@ tracking) plus the deliberate-failure check above.
   this project's own verification convention.
 - **8.3 Photon crystals / stat materials:** Engine: consumable permanent-stat-boost items
   (Power/Mind/HP Material, etc.). Editor: material-effect fields on the item editor. UI:
-  use-item confirmation + stat-gain feedback.
+  use-item confirmation + stat-gain feedback. **Effect data + math done (worked autonomously
+  overnight; not built/run — see M8.2's identical caveat above for why):** new
+  `Core/Source/Engine/Items/MaterialStat.h` (`Atp`/`Ata`/`Mst`/`Dfp`/`Evp`/`Lck`/`MaxHp` — mirrors
+  `AffixStat`'s six stats plus a seventh `MaxHp`, since a material can target
+  `HealthComponent::max_hp` too, which weapon-bonus-only `AffixStat` has no reason to; kept as its
+  own enum rather than folding into `AffixStat` since the two content families' target semantics
+  differ even though most value names overlap) and `MaterialComponent` (`stat` + `amount`,
+  authorable, folded into the Prefab Editor as a "Material" card per the same recipe every other
+  card this session added already uses). `Engine/Items/MaterialApplication.h/.cpp`
+  (`ApplyMaterial`) is the pure, permanent effect: adds `amount` to the matching
+  `StatsComponent` field, or to *both* `current_hp` and `max_hp` for `MaxHp` (a genuine stat
+  increase, not a heal stacked on an existing wound). **Deliberately stops there — the actual
+  consumable-use trigger stays unbuilt**, same as M8.1's own explicit deferral of "the
+  monogrinder's consumable-use flow": there is still no inventory/item-use system for a player to
+  actually *use* a material from (M8.1's own notes: "no item-use system... no inventory UI"), so
+  wiring `ApplyMaterial` to a real action/key press now would mean inventing that trigger
+  speculatively, ahead of the system that's supposed to host it — this only builds the effect a
+  future item-use action calls into once inventory (still not scheduled) exists. Editor
+  (material-effect fields) and UI (use-item confirmation/stat-gain feedback) bullets are otherwise
+  as originally scoped: the fields exist on the Prefab Editor's new card; the UI half waits on
+  the same not-yet-built inventory screen its own bullet already names. Catch2 coverage in
+  `Core-Test/Source/MaterialComponentTests.cpp` (schema shape/authorable, `JsonEntityLoader`
+  round-trip, and `ApplyMaterial` for all seven `MaterialStat` values including the `MaxHp`
+  current+max interaction). **Not verified live**, for the same reason as M8.2's note above.
 
 ## M9 — Mag Companion
 

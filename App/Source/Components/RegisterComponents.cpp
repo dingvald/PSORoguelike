@@ -9,6 +9,7 @@
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/DropTableComponent.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/MaterialComponent.h"
 #include "Engine/ECS/MesetaComponent.h"
 #include "Engine/ECS/ModComponent.h"
 #include "Engine/ECS/PPComponent.h"
@@ -35,6 +36,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     EnergyComponent::Register(reg);
     GroundItemComponent::Register(reg);
     HealthComponent::Register(reg);
+    MaterialComponent::Register(reg);
     MesetaComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
