@@ -1,10 +1,14 @@
 #pragma once
 
 #include "Components/RenderableComponent.h"
+#include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/RaceComponent.h"
+#include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/WeaponComponent.h"
+#include "Engine/Items/AffixLibrary.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
@@ -41,12 +45,14 @@ class RmlEventListener;
 // under App/Assets/Data/Entities/ that PieceEditorLayer's palette stamps into
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
-// (RenderableComponent, SocketComponent, StatsComponent, RaceComponent) --
-// not a bespoke enemy-specific "Entity editor"; a dedicated stat-forms/race-
-// picker pass (roadmap M5.2) can still build further UI on these same
-// sections later. Position and PrefabIdComponent are never exposed; both are
-// non-authorable per their own doc comments (engine-derived-only: spawn
-// position, clone-source id).
+// (RenderableComponent, SocketComponent, StatsComponent, RaceComponent,
+// WeaponComponent, ArmorComponent, ModComponent, RarityComponent) -- not a
+// bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
+// stayed folded into these same Inspector-card sections rather than a
+// separate "Item editor layer", same call M5.2 already made for entities.
+// Position and PrefabIdComponent are never exposed; both are non-authorable
+// per their own doc comments (engine-derived-only: spawn position,
+// clone-source id).
 //
 // Unlike PieceEditorLayer/DungeonEditorLayer, a draft is held as a raw
 // rapidjson::Document (not a typed C++ struct) and only its known
@@ -96,6 +102,7 @@ private:
     void RefreshEditForm();
     void RefreshAddComponentOptions();
     void RefreshTagRows();
+    void RefreshRaceBonusRows();
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();
@@ -134,6 +141,7 @@ private:
     std::vector<std::unique_ptr<RmlEventListener>> m_preview_listeners; // #edit-body pan/zoom listeners
     fieldwidgets::Listeners m_form_listeners;
     fieldwidgets::Listeners m_tag_row_listeners;
+    fieldwidgets::Listeners m_race_bonus_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
 
     // Reorder (drag-drop) finalizes here, one frame after the drag gesture
@@ -156,12 +164,12 @@ private:
 
     // -- Edit state: known/editable components --
     // Presence AND display order of a prefab's components (a subset of
-    // {"renderable","socket","stats","race"}) -- rendered as one
-    // Inspector-style card per entry, in this order. Populated from
-    // components' JSON member order on load (rapidjson preserves insertion
-    // order) and rewritten back in this same order on save (see
-    // ApplyDraftToDocument), so drag-reorder persists to disk without any new
-    // schema.
+    // {"renderable","socket","stats","race","weapon","armor","mod","rarity"})
+    // -- rendered as one Inspector-style card per entry, in this order.
+    // Populated from components' JSON member order on load (rapidjson
+    // preserves insertion order) and rewritten back in this same order on
+    // save (see ApplyDraftToDocument), so drag-reorder persists to disk
+    // without any new schema.
     std::vector<std::string> m_component_order;
     bool HasComponent(std::string_view key) const;
 
@@ -172,6 +180,13 @@ private:
     StatsComponent m_stats;
     RaceComponent m_race;
     std::string m_race_name;
+    WeaponComponent m_weapon;
+    ArmorComponent m_armor;
+    RarityComponent m_rarity;
+
+    // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
+    // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
+    AffixLibrary m_affixes;
 
     // -- Shared render resources (lazy) --
     bool m_renderer_initialized = false;

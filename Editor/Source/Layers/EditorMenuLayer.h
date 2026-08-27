@@ -22,7 +22,10 @@ class RmlClickListener;
 // M3.2/M4.2/M5.2/M8.1). Each sub-editor milestone appends its own row id +
 // TransitionTo<>() case in ConfirmSelection() below -- Pieces (M4.2) is the
 // first. Prefabs is the generic, stats-free entity-prefab editor (an early
-// slice of M5.2, ahead of the M5.1 stat components).
+// slice of M5.2, ahead of the M5.1 stat components). Affixes (M8.1) is the
+// bespoke weapon prefix/suffix library, separate from Prefabs since an Affix
+// isn't an entity -- weapon/armor/mod authoring itself stayed folded into
+// the Prefabs row (see PrefabEditorLayer's class doc comment).
 //
 // Both keyboard (Up/Down/Enter/Space) and mouse (hover selects, click
 // confirms, via RmlClickListener) drive the same MoveSelection()/
@@ -55,11 +58,12 @@ private:
         RowPieces = 0,
         RowDungeons = 1,
         RowPrefabs = 2,
-        RowExit = 3,
-        RowCount = 4
+        RowAffixes = 3,
+        RowExit = 4,
+        RowCount = 5
     };
     static constexpr std::array<const char*, RowCount> kRowIds = {"menu-pieces", "menu-dungeons", "menu-prefabs",
-                                                                   "menu-exit"};
+                                                                   "menu-affixes", "menu-exit"};
 };
 
 } // namespace psr

@@ -493,11 +493,75 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
 
 ## M8 — Itemization & Economy
 
-**Status:** Not started
+**Status:** 8.1 done (pulled forward, see the Phase-A note above)
 
 - **8.1 Item & equipment schema:** Engine: weapon/armor/material components + inventory/equip
   slots. Editor: **Item editor layer** — weapon stats, race-bonus %, equip-slot config. UI:
-  inventory grid, equipment slot panel.
+  inventory grid, equipment slot panel. **Done:** weapons/armor/mods are entity prefabs, per the
+  user's explicit brief — composed of components under `Core/Source/Engine/ECS/`, not embedded
+  value structs. `WeaponComponent` (`range_shape`: `SingleTarget`/`Cone3`/`Surrounding`/`Line`,
+  reconciling the brief's four range cases with the GDD's own melee "single adjacent tile/cone"
+  and ranged "range/spread/line/hits-per-turn" vocabulary; `range`, `hits_per_turn`,
+  `grind_level` for the monogrinder effect; `prefix_affix_id`/`suffix_affix_id` NameId refs;
+  `race_bonuses` — a `std::vector<{race_id, bonus_percent}>` rather than one fixed-race field,
+  per the user's explicit choice, matching `RaceComponent`'s own "no fixed enum, purely
+  data-driven" design intent). `ArmorComponent` (`slot`: `Head`/`Torso`/`Hands`/`Legs`;
+  `mod_slot_count`, 0-4, a flat cap for every armor piece per the user's explicit brief —
+  deliberately more generous than PSO's variable 0-4). `ModComponent` (empty tag, same shape as
+  `BlocksMovementComponent`). `RarityComponent` (`stars`, a single shared component reused
+  verbatim on weapon/armor/mod prefabs, per the brief's "all three need it" — one component, not
+  three). All four reuse `StatsComponent` (reattached to mean "stat bonus granted when equipped,"
+  same struct, different role) for their stat contribution. New
+  `Core/Source/Engine/Items/` directory: a bespoke, non-ECS **Affix library**
+  (`Affix`/`AffixSchema`/`AffixSchemaEmitter`/`AffixLibrary`/`AffixLibraryFile`, content at
+  `App/Assets/Data/Affixes/*.json`) for the prefix/suffix definitions weapons reference by
+  NameId — follows the `DungeonPiece`/`Dungeon` file-family pattern (a reusable named content
+  type, not an entity) rather than the `ComponentSchemaRegistrar` pipeline; its effect payload
+  (one `AffixStat` + a flat `amount`) is deliberately minimal, matching `DungeonLockConfig`'s
+  "just needs to round-trip as data for now" precedent, since nothing consumes an affix's effect
+  yet. Per the user's explicit brief, **affixes are weapon-only this round** — armor doesn't get
+  prefix/suffix fields (trivial to add later with the identical mechanism if wanted). New
+  `App/Source/Components/EquipmentComponent.h` (weapon + Head/Torso/Hands/Legs, each a live
+  `entt::entity`) gives M7.1 something to read "what's equipped" from — deliberately **not**
+  meta-registered (`entt::entity` has no `FieldKind` mapping) and never authored in a prefab
+  JSON, following `TweenComponent`'s existing precedent for engine-internal runtime-only state
+  rather than `PrefabIdComponent`'s `authorable=false`-but-still-registered pattern; it ships
+  unpopulated this round (nothing yet sets it — that's the not-yet-built debug mission
+  launcher's job, later in Phase A). Authored entity-prefab JSON stays a **template**: fields
+  like `grind_level`/`race_bonuses`/affix refs are base/default values, not rolled instances —
+  the actual random-roll-at-drop logic is M8.2's job (drop tables, not yet started), and the
+  monogrinder's consumable-use flow and mod-plugged-into-armor-slot runtime state are likewise
+  deferred for lack of any consumer yet (no item-use system, no mod-effect system, no inventory
+  UI) — only the static `mod_slot_count` template field ships. Editor: `PrefabEditorLayer`
+  (`Editor/Source/Layers/PrefabEditorLayer.{h,cpp}`) gained four new Inspector cards (Weapon,
+  Armor, Mod, Rarity) alongside its existing four, using only existing `FieldWidgets` primitives
+  (`BuildEnumField` for `range_shape`/`slot`, `BuildIdEnumField` for the prefix/suffix affix
+  pickers sourced from the Affix library, `BuildRowList` for the repeatable race-bonus rows, and
+  a `BuildEnumField` over `"0".."4"` — not `BuildIntField` — for `mod_slot_count`, since nothing
+  in `ComponentSchema`/`EntitySchemaEmitter` enforces an integer field's range generically; the
+  editor dropdown is the pragmatic enforcement point instead of adding that machinery for one
+  field). A new standalone `Editor/Source/Layers/AffixEditorLayer.{h,cpp}` (wired into
+  `EditorMenuLayer` as a new "Affixes" row) follows the `PieceEditorLayer`/`DungeonEditorLayer`
+  List/Edit template for the bespoke Affix library — much shorter than either, since Affix has
+  no nested arrays and needs no preview canvas. **Deviates from this bullet's literal "Item
+  editor layer" wording**: coverage is split across the extended Prefabs row and the new
+  standalone Affixes row rather than one dedicated layer — the same kind of deviation M5.2 already
+  made (folding entity-editor scope into the Prefab Editor instead of a dedicated
+  `EntityEditorLayer`). UI: inventory grid / equipment slot panel **deliberately deferred** — no
+  gameplay UI layer exists yet to host them, same reasoning every other milestone's UI bullets
+  wait on a real screen to display in. Verified live in the running Editor: the Affix Editor's
+  full List→New→fill→Save→List cycle was exercised end-to-end and the saved JSON inspected on
+  disk to confirm the round-trip (name/kind/stat/amount all correct), then reverted per this
+  file's own throwaway-fixture convention; the Prefab Editor's card system was confirmed still
+  loading/rendering correctly against the existing `test` prefab. Catch2 coverage in
+  `Core-Test/Source/ItemComponentTests.cpp` (schema shape/authorable flags for all four new
+  components, plus full `JsonEntityLoader` round-trips for a weapon entity — including
+  `race_bonuses` and a non-default `range_shape` — an armor entity, and a mod entity) and
+  `Core-Test/Source/AffixSchemaTests.cpp` (schema reflection, save/load round-trip, and the
+  unknown-stat-name / schema-version-mismatch error paths), mirroring
+  `StatsRaceComponentTests.cpp`/`DungeonSchemaTests.cpp`'s existing structure. Content authoring
+  (real starter Hunter/Ranger weapons, per this milestone's own Phase-A scope) is the user's own
+  work through these editors, per `CLAUDE.md`'s division of labor — not done by Claude.
 - **8.2 Drop tables & Section ID:** Engine: per-enemy common+rare tables, Section-ID weighting
   (10 IDs), boss guaranteed tables, Meseta currency. Editor: drop-table editor (weighted entry
   list per enemy/boss, Section ID weight matrix). UI: loot-drop toast, Meseta HUD counter.

@@ -1,6 +1,7 @@
 #include "Layers/EditorMenuLayer.h"
 
 #include "Engine/Events/KeyEvent.h"
+#include "Layers/AffixEditorLayer.h"
 #include "Layers/DungeonEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
 #include "Layers/PrefabEditorLayer.h"
@@ -130,6 +131,9 @@ void EditorMenuLayer::ConfirmSelection()
         break;
     case RowPrefabs:
         TransitionTo<PrefabEditorLayer>();
+        break;
+    case RowAffixes:
+        TransitionTo<AffixEditorLayer>();
         break;
     case RowExit:
         RequestQuit();

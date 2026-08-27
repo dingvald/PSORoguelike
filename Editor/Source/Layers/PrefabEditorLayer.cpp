@@ -6,6 +6,7 @@
 #include "Engine/ECS/Registry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
+#include "Engine/Items/AffixLibraryFile.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Persistence/JsonFile.h"
 #include "Layers/EditorMenuLayer.h"
@@ -292,6 +293,143 @@ namespace {
         return object;
     }
 
+    // Mirrors PieceLibraryFile.cpp's ReadEnum/EnumName: a JSON string mapped
+    // against psr::EnumNames<E>::kValues, falling back rather than throwing
+    // (this editor is more forgiving of stale/hand-edited files than the
+    // library loaders -- an unknown name just reverts to the default).
+    template <typename E> E ReadEnum(const rapidjson::Value& object, const char* key, E fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsString())
+            return fallback;
+        const std::string_view name = it->value.GetString();
+        for (const auto& [text, value] : EnumNames<E>::kValues)
+            if (text == name)
+                return value;
+        return fallback;
+    }
+
+    template <typename E> std::string_view EnumName(E value)
+    {
+        for (const auto& [text, candidate] : EnumNames<E>::kValues)
+            if (candidate == value)
+                return text;
+        return EnumNames<E>::kValues.front().first; // unreachable for a valid enum value
+    }
+
+    // Generic BuildEnumField backing: option-text list and string->value
+    // lookup, so a new enum field doesn't need its own Options/ToString/
+    // FromString trio (mirrors PieceEditorLayer.cpp's per-enum helpers, but
+    // written once against EnumNames<E> instead of duplicated per type).
+    template <typename E> std::vector<std::string> EnumOptions()
+    {
+        std::vector<std::string> options;
+        for (const auto& [text, value] : EnumNames<E>::kValues)
+        {
+            (void)value;
+            options.push_back(std::string{text});
+        }
+        return options;
+    }
+
+    template <typename E> E EnumFromString(const std::string& text, E fallback)
+    {
+        for (const auto& [name, value] : EnumNames<E>::kValues)
+            if (name == text)
+                return value;
+        return fallback;
+    }
+
+    std::vector<RaceBonusEntry> ReadRaceBonuses(const rapidjson::Value& object, const char* key)
+    {
+        std::vector<RaceBonusEntry> bonuses;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsArray())
+            return bonuses;
+        for (const auto& entry : it->value.GetArray())
+        {
+            if (!entry.IsObject())
+                continue;
+            RaceBonusEntry bonus;
+            bonus.race_id = ReadNameId(entry, "race_id", 0);
+            bonus.bonus_percent = ReadInt(entry, "bonus_percent", 0);
+            bonuses.push_back(bonus);
+        }
+        return bonuses;
+    }
+
+    rapidjson::Value WriteRaceBonuses(const std::vector<RaceBonusEntry>& bonuses,
+                                      rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const RaceBonusEntry& bonus : bonuses)
+        {
+            rapidjson::Value object(rapidjson::kObjectType);
+            object.AddMember("race_id", WriteNameId(bonus.race_id, allocator), allocator);
+            object.AddMember("bonus_percent", bonus.bonus_percent, allocator);
+            array.PushBack(object, allocator);
+        }
+        return array;
+    }
+
+    WeaponComponent ReadWeaponBody(const rapidjson::Value& body)
+    {
+        WeaponComponent weapon;
+        weapon.range_shape = ReadEnum<WeaponRangeShape>(body, "range_shape", weapon.range_shape);
+        weapon.range = ReadInt(body, "range", weapon.range);
+        weapon.hits_per_turn = ReadInt(body, "hits_per_turn", weapon.hits_per_turn);
+        weapon.grind_level = ReadInt(body, "grind_level", weapon.grind_level);
+        weapon.prefix_affix_id = ReadNameId(body, "prefix_affix_id", 0);
+        weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
+        weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
+        return weapon;
+    }
+
+    rapidjson::Value WriteWeaponBody(const WeaponComponent& weapon, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("range_shape", StringValue(std::string{EnumName(weapon.range_shape)}, allocator), allocator);
+        object.AddMember("range", weapon.range, allocator);
+        object.AddMember("hits_per_turn", weapon.hits_per_turn, allocator);
+        object.AddMember("grind_level", weapon.grind_level, allocator);
+        object.AddMember("prefix_affix_id", WriteNameId(weapon.prefix_affix_id, allocator), allocator);
+        object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
+        object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
+        return object;
+    }
+
+    ArmorComponent ReadArmorBody(const rapidjson::Value& body)
+    {
+        ArmorComponent armor;
+        armor.slot = ReadEnum<ArmorSlot>(body, "slot", armor.slot);
+        armor.mod_slot_count = ReadInt(body, "mod_slot_count", armor.mod_slot_count);
+        return armor;
+    }
+
+    rapidjson::Value WriteArmorBody(const ArmorComponent& armor, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("slot", StringValue(std::string{EnumName(armor.slot)}, allocator), allocator);
+        object.AddMember("mod_slot_count", armor.mod_slot_count, allocator);
+        return object;
+    }
+
+    rapidjson::Value WriteModBody(rapidjson::Document::AllocatorType&) { return rapidjson::Value(rapidjson::kObjectType); }
+
+    RarityComponent ReadRarityBody(const rapidjson::Value& body)
+    {
+        RarityComponent rarity;
+        rarity.stars = ReadInt(body, "stars", rarity.stars);
+        return rarity;
+    }
+
+    rapidjson::Value WriteRarityBody(const RarityComponent& rarity, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("stars", rarity.stars, allocator);
+        return object;
+    }
+
     // Per-kind chrome for an Inspector-style component card: the accent dot
     // colour (reusing existing theme.rcss/palette accents, not a new
     // palette), the card's title, and its body markup -- the same fixed-id
@@ -307,7 +445,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 4> kComponentKinds = {
+    constexpr std::array<ComponentKind, 8> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -326,7 +464,21 @@ namespace {
          "<div id=\"field-dfp\" class=\"field-row\"></div>"
          "<div id=\"field-evp\" class=\"field-row\"></div>"
          "<div id=\"field-lck\" class=\"field-row\"></div>"},
-        {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"}}};
+        {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
+        {"weapon", "Weapon", "#e85d5d",
+         "<div id=\"field-range-shape\" class=\"field-row\"></div>"
+         "<div id=\"field-range\" class=\"field-row\"></div>"
+         "<div id=\"field-hits-per-turn\" class=\"field-row\"></div>"
+         "<div id=\"field-grind-level\" class=\"field-row\"></div>"
+         "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
+         "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
+         "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
+         "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"},
+        {"armor", "Armor", "#6f9de8",
+         "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
+         "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
+        {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
+        {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -354,6 +506,16 @@ void PrefabEditorLayer::OnAttach()
     if (!Rml::LoadFontFace(kFontPathBold.string().c_str()))
         SDL_Log("Warning: PrefabEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
 
+    try
+    {
+        m_affixes = LoadAffixLibrary(EditorFilepaths::AffixesPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_affixes = AffixLibrary{};
+        m_error = error.what();
+    }
+
     LoadDocuments();
     RefreshPrefabList();
     ShowScreen(Mode::List);
@@ -361,6 +523,7 @@ void PrefabEditorLayer::OnAttach()
 
 void PrefabEditorLayer::OnDetach()
 {
+    m_race_bonus_row_listeners.clear();
     m_tag_row_listeners.clear();
     m_form_listeners.clear();
     m_preview_chrome_listeners.clear();
@@ -673,7 +836,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "socket" || key == "stats" || key == "race")
+        if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "weapon" ||
+            key == "armor" || key == "mod" || key == "rarity")
             m_component_order.emplace_back(key);
     }
 
@@ -687,6 +851,10 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 
     m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
     m_race_name = LabelFor(m_race.race_id);
+
+    m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
+    m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
+    m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -935,6 +1103,85 @@ void PrefabEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                             }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-range-shape"))
+        keep(fieldwidgets::BuildEnumField(*row, "range_shape", EnumOptions<WeaponRangeShape>(),
+                                          std::string{EnumName(m_weapon.range_shape)},
+                                          [this](std::string v)
+                                          {
+                                              m_weapon.range_shape =
+                                                  EnumFromString(v, WeaponRangeShape::SingleTarget);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-range"))
+        keep(fieldwidgets::BuildIntField(*row, "range", m_weapon.range,
+                                         [this](int v)
+                                         {
+                                             m_weapon.range = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-hits-per-turn"))
+        keep(fieldwidgets::BuildIntField(*row, "hits_per_turn", m_weapon.hits_per_turn,
+                                         [this](int v)
+                                         {
+                                             m_weapon.hits_per_turn = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-grind-level"))
+        keep(fieldwidgets::BuildIntField(*row, "grind_level", m_weapon.grind_level,
+                                         [this](int v)
+                                         {
+                                             m_weapon.grind_level = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-prefix-affix"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> prefix_options = {{0, "-- Select Affix --"}};
+        for (const Affix& affix : m_affixes.All())
+            if (affix.kind == AffixKind::Prefix)
+                prefix_options.emplace_back(affix.id, affix.name.empty() ? affix.id_string : affix.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "prefix_affix_id", prefix_options, m_weapon.prefix_affix_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_weapon.prefix_affix_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+    if (Rml::Element* row = m_editor->GetElementById("field-suffix-affix"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> suffix_options = {{0, "-- Select Affix --"}};
+        for (const Affix& affix : m_affixes.All())
+            if (affix.kind == AffixKind::Suffix)
+                suffix_options.emplace_back(affix.id, affix.name.empty() ? affix.id_string : affix.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "suffix_affix_id", suffix_options, m_weapon.suffix_affix_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_weapon.suffix_affix_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+    if (Rml::Element* row = m_editor->GetElementById("field-armor-slot"))
+        keep(fieldwidgets::BuildEnumField(*row, "slot", EnumOptions<ArmorSlot>(), std::string{EnumName(m_armor.slot)},
+                                          [this](std::string v)
+                                          {
+                                              m_armor.slot = EnumFromString(v, ArmorSlot::Torso);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-mod-slot-count"))
+        keep(fieldwidgets::BuildEnumField(*row, "mod_slot_count", {"0", "1", "2", "3", "4"},
+                                          std::to_string(m_armor.mod_slot_count),
+                                          [this](std::string v)
+                                          {
+                                              m_armor.mod_slot_count = std::stoi(v);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-stars"))
+        keep(fieldwidgets::BuildIntField(*row, "stars", m_rarity.stars,
+                                         [this](int v)
+                                         {
+                                             m_rarity.stars = v;
+                                             MarkDirty();
+                                         }));
+
     if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -947,8 +1194,21 @@ void PrefabEditorLayer::RefreshEditForm()
         listener->Attach(*add_tag);
         m_form_listeners.push_back(std::move(listener));
     }
+    if (Rml::Element* add_race_bonus = m_editor->GetElementById("add-race-bonus"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this]
+            {
+                m_weapon.race_bonuses.emplace_back();
+                MarkDirty();
+                RefreshRaceBonusRows();
+            });
+        listener->Attach(*add_race_bonus);
+        m_form_listeners.push_back(std::move(listener));
+    }
 
     RefreshTagRows();
+    RefreshRaceBonusRows();
     RefreshDirtyDisplay();
 }
 
@@ -1022,6 +1282,71 @@ void PrefabEditorLayer::RefreshTagRows()
         m_tag_row_listeners.push_back(std::move(listener));
 }
 
+void PrefabEditorLayer::RefreshRaceBonusRows()
+{
+    if (!m_editor)
+        return;
+    m_race_bonus_row_listeners.clear();
+
+    Rml::Element* list = m_editor->GetElementById("race-bonus-list");
+    if (!list)
+        return;
+
+    const std::vector<std::string> content(
+        m_weapon.race_bonuses.size(),
+        "<div class=\"bonus-race field-row\"></div><div class=\"bonus-percent field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No race bonuses configured.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_weapon.race_bonuses.size())
+                m_weapon.race_bonuses.erase(m_weapon.race_bonuses.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshRaceBonusRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_weapon.race_bonuses, from, to);
+                MarkDirty();
+                RefreshRaceBonusRows();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_weapon.race_bonuses.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".bonus-race"))
+            for (auto& listener :
+                 fieldwidgets::BuildNameIdField(*row, "race_id", m_weapon.race_bonuses[i].race_id,
+                                                LabelFor(m_weapon.race_bonuses[i].race_id),
+                                                [this, index](std::uint32_t id, std::string name)
+                                                {
+                                                    if (index >= m_weapon.race_bonuses.size())
+                                                        return;
+                                                    m_weapon.race_bonuses[index].race_id = id;
+                                                    if (!name.empty())
+                                                        NameIdRegistry::Register(id, name);
+                                                    MarkDirty();
+                                                }))
+                m_race_bonus_row_listeners.push_back(std::move(listener));
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".bonus-percent"))
+            for (auto& listener :
+                 fieldwidgets::BuildIntField(*row, "bonus_percent", m_weapon.race_bonuses[i].bonus_percent,
+                                             [this, index](int v)
+                                             {
+                                                 if (index < m_weapon.race_bonuses.size())
+                                                     m_weapon.race_bonuses[index].bonus_percent = v;
+                                                 MarkDirty();
+                                             }))
+                m_race_bonus_row_listeners.push_back(std::move(listener));
+    }
+    for (auto& listener : result.listeners)
+        m_race_bonus_row_listeners.push_back(std::move(listener));
+}
+
 void PrefabEditorLayer::ApplyDraftToDocument()
 {
     rapidjson::Document::AllocatorType& allocator = m_draft_document.GetAllocator();
@@ -1035,7 +1360,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "socket", "stats", "race"})
+    for (const char* key : {"renderable", "socket", "stats", "race", "weapon", "armor", "mod", "rarity"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1050,6 +1375,14 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteStatsBody(m_stats, allocator);
         else if (key == "race")
             body = WriteRaceBody(m_race, allocator);
+        else if (key == "weapon")
+            body = WriteWeaponBody(m_weapon, allocator);
+        else if (key == "armor")
+            body = WriteArmorBody(m_armor, allocator);
+        else if (key == "mod")
+            body = WriteModBody(allocator);
+        else if (key == "rarity")
+            body = WriteRarityBody(m_rarity, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);
