@@ -15,6 +15,8 @@
 
 namespace psr {
 
+class AffixLibrary;
+
 // Owning wrapper around a pair of entt::registry instances, so call sites use
 // this class's vocabulary (CreateEntity/Emplace/GetComponent/...) rather than
 // entt's registry API directly -- keeps entt as an implementation detail of
@@ -204,6 +206,21 @@ public:
     // happens -- an App-side RegisterComponents() aggregator drives this at
     // startup.
     entt::meta_ctx& GetMetaContext();
+
+    // Stashes a reference to affixes in this registry's ctx(), the same
+    // storage FromEntt's self-pointer uses -- lets a component's static
+    // AttachHandlers-registered handler (which can't capture state) reach
+    // shared combat-content data it needs to contribute to an event (e.g.
+    // EquipmentComponent computing effective stats for a Before<Action>Event).
+    // Call once, early, before any entity that needs it is created. affixes
+    // must outlive this Registry.
+    void SetAffixLibrary(const AffixLibrary& affixes);
+
+    // Returns the AffixLibrary stashed via SetAffixLibrary(). Asserts if none
+    // was ever set -- a call site that needs this only exists because a
+    // component handler needs it, so a missing SetAffixLibrary() call is a
+    // setup bug, not a runtime condition to handle gracefully.
+    const AffixLibrary& GetAffixLibrary();
 
     // Recovers the owning Registry& from a raw entt::registry& -- needed
     // because entt's on_construct/on_destroy listener signature is fixed as

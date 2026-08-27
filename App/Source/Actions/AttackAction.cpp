@@ -3,7 +3,7 @@
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
 #include "Combat/TargetResolution.h"
-#include "Components/EquipmentComponent.h"
+#include "Engine/Combat/AttackEvent.h"
 #include "Engine/Combat/CombatMath.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -11,7 +11,6 @@
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 #include <algorithm>
 #include <vector>
@@ -25,20 +24,20 @@ AttackAction::AttackAction(Grid& grid, const AffixLibrary& affixes, Vec2 directi
 
 ActionResult AttackAction::Perform(Entity actor)
 {
-    const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
-    if (!equipment || equipment->weapon == entt::null)
+    // EquipmentComponent's own handler resolves the equipped weapon (if any)
+    // and fills range_shape/range/hits_per_turn/race_bonuses/attacker_stats --
+    // this action never reads EquipmentComponent/WeaponComponent directly.
+    BeforeAttackEvent before_attack{m_direction};
+    actor.Dispatch(before_attack);
+    if (!before_attack.has_weapon)
         return ActionResult(0);
 
     Registry& registry = actor.GetRegistry();
-    const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(equipment->weapon);
-    if (!weapon)
-        return ActionResult(0);
-
     const Vec2 origin = actor.Get<Position>().tile;
-    const std::vector<Vec2> target_tiles =
-        ResolveTargetTiles(*m_grid, registry, origin, m_direction, weapon->range_shape, weapon->range);
+    const std::vector<Vec2> target_tiles = ResolveTargetTiles(*m_grid, registry, origin, m_direction,
+                                                               before_attack.range_shape, before_attack.range);
 
-    const StatsComponent attacker_stats = ComputeEffectiveStats(actor, *m_affixes);
+    const StatsComponent& attacker_stats = before_attack.attacker_stats;
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
     std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
 
@@ -62,7 +61,7 @@ ActionResult AttackAction::Perform(Entity actor)
             const RaceComponent* defender_race = target.TryGet<RaceComponent>();
             const std::uint32_t defender_race_id = defender_race ? defender_race->race_id : 0;
 
-            for (int hit = 0; hit < weapon->hits_per_turn; ++hit)
+            for (int hit = 0; hit < before_attack.hits_per_turn; ++hit)
             {
                 if (!target.IsValid())
                     break;
@@ -72,7 +71,7 @@ ActionResult AttackAction::Perform(Entity actor)
                     continue; // miss
 
                 int damage = ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng));
-                damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
+                damage = ApplyRaceBonus(damage, before_attack.race_bonuses, defender_race_id);
 
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);
@@ -94,6 +93,9 @@ ActionResult AttackAction::Perform(Entity actor)
             }
         }
     }
+
+    AfterAttackEvent after_attack{found_target};
+    actor.Dispatch(after_attack);
 
     return found_target ? ActionResult(kAttackCost) : ActionResult(0);
 }

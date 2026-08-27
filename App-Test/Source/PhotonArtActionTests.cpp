@@ -1,5 +1,6 @@
 #include "Actions/PhotonArtAction.h"
 
+#include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -91,6 +92,7 @@ TEST_CASE("PhotonArtAction with no weapon equipped is a free no-op", "[PhotonArt
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -107,6 +109,7 @@ TEST_CASE("PhotonArtAction with a weapon that doesn't grant the id is a free no-
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -125,6 +128,7 @@ TEST_CASE("PhotonArtAction with insufficient TP is a free no-op", "[PhotonArtAct
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 20;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
@@ -147,6 +151,7 @@ TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -175,6 +180,7 @@ TEST_CASE("PhotonArtAction self-target Drain heals the caster capped at max HP",
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -203,6 +209,7 @@ TEST_CASE("PhotonArtAction eventually destroys a hostile Directional-cast occupa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;
@@ -243,6 +250,7 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
+        psr::SetUpCombatRegistry(registry, affixes);
         std::mt19937 rng{42};
 
         psr::PhotonArt art;
@@ -281,6 +289,7 @@ TEST_CASE("PhotonArtAction dispatches AfterPhotonArtCastEvent and AfterDamageEve
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -318,6 +327,7 @@ TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -341,4 +351,28 @@ TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDa
     action.Perform(actor);
 
     REQUIRE(damage_events == 0);
+}
+
+TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPComponent's contributes current_tp, "
+          "to BeforePhotonArtCastEvent",
+          "[PhotonArtAction][EquipmentComponent][TPComponent]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/65, /*ata=*/45, /*tp=*/12);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::BeforePhotonArtCastEvent event{kArtId};
+    actor.Dispatch(event);
+
+    REQUIRE(event.has_weapon);
+    REQUIRE(event.weapon_grants_id);
+    REQUIRE(event.has_tp_component);
+    REQUIRE(event.current_tp == 12);
+    REQUIRE(event.attacker_stats.atp == 65);
+    REQUIRE(event.attacker_stats.ata == 45);
 }

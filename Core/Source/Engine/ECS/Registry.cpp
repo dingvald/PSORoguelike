@@ -1,6 +1,7 @@
 #include "Engine/ECS/Registry.h"
 
 #include "Engine/ECS/PrefabIdComponent.h"
+#include "Engine/Items/AffixLibrary.h"
 
 #include <cassert>
 
@@ -108,6 +109,18 @@ void Registry::RegisterPrefabs(IEntityLoader& loader)
 entt::meta_ctx& Registry::GetMetaContext() { return m_meta_ctx; }
 
 Registry& Registry::FromEntt(entt::registry& runtime_registry) { return *runtime_registry.ctx().get<Registry*>(); }
+
+void Registry::SetAffixLibrary(const AffixLibrary& affixes)
+{
+    m_runtime_registry->ctx().insert_or_assign<const AffixLibrary*>(&affixes);
+}
+
+const AffixLibrary& Registry::GetAffixLibrary()
+{
+    auto* affixes = m_runtime_registry->ctx().find<const AffixLibrary*>();
+    assert(affixes && "Registry::GetAffixLibrary: SetAffixLibrary() must be called first");
+    return **affixes;
+}
 
 std::vector<ComponentValue> Registry::DescribeEntity(entt::entity entity, const EntitySchemaModel& schema) const
 {

@@ -33,6 +33,12 @@ project "Editor"
       -- entity prefabs, mirrors UnnamedRoguelike's Editor/Build-Editor.lua.
       "../App/Source/Components/**.h",
       "../App/Source/Components/**.cpp",
+      -- EquipmentComponent::AttachHandlers calls ComputeEffectiveStats to
+      -- contribute a Before<Action>Event's attacker_stats -- pull in
+      -- Combat/'s definitions too, or that call is an undefined symbol at
+      -- link time (Editor doesn't link against App, which is a ConsoleApp).
+      "../App/Source/Combat/**.h",
+      "../App/Source/Combat/**.cpp",
       -- RegistryRenderableLookup resolves a live entity's RenderableComponent
       -- into the RenderableTile content editors draw for palette icons/canvas
       -- previews -- reused as-is rather than duplicating it Editor-side.

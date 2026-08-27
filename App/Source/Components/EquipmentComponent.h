@@ -11,8 +11,7 @@ namespace psr {
 // by game code as items are equipped, never hand-authored in a prefab JSON
 // or listed in the editor's Add Component picker. Same precedent as
 // TweenComponent. Unpopulated until the debug mission launcher (later in
-// Phase A) starts setting it; consumed by M7.1's AttackAction to read the
-// wielder's WeaponComponent/StatsComponent.
+// Phase A) starts setting it.
 struct EquipmentComponent
 {
     entt::entity weapon = entt::null;
@@ -20,6 +19,17 @@ struct EquipmentComponent
     entt::entity torso = entt::null;
     entt::entity hands = entt::null;
     entt::entity legs = entt::null;
+
+    // Contributes this entity's equipped-weapon data and effective stats to
+    // BeforeAttackEvent/BeforeTechniqueCastEvent/BeforePhotonArtCastEvent,
+    // dispatched to this same entity by AttackAction/TechniqueAction/
+    // PhotonArtAction -- see EquipmentComponent.cpp. Wired via
+    // Registry::BindComponentEvents<EquipmentComponent>() in
+    // RegisterComponents.cpp, so every entity gets this the moment it gains
+    // an EquipmentComponent, with no per-entity opt-in required by whoever
+    // equips it.
+    static void AttachHandlers(entt::registry& registry, entt::entity entity);
+    static void DetachHandlers(entt::registry& registry, entt::entity entity);
 };
 
 } // namespace psr

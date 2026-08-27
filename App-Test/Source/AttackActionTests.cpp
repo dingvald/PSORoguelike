@@ -1,7 +1,9 @@
 #include "Actions/AttackAction.h"
 
+#include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Engine/Combat/AttackEvent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -74,6 +76,7 @@ TEST_CASE("AttackAction with no weapon equipped is a free no-op", "[AttackAction
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -89,6 +92,7 @@ TEST_CASE("AttackAction against an empty tile is a free no-op", "[AttackAction]"
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -106,6 +110,7 @@ TEST_CASE("AttackAction does not damage a non-hostile occupant", "[AttackAction]
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -127,6 +132,7 @@ TEST_CASE("AttackAction eventually destroys a hostile SingleTarget occupant", "[
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -156,6 +162,7 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{7};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -186,6 +193,7 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
+        psr::SetUpCombatRegistry(registry, affixes);
         std::mt19937 rng{42};
 
         psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -213,6 +221,7 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -239,4 +248,46 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
     REQUIRE_FALSE(registry.IsValid(enemy_handle));
     REQUIRE(damage_events > 0);
     REQUIRE(saw_defeat);
+}
+
+TEST_CASE("AttackAction is a free no-op when the weapon carrier lacks WeaponComponent", "[AttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
+    entt::entity not_a_weapon = registry.CreateEntity(); // no WeaponComponent
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{not_a_weapon});
+
+    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+}
+
+TEST_CASE("EquipmentComponent's handler contributes weapon data and effective stats to BeforeAttackEvent",
+          "[AttackAction][EquipmentComponent]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/60, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry, psr::WeaponRangeShape::Cone3, /*range=*/2, /*hits_per_turn=*/3);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::BeforeAttackEvent event{psr::Vec2{1, 0}};
+    actor.Dispatch(event);
+
+    REQUIRE(event.has_weapon);
+    REQUIRE(event.range_shape == psr::WeaponRangeShape::Cone3);
+    REQUIRE(event.range == 2);
+    REQUIRE(event.hits_per_turn == 3);
+    REQUIRE(event.attacker_stats.atp == 50);
+    REQUIRE(event.attacker_stats.ata == 60);
 }

@@ -1,5 +1,6 @@
 #include "Actions/TechniqueAction.h"
 
+#include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -88,6 +89,7 @@ TEST_CASE("TechniqueAction with no weapon equipped is a free no-op", "[Technique
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -104,6 +106,7 @@ TEST_CASE("TechniqueAction with a weapon that doesn't grant the id is a free no-
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -122,6 +125,7 @@ TEST_CASE("TechniqueAction with insufficient TP is a free no-op", "[TechniqueAct
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::Technique technique;
     technique.tp_cost = 20;
     psr::TechniqueLibrary techniques = MakeLibrary(technique);
@@ -144,6 +148,7 @@ TEST_CASE("TechniqueAction self-target (no SelectedTargetComponent) damages the 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -173,6 +178,7 @@ TEST_CASE("TechniqueAction self-target Drain resolves identically to Damage (no 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Drain;
@@ -201,6 +207,7 @@ TEST_CASE("TechniqueAction eventually destroys a hostile Directional-cast occupa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.targeting_mode = psr::TargetingMode::Directional;
@@ -240,6 +247,7 @@ TEST_CASE("TechniqueAction applies a tier power multiplier", "[TechniqueAction]"
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
+        psr::SetUpCombatRegistry(registry, affixes);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -281,6 +289,7 @@ TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
+        psr::SetUpCombatRegistry(registry, affixes);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -317,6 +326,7 @@ TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEve
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -347,4 +357,47 @@ TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEve
 
     REQUIRE(cast_events == 1);
     REQUIRE(damage_events == 1);
+}
+
+TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPComponent's contributes current_tp, "
+          "to BeforeTechniqueCastEvent",
+          "[TechniqueAction][EquipmentComponent][TPComponent]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/70, /*ata=*/40, /*tp=*/33);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::BeforeTechniqueCastEvent event{kTechniqueId};
+    actor.Dispatch(event);
+
+    REQUIRE(event.has_weapon);
+    REQUIRE(event.weapon_grants_id);
+    REQUIRE(event.has_tp_component);
+    REQUIRE(event.current_tp == 33);
+    REQUIRE(event.attacker_stats.mst == 70);
+    REQUIRE(event.attacker_stats.ata == 40);
+}
+
+TEST_CASE("BeforeTechniqueCastEvent reports weapon_grants_id false for an id the weapon doesn't grant",
+          "[TechniqueAction][EquipmentComponent]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::SetUpCombatRegistry(registry, affixes);
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/10);
+    entt::entity weapon = MakeWeapon(registry, /*grants_technique=*/false);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::BeforeTechniqueCastEvent event{kTechniqueId};
+    actor.Dispatch(event);
+
+    REQUIRE(event.has_weapon);
+    REQUIRE_FALSE(event.weapon_grants_id);
 }

@@ -3,7 +3,6 @@
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
 #include "Combat/TargetResolution.h"
-#include "Components/EquipmentComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/CombatMath.h"
 #include "Engine/Combat/DamageEvent.h"
@@ -15,7 +14,6 @@
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
 #include "Engine/ECS/TPComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,12 +22,6 @@
 namespace psr {
 
 namespace {
-    bool WeaponGrants(const WeaponComponent& weapon, std::uint32_t photon_art_id)
-    {
-        return std::find(weapon.photon_art_ids.begin(), weapon.photon_art_ids.end(), photon_art_id) !=
-               weapon.photon_art_ids.end();
-    }
-
     float TierMultiplier(const std::vector<PhotonArtTier>& tiers)
     {
         return tiers.empty() ? 1.0f : tiers.front().power_multiplier;
@@ -44,36 +36,40 @@ PhotonArtAction::PhotonArtAction(Grid& grid, const PhotonArtLibrary& photon_arts
 
 ActionResult PhotonArtAction::Perform(Entity actor)
 {
+    // EquipmentComponent's own handler resolves the equipped weapon (if any)
+    // and fills has_weapon/weapon_grants_id/race_bonuses/attacker_stats;
+    // TPComponent's own handler fills current_tp/has_tp_component -- this
+    // action never reads EquipmentComponent/WeaponComponent directly, and
+    // only touches TPComponent for the deduction below, once the gate has
+    // already passed.
+    BeforePhotonArtCastEvent before_cast{m_photon_art_id};
+    actor.Dispatch(before_cast);
+    if (!before_cast.has_weapon || !before_cast.weapon_grants_id)
+        return ActionResult(0);
+
     const PhotonArt* art = m_photon_arts->Find(m_photon_art_id);
     if (!art)
         return ActionResult(0);
 
-    const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
-    if (!equipment || equipment->weapon == entt::null)
-        return ActionResult(0);
-
-    Registry& registry = actor.GetRegistry();
-    const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(equipment->weapon);
-    if (!weapon || !WeaponGrants(*weapon, m_photon_art_id))
+    if (!before_cast.has_tp_component || before_cast.current_tp < art->tp_cost)
         return ActionResult(0);
 
     TPComponent* tp = actor.TryGet<TPComponent>();
-    if (!tp || tp->current_tp < art->tp_cost)
+    if (!tp)
         return ActionResult(0);
-
-    BeforePhotonArtCastEvent before_cast{m_photon_art_id};
-    actor.Dispatch(before_cast);
     tp->current_tp -= art->tp_cost;
+
     AfterPhotonArtCastEvent after_cast{m_photon_art_id};
     actor.Dispatch(after_cast);
 
+    Registry& registry = actor.GetRegistry();
     const Vec2 origin = actor.Get<Position>().tile;
     const Vec2 selected_tile =
         actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
     const Vec2 offset = selected_tile - origin;
     const float multiplier = TierMultiplier(art->tiers);
 
-    StatsComponent attacker_stats = ComputeEffectiveStats(actor, *m_affixes);
+    const StatsComponent& attacker_stats = before_cast.attacker_stats;
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
     std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
 
@@ -148,7 +144,7 @@ ActionResult PhotonArtAction::Perform(Entity actor)
 
                 int damage = static_cast<int>(std::lround(
                     ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
-                damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
+                damage = ApplyRaceBonus(damage, before_cast.race_bonuses, defender_race_id);
 
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);

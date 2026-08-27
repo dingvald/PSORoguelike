@@ -4,6 +4,7 @@
 #include "Combat/Hostility.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/TweenComponent.h"
+#include "Engine/Actions/MoveEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/Math/Vec2f.h"
@@ -19,6 +20,14 @@ MoveAction::MoveAction(Grid& grid, const AffixLibrary& affixes, Vec2 offset, std
 
 ActionResult MoveAction::Perform(Entity actor)
 {
+    // Nothing subscribes to BeforeMoveEvent yet (no status-effect system
+    // exists) -- this is a ready hook for a future root/immobilize effect to
+    // veto the move via cancelled.
+    BeforeMoveEvent before_move{m_offset};
+    actor.Dispatch(before_move);
+    if (before_move.cancelled)
+        return ActionResult(0);
+
     Position& position = actor.Get<Position>();
     const Vec2 tile = position.tile;
     const Vec2 target = tile + m_offset;
@@ -50,6 +59,9 @@ ActionResult MoveAction::Perform(Entity actor)
 
     actor.GetOrEmplace<TweenComponent>() = TweenComponent{
         Vec2f{static_cast<float>(tile.x - target.x), static_cast<float>(tile.y - target.y)}, kMoveTweenDuration, 0.0f};
+
+    AfterMoveEvent after_move{tile, target};
+    actor.Dispatch(after_move);
 
     return ActionResult(kMoveCost);
 }

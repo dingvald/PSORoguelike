@@ -2,6 +2,7 @@
 
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EnergyComponent.h"
+#include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
@@ -40,6 +41,15 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
     WeaponComponent::Register(reg);
+
+    // EquipmentComponent is deliberately not meta/schema-registered above
+    // (entt::entity has no FieldKind), but it and TPComponent still need
+    // their own event handlers wired -- see each component's own
+    // AttachHandlers/DetachHandlers doc comment. Registry::BindComponentEvents
+    // just connects entt's on_construct/on_destroy<T> signals, independent of
+    // meta registration, so this is safe to call regardless.
+    registry.BindComponentEvents<EquipmentComponent>();
+    registry.BindComponentEvents<TPComponent>();
 
     return reg.Model();
 }

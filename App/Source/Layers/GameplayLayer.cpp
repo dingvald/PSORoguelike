@@ -111,6 +111,13 @@ void GameplayLayer::OnAttach()
     // main.cpp's top-level catch turns an uncaught one into a logged, clean
     // exit instead of an OS crash dialog.
     const EntitySchemaModel schema = RegisterComponents(m_registry);
+
+    // Lets EquipmentComponent's AttachHandlers-registered handler (which
+    // can't capture state) reach affix data when it contributes a
+    // Before<Action>Event's effective stats -- must happen before any entity
+    // that could carry EquipmentComponent/StatsComponent is created.
+    m_registry.SetAffixLibrary(m_affixes);
+
     JsonEntityLoader loader{m_registry.GetMetaContext(), &schema};
     loader.Load(ApplicationFilepaths::EntitiesPath);
     m_registry.RegisterPrefabs(loader);

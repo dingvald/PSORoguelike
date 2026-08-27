@@ -1,11 +1,13 @@
 #include "Actions/AttackAction.h"
 #include "Actions/MoveAction.h"
 
+#include "CombatRegistrySetup.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/TweenComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
+#include "Engine/Actions/MoveEvent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
@@ -15,6 +17,8 @@
 #include "Engine/World/Grid.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <optional>
 
 namespace {
 psr::AffixLibrary g_no_affixes;
@@ -124,6 +128,7 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
 {
     psr::Registry registry;
     psr::Grid grid{3, 3};
+    psr::SetUpCombatRegistry(registry, g_no_affixes);
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     actor.Emplace<psr::Position>(psr::Vec2{1, 1});
@@ -159,4 +164,52 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
     REQUIRE(result.cost == psr::AttackAction::kAttackCost);
     REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 1});
     REQUIRE_FALSE(actor.Has<psr::TweenComponent>());
+}
+
+TEST_CASE("MoveAction is a free no-op when a BeforeMoveEvent handler cancels it", "[MoveAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    struct RootProbe
+    {
+    };
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::BeforeMoveEvent, RootProbe>(
+        [](psr::Entity, psr::BeforeMoveEvent& event) { event.cancelled = true; });
+
+    std::mt19937 rng{1};
+    psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 1});
+}
+
+TEST_CASE("MoveAction dispatches AfterMoveEvent with the from/to tiles on a successful move", "[MoveAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    struct MoveProbe
+    {
+    };
+    std::optional<psr::AfterMoveEvent> received;
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::AfterMoveEvent, MoveProbe>(
+        [&](psr::Entity, psr::AfterMoveEvent& event) { received = event; });
+
+    std::mt19937 rng{1};
+    psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
+    action.Perform(actor);
+
+    REQUIRE(received.has_value());
+    REQUIRE(received->from == psr::Vec2{1, 1});
+    REQUIRE(received->to == psr::Vec2{2, 1});
 }
