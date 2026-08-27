@@ -55,8 +55,8 @@ around a distinct weapon category:
   matching PSO) — differentiated by range, spread (single-target vs area-of-effect line/cone), and
   hits-per-turn.
 - **Force — Cane/Wand:** Cane boosts Technique power when equipped; Wand is the channel Techniques
-  are cast through. Techniques are the class's primary damage source, spending Force's own TP pool
-  (kept separate from Hunter/Ranger's PP — see
+  are cast through. Techniques are the class's primary damage source, spending the same shared TP
+  pool Hunter/Ranger Photon Arts draw from (see
   [Weapons, Photon Arts & combat skills](#weapons-photon-arts--combat-skills) below); melee is a
   fallback only when TP runs low.
 
@@ -81,23 +81,26 @@ standard roguelike pattern, and matches PSO (class is also a creation-time choic
   (robotic constructs), **Dark** (demonic/humanoid dark units). This ties directly into
   [Areas, enemies & bosses](#areas-enemies--bosses) below, since each area is dominated by one
   race — a weapon built for one area's race trades off effectiveness elsewhere.
-- **Photon Arts:** weapon-attached special attacks, spending **PP** (see below). **Design
+- **Photon Arts:** weapon-attached special attacks, spending **TP** (see below). **Design
   adaptation from PSO:** in the source game these trigger probabilistically on a normal hit; here
-  they're reinterpreted as an **actively chosen attack option that costs PP** — a deliberate
+  they're reinterpreted as an **actively chosen attack option that costs TP** — a deliberate
   tactical choice fits turn-based play better than a hidden proc chance. Example families (exact
-  effects/naming are a follow-on balancing pass, not decided here): a drain-family art trades PP
-  for HP/PP drain on hit; a status-family art inflicts an ailment (Freeze/Poison/Shock/Confuse).
-- **PP vs. TP (resolved):** kept split, matching PSO exactly, rather than unified. **PP** fuels
-  Hunter/Ranger weapon Photon Arts; **TP** is Force's separate resource for
-  [Techniques](#elemental-techniques). Two distinct resource pools from the start, giving Force
-  its own identity rather than sharing a pool with the other two classes.
+  effects/naming are a follow-on balancing pass, not decided here): a drain-family art trades TP
+  for HP/TP drain on hit; a status-family art inflicts an ailment (Freeze/Poison/Shock/Confuse).
+- **PP vs. TP (revised — collapsed to one pool):** originally kept split (PP for Hunter/Ranger
+  Photon Arts, TP for Force [Techniques](#elemental-techniques)) to match PSO exactly and give
+  Force its own identity. Revised: a single shared **TP** pool now fuels both Photon Arts and
+  Techniques — two separate pools added bookkeeping (a second bar, a second component) without a
+  gameplay payoff distinct enough to justify it, since both are already gated the same way (a
+  weapon-granted ability, a per-use cost, one turn-consuming cast). Class identity comes from
+  *which* abilities a weapon grants and how they're themed, not from a second currency.
 
 **Current implementation:** nothing yet.
 
 ## Elemental Techniques
 
 PSO's Foie/Barta/Zonde-style elemental spell families (fire/ice/lightning, roughly), cast by
-Forces, spending their own **TP** pool — kept separate from Hunter/Ranger Photon Arts' PP (see
+Forces, spending the same shared **TP** pool Hunter/Ranger Photon Arts draw from (see
 [Weapons, Photon Arts & combat skills](#weapons-photon-arts--combat-skills) above). Reimagined as
 a turn-based spell system with elemental damage types and status effects (burn/freeze/shock-
 adjacent mechanics), tiered by spell level the way PSO's Techniques level with use.
@@ -220,6 +223,6 @@ built and can be tuned against real play:
   a Rifle volley vs. a single Handgun shot, etc.).
 - **Difficulty-tier drop/challenge scaling specifics** (exact stat multipliers, drop-rate curves
   Normal → Ultimate).
-- **Photon Art / Technique family effects and PP/TP costs** (the specific drain/status families
+- **Photon Art / Technique family effects and TP costs** (the specific drain/status families
   sketched in [Weapons, Photon Arts & combat skills](#weapons-photon-arts--combat-skills) need
   concrete numbers once combat exists to test against).

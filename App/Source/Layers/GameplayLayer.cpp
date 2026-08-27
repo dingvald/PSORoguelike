@@ -19,7 +19,6 @@
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/ECS/TPComponent.h"
@@ -274,8 +273,8 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
         const PhotonArt* art = m_photon_arts.Find(slot.id);
         if (!art)
             return false;
-        const PPComponent* pp = m_registry.TryGetComponent<PPComponent>(m_player);
-        if (!pp || pp->current_pp < art->pp_cost)
+        const TPComponent* tp = m_registry.TryGetComponent<TPComponent>(m_player);
+        if (!tp || tp->current_tp < art->tp_cost)
             return false;
 
         m_pending_cast_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, slot.id, m_rng);

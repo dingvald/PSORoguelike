@@ -8,11 +8,11 @@
 #include "Engine/Combat/PhotonArtLibrary.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -41,7 +41,7 @@ entt::entity MakeWeapon(psr::Registry& registry, bool grants_art = true)
     return weapon;
 }
 
-psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, int atp, int ata, int pp)
+psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, int atp, int ata, int tp)
 {
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
@@ -52,10 +52,10 @@ psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, 
     stats.ata = ata;
     actor.Emplace<psr::StatsComponent>(stats);
     actor.Emplace<psr::PlayerControlledComponent>();
-    psr::PPComponent pp_component;
-    pp_component.current_pp = pp;
-    pp_component.max_pp = pp;
-    actor.Emplace<psr::PPComponent>(pp_component);
+    psr::TPComponent tp_component;
+    tp_component.current_tp = tp;
+    tp_component.max_tp = tp;
+    actor.Emplace<psr::TPComponent>(tp_component);
     return actor;
 }
 
@@ -94,7 +94,7 @@ TEST_CASE("PhotonArtAction with no weapon equipped is a free no-op", "[PhotonArt
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*pp=*/100);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*tp=*/100);
 
     psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
     psr::ActionResult result = action.Perform(actor);
@@ -110,7 +110,7 @@ TEST_CASE("PhotonArtAction with a weapon that doesn't grant the id is a free no-
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*pp=*/100);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*tp=*/100);
     entt::entity weapon = MakeWeapon(registry, /*grants_art=*/false);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
@@ -120,17 +120,17 @@ TEST_CASE("PhotonArtAction with a weapon that doesn't grant the id is a free no-
     REQUIRE(result.cost == 0);
 }
 
-TEST_CASE("PhotonArtAction with insufficient PP is a free no-op", "[PhotonArtAction]")
+TEST_CASE("PhotonArtAction with insufficient TP is a free no-op", "[PhotonArtAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 20;
+    art.tp_cost = 20;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*pp=*/10);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
@@ -138,7 +138,7 @@ TEST_CASE("PhotonArtAction with insufficient PP is a free no-op", "[PhotonArtAct
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
-    REQUIRE(actor.Get<psr::PPComponent>().current_pp == 10); // untouched
+    REQUIRE(actor.Get<psr::TPComponent>().current_tp == 10); // untouched
 }
 
 TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the caster with no hit roll",
@@ -148,12 +148,12 @@ TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the 
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 5;
+    art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
     psr::HealthComponent health;
@@ -166,7 +166,7 @@ TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the 
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == psr::PhotonArtAction::kPhotonArtCost);
-    REQUIRE(actor.Get<psr::PPComponent>().current_pp == 5);
+    REQUIRE(actor.Get<psr::TPComponent>().current_tp == 5);
     REQUIRE(actor.Get<psr::HealthComponent>().current_hp < 100); // always hits itself, no roll to miss
 }
 
@@ -176,13 +176,13 @@ TEST_CASE("PhotonArtAction self-target Drain heals the caster capped at max HP",
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 5;
+    art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
     art.drain_percent = 100;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
     psr::HealthComponent health;
@@ -204,7 +204,7 @@ TEST_CASE("PhotonArtAction eventually destroys a hostile Directional-cast occupa
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 0;
+    art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;
     art.range_shape = psr::WeaponRangeShape::SingleTarget;
     art.range = 1;
@@ -213,7 +213,7 @@ TEST_CASE("PhotonArtAction eventually destroys a hostile Directional-cast occupa
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*pp=*/100000);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*tp=*/100000);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
     actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
@@ -246,7 +246,7 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
         std::mt19937 rng{42};
 
         psr::PhotonArt art;
-        art.pp_cost = 0;
+        art.tp_cost = 0;
         art.range_shape = psr::WeaponRangeShape::SingleTarget;
         art.range = 1;
         art.hits_per_turn = 1;
@@ -255,7 +255,7 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
             art.tiers.push_back(psr::PhotonArtTier{2, multiplier});
         psr::PhotonArtLibrary arts = MakeLibrary(art);
 
-        psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*pp=*/100000);
+        psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*tp=*/100000);
         entt::entity weapon = MakeWeapon(registry);
         actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
         actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
@@ -282,12 +282,12 @@ TEST_CASE("PhotonArtAction dispatches AfterPhotonArtCastEvent and AfterDamageEve
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 5;
+    art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
     psr::HealthComponent health;
@@ -319,13 +319,13 @@ TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDa
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::PhotonArt art;
-    art.pp_cost = 5;
+    art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
     art.drain_percent = 100;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*pp=*/10);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/0, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
     psr::HealthComponent health;

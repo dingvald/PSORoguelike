@@ -47,11 +47,11 @@ public:
     // mechanism with exactly one caller.
     void Subscribe(Entity actor);
 
-    // Reads the player's current HealthComponent/TPComponent-or-PPComponent
-    // and publishes a fresh PlayerStatusMessage snapshot. Called internally
-    // whenever a combat event changes the player's HP/TP/PP; also called by
-    // GameplayLayer in response to HudReadyMessage (see that message's own
-    // doc comment for why a snapshot can't just be published once up front).
+    // Reads the player's current HealthComponent/TPComponent and publishes a
+    // fresh PlayerStatusMessage snapshot. Called internally whenever a combat
+    // event changes the player's HP/TP; also called by GameplayLayer in
+    // response to HudReadyMessage (see that message's own doc comment for
+    // why a snapshot can't just be published once up front).
     void PublishPlayerStatus();
 
 private:

@@ -13,7 +13,6 @@
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/TPComponent.h"
@@ -99,16 +98,8 @@ void CombatLogBridge::PublishPlayerStatus()
     if (const TPComponent* tp = m_registry->TryGetComponent<TPComponent>(m_player))
     {
         status.has_secondary = true;
-        status.secondary_label = "TP";
         status.current_secondary = tp->current_tp;
         status.max_secondary = tp->max_tp;
-    }
-    else if (const PPComponent* pp = m_registry->TryGetComponent<PPComponent>(m_player))
-    {
-        status.has_secondary = true;
-        status.secondary_label = "PP";
-        status.current_secondary = pp->current_pp;
-        status.max_secondary = pp->max_pp;
     }
 
     m_message_bus->Publish(status);

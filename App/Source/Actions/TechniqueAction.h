@@ -21,10 +21,11 @@ namespace psr {
 // resistance table or status framework exists yet -- M7.3's job for the
 // latter).
 //
-// Same free-no-op/cost rules as PhotonArtAction: a missing weapon, a weapon
-// that doesn't grant technique_id, or insufficient TP is a free no-op;
-// otherwise TP is spent and the turn is consumed (kTechniqueCost) regardless
-// of whether the cast connects.
+// Same free-no-op/cost rules as PhotonArtAction, and the same TPComponent
+// pool (see docs/GDD.md's "PP vs. TP (revised -- collapsed to one pool)" section): a missing weapon,
+// a weapon that doesn't grant technique_id, or insufficient TP is a free
+// no-op; otherwise TP is spent and the turn is consumed (kTechniqueCost)
+// regardless of whether the cast connects.
 class TechniqueAction : public IAction
 {
 public:

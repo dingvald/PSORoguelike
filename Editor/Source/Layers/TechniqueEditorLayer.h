@@ -23,9 +23,10 @@ class RmlClickListener;
 // The Technique Editor: browse/create/delete Wand/Cane-attached Technique
 // definitions (see Core/Engine/Combat/Technique.h) -- mirrors
 // PhotonArtEditorLayer's shape exactly (a flat, bespoke non-ECS content type
-// following AffixEditorLayer's List/Edit shell pattern), differing only in
-// which struct fields the form exposes (tp_cost/element_id instead of
-// pp_cost/hits_per_turn/drain_percent).
+// following AffixEditorLayer's List/Edit shell pattern; tp_cost is shared
+// with PhotonArt -- both spend the same TPComponent pool), differing only in
+// which struct fields the form exposes (element_id instead of
+// hits_per_turn/drain_percent).
 class TechniqueEditorLayer : public Layer
 {
 public:

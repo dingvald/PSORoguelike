@@ -22,7 +22,7 @@ PhotonArtSchemaModel BuildPhotonArtSchemaModel()
 
     PhotonArtSchemaModel model;
     model.fields.push_back(FieldSchema{"name", FieldKind::String});
-    model.fields.push_back(FieldSchema{"pp_cost", FieldKind::Integer});
+    model.fields.push_back(FieldSchema{"tp_cost", FieldKind::Integer});
 
     FieldSchema targeting_mode{"targeting_mode", FieldKind::Enum};
     targeting_mode.enum_values = detail::EnsureEnumRegistered<TargetingMode>(ctx);

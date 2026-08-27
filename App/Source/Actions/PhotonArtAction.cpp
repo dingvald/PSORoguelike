@@ -10,11 +10,11 @@
 #include "Engine/Combat/PhotonArt.h"
 #include "Engine/Combat/PhotonArtCastEvent.h"
 #include "Engine/ECS/HealthComponent.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
 #include <algorithm>
@@ -57,13 +57,13 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     if (!weapon || !WeaponGrants(*weapon, m_photon_art_id))
         return ActionResult(0);
 
-    PPComponent* pp = actor.TryGet<PPComponent>();
-    if (!pp || pp->current_pp < art->pp_cost)
+    TPComponent* tp = actor.TryGet<TPComponent>();
+    if (!tp || tp->current_tp < art->tp_cost)
         return ActionResult(0);
 
     BeforePhotonArtCastEvent before_cast{m_photon_art_id};
     actor.Dispatch(before_cast);
-    pp->current_pp -= art->pp_cost;
+    tp->current_tp -= art->tp_cost;
     AfterPhotonArtCastEvent after_cast{m_photon_art_id};
     actor.Dispatch(after_cast);
 

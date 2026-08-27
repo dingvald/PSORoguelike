@@ -144,7 +144,7 @@ PhotonArt ReadPhotonArtBody(const rapidjson::Value& photon_art_def)
 {
     PhotonArt photon_art;
     photon_art.name = ReadString(photon_art_def, "name", photon_art.name);
-    photon_art.pp_cost = ReadInt(photon_art_def, "pp_cost", photon_art.pp_cost);
+    photon_art.tp_cost = ReadInt(photon_art_def, "tp_cost", photon_art.tp_cost);
     photon_art.targeting_mode =
         ReadEnum<TargetingMode>(photon_art_def, "targeting_mode", photon_art.targeting_mode, "targeting mode");
     photon_art.range_shape =
@@ -163,7 +163,7 @@ rapidjson::Value WritePhotonArtBody(const PhotonArt& photon_art, rapidjson::Docu
 {
     rapidjson::Value object(rapidjson::kObjectType);
     object.AddMember("name", StringValue(photon_art.name, allocator), allocator);
-    object.AddMember("pp_cost", photon_art.pp_cost, allocator);
+    object.AddMember("tp_cost", photon_art.tp_cost, allocator);
     object.AddMember("targeting_mode", StringValue(std::string{EnumName(photon_art.targeting_mode)}, allocator),
                      allocator);
     object.AddMember("range_shape", StringValue(std::string{EnumName(photon_art.range_shape)}, allocator), allocator);

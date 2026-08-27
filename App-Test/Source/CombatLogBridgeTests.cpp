@@ -7,7 +7,6 @@
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/Messages/MessageBus.h"
@@ -197,11 +196,10 @@ TEST_CASE("CombatLogBridge::PublishPlayerStatus reports TP as the player's secon
     REQUIRE(received->current_hp == 30);
     REQUIRE(received->max_hp == 30);
     REQUIRE(received->has_secondary);
-    REQUIRE(received->secondary_label == "TP");
     REQUIRE(received->current_secondary == 15);
 }
 
-TEST_CASE("CombatLogBridge::PublishPlayerStatus reports no secondary resource when the player has neither TP nor PP",
+TEST_CASE("CombatLogBridge::PublishPlayerStatus reports no secondary resource when the player has no TP",
           "[CombatLogBridge]")
 {
     psr::Registry registry;

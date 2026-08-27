@@ -11,7 +11,7 @@
                 <span id="hp-text" class="bar-text"></span>
             </div>
             <div id="secondary-row" class="bar-row">
-                <span id="secondary-label" class="bar-label"></span>
+                <span class="bar-label">TP</span>
                 <div class="bar-track"><div id="secondary-fill" class="bar-fill secondary"></div></div>
                 <span id="secondary-text" class="bar-text"></span>
             </div>

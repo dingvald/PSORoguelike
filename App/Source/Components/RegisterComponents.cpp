@@ -9,7 +9,6 @@
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/ModComponent.h"
-#include "Engine/ECS/PPComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/RaceComponent.h"
@@ -32,7 +31,6 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     HotbarComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
-    PPComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);

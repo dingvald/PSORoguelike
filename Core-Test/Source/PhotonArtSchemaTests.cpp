@@ -57,9 +57,9 @@ TEST_CASE("BuildPhotonArtSchemaModel reflects fields with the expected field kin
     REQUIRE(name != nullptr);
     CHECK(name->kind == psr::FieldKind::String);
 
-    const psr::FieldSchema* pp_cost = find("pp_cost");
-    REQUIRE(pp_cost != nullptr);
-    CHECK(pp_cost->kind == psr::FieldKind::Integer);
+    const psr::FieldSchema* tp_cost = find("tp_cost");
+    REQUIRE(tp_cost != nullptr);
+    CHECK(tp_cost->kind == psr::FieldKind::Integer);
 
     const psr::FieldSchema* targeting_mode = find("targeting_mode");
     REQUIRE(targeting_mode != nullptr);
@@ -91,7 +91,7 @@ TEST_CASE("SavePhotonArt + LoadPhotonArtLibrary round-trips every field", "[Phot
 {
     psr::PhotonArt photon_art;
     photon_art.name = "Rising Strike";
-    photon_art.pp_cost = 12;
+    photon_art.tp_cost = 12;
     photon_art.targeting_mode = psr::TargetingMode::Directional;
     photon_art.range_shape = psr::WeaponRangeShape::Cone3;
     photon_art.range = 2;
@@ -110,7 +110,7 @@ TEST_CASE("SavePhotonArt + LoadPhotonArtLibrary round-trips every field", "[Phot
 
     CHECK(loaded.id_string == "rising_strike");
     CHECK(loaded.name == "Rising Strike");
-    CHECK(loaded.pp_cost == 12);
+    CHECK(loaded.tp_cost == 12);
     CHECK(loaded.targeting_mode == psr::TargetingMode::Directional);
     CHECK(loaded.range_shape == psr::WeaponRangeShape::Cone3);
     CHECK(loaded.range == 2);

@@ -19,7 +19,7 @@ struct PlayerStatusMessage;
 struct HotbarStateMessage;
 struct CombatLogEntryMessage;
 
-// Player HUD overlay: HP/TP-or-PP bars, the 10-slot Technique/Photon Art/Item
+// Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, and a scrolling event log. Pushed as an overlay from
 // GameplayLayer::OnAttach (PushOverlay<HudLayer>()), with its own
 // hud.rml/hud.rcss document.

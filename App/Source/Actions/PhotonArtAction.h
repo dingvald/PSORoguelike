@@ -22,11 +22,13 @@ namespace psr {
 // UnnamedRoguelike's SelectTargetAction).
 //
 // A free no-op (cost 0) if actor has no weapon equipped, the weapon doesn't
-// grant photon_art_id, or actor's current PP can't afford the art's pp_cost.
-// Otherwise PP is spent and the turn is consumed (kPhotonArtCost) regardless
-// of whether the cast connects -- unlike AttackAction's free-swing-into-empty-
-// air case, the player explicitly chose this target through an interactive
-// selection flow, so there's no "accidental miss" to refund.
+// grant photon_art_id, or actor's current TP can't afford the art's tp_cost
+// -- the same TPComponent pool TechniqueAction spends, per docs/GDD.md's
+// "PP vs. TP (revised -- collapsed to one pool)" section. Otherwise TP is spent and the turn is
+// consumed (kPhotonArtCost) regardless of whether the cast connects --
+// unlike AttackAction's free-swing-into-empty-air case, the player
+// explicitly chose this target through an interactive selection flow, so
+// there's no "accidental miss" to refund.
 class PhotonArtAction : public IAction
 {
 public:

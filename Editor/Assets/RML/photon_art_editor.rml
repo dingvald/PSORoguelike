@@ -29,8 +29,8 @@
                 <div id="field-id" class="field-row"></div>
                 <h3>Name</h3>
                 <div id="field-name" class="field-row"></div>
-                <h3>PP Cost</h3>
-                <div id="field-pp-cost" class="field-row"></div>
+                <h3>TP Cost</h3>
+                <div id="field-tp-cost" class="field-row"></div>
                 <h3>Targeting Mode</h3>
                 <div id="field-targeting-mode" class="field-row"></div>
                 <h3>Range Shape</h3>

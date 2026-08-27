@@ -348,11 +348,11 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                             }));
 
-    if (Rml::Element* row = m_editor->GetElementById("field-pp-cost"))
-        keep(fieldwidgets::BuildIntField(*row, "pp_cost", m_draft.pp_cost,
+    if (Rml::Element* row = m_editor->GetElementById("field-tp-cost"))
+        keep(fieldwidgets::BuildIntField(*row, "tp_cost", m_draft.tp_cost,
                                          [this](int v)
                                          {
-                                             m_draft.pp_cost = v;
+                                             m_draft.tp_cost = v;
                                              MarkDirty();
                                          }));
 

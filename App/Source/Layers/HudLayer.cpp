@@ -112,8 +112,6 @@ void HudLayer::OnPlayerStatus(const PlayerStatusMessage& message)
     if (!message.has_secondary)
         return;
 
-    if (Rml::Element* label = m_document->GetElementById("secondary-label"))
-        label->SetInnerRML(EscapeRml(message.secondary_label));
     if (Rml::Element* fill = m_document->GetElementById("secondary-fill"))
         fill->SetProperty("width", PercentWidth(message.current_secondary, message.max_secondary));
     if (Rml::Element* text = m_document->GetElementById("secondary-text"))

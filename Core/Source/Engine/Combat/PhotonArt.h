@@ -27,20 +27,23 @@ struct PhotonArtTier
     }
 };
 
-// One authored Photon Art: a weapon-attached, PP-costed special attack
+// One authored Photon Art: a weapon-attached, TP-costed special attack
 // (docs/GDD.md's "Weapons, Photon Arts & combat skills" section) -- granted by
 // whichever weapon(s) list its id in WeaponComponent::photon_art_ids, not
-// learned by the character. Deliberately minimal per the GDD's own
-// "exact effects/naming are a follow-on balancing pass" framing: drain_percent
-// and status_effect_id are effect-family-specific fields that sit unused when
-// effect_family doesn't call for them, rather than three separate structs for
-// three families that otherwise share every other field.
+// learned by the character. Shares its resource pool with Technique (both
+// spend TPComponent -- see docs/GDD.md's "PP vs. TP (revised -- collapsed to one pool)" section for
+// why the two pools were collapsed into one). Deliberately minimal per the
+// GDD's own "exact effects/naming are a follow-on balancing pass" framing:
+// drain_percent and status_effect_id are effect-family-specific fields that
+// sit unused when effect_family doesn't call for them, rather than three
+// separate structs for three families that otherwise share every other
+// field.
 struct PhotonArt
 {
     std::uint32_t id = 0;
     std::string id_string;
     std::string name;
-    int pp_cost = 0;
+    int tp_cost = 0;
     TargetingMode targeting_mode = TargetingMode::Directional;
     WeaponRangeShape range_shape = WeaponRangeShape::SingleTarget;
     int range = 1;
