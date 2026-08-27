@@ -1,0 +1,27 @@
+{
+    "schema_version": 1,
+    "name": "Test Dungeon",
+    "area_tag": "",
+    "room_count_min": 5,
+    "room_count_max": 20,
+    "loopback_count_min": 0,
+    "loopback_count_max": 2,
+    "pieces": [
+        {
+            "piece_id": 2421513152,
+            "weight": 1.0,
+            "max_occurrences": 20
+        },
+        {
+            "piece_id": 3537263524,
+            "weight": 1.0,
+            "max_occurrences": 1
+        },
+        {
+            "piece_id": 1278703254,
+            "weight": 1.0,
+            "max_occurrences": 1
+        }
+    ],
+    "locks": []
+}

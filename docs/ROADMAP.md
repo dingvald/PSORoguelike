@@ -68,12 +68,13 @@ Three deviations from strict document order, each because the dependency is real
 - **M8.1 (item & equipment schema) moves ahead of the rest of M7/M8.** M7.1's own bullet already
   says weapon-type fields (range shape, ATP/ATA split) are "added to the item schema/editor
   (M8.1)" — melee/ranged resolution can't be authored or tested without weapons existing first.
-- **A minimal debug mission launcher is inserted before M6/M7, not in the original numbered
-  list.** Nothing before M10.1 (persistent hub) gives the player a way to actually enter a
-  mission. Rather than pull the full hub forward, Phase A adds a throwaway launcher layer
-  (pick a class, drop into a generated Forest mission) under CLAUDE.md's test-fixture exception
-  — scaffolding to exercise the system, not content. It's replaced by the real M10.1/M10.3 UI in
-  Phase B, not kept.
+- **A gameplay layer is inserted before M6/M7, not in the original numbered list.** Nothing
+  before M10.1 (persistent hub) gives the player a way to actually enter a mission. Originally
+  scoped as a throwaway launcher (CLAUDE.md's test-fixture exception) to be replaced outright by
+  M10.1/M10.3 — **revised by the user's explicit choice**: `GameplayLayer` is the permanent
+  gameplay entry point instead, starting minimal (spawn the player in a fixed test dungeon, no
+  class-picker/hub yet) and grown in place. M10.1/M10.3 *extend* it (real mission-select/hub UI,
+  real character creation) rather than replacing it — see its own write-up after M6 below.
 - **`cereal` is split out of M1.1 and added in M11.2 instead.** `cereal` is for binary run-state
   persistence, whose only consumer is M11.2 (run persistence & permadeath); adding it 30 steps
   before it's used has no payoff. M1.1 in Phase A means rapidjson only.
@@ -98,8 +99,9 @@ Three deviations from strict document order, each because the dependency is real
 15. M6.1 — Energy-based turn scheduler
 16. M6.2 — Grid movement & input
 17. M7.1 — Melee/ranged resolution (now unblocked by M8.1)
-18. *(new)* Minimal debug mission launcher — throwaway scaffold to pick a class and drop into a
-    generated Forest mission; replaced by M10.1/M10.3 in Phase B
+18. *(new)* `GameplayLayer` — the permanent gameplay entry point: generates a dungeon into a live
+    `Grid`, spawns the player, wires turn-based input. Extended in place by M10.1/M10.3, not
+    replaced
 
 **Checkpoint:** playable dungeon reached. Force is melee-fallback-only until Phase B lands
 Techniques (7.2) — matches the GDD's own fallback framing for Force without Techniques.
@@ -114,9 +116,9 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 24. M9.1 — Mag entity & feeding
 25. M4.5 — Fixed area unlock order, plus authoring Caves/Mines/Ruins through the now-proven
     M3.2/M4.2/M5.2 editors (content authoring, not new engine work)
-26. M10.1 — Persistent hub (replaces the Phase A debug launcher)
+26. M10.1 — Persistent hub (extends the Phase A `GameplayLayer` with real mission-select/hub UI)
 27. M10.2 — Difficulty tiers
-28. M10.3 — Character creation (replaces the Phase A debug class-picker)
+28. M10.3 — Character creation (extends `GameplayLayer` with a real class-picker)
 29. M11.1 — XP & leveling
 30. M11.2 — Run persistence & permadeath (`cereal` added here)
 
@@ -462,17 +464,68 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   Input: `ActionMap<TKey>`/`InputBuffer<TKey>` (`Core/Source/Engine/Input/`, DAS-style held-key
   repeat) are generic, engine-agnostic ports; `App/Source/Content/KeyBindings.{h,cpp}` binds the
   default 4-directional arrow keys + Space-to-wait (diagonals deferred — nothing in the GDD commits
-  to 8-directional movement). No gameplay `Layer` wires any of this to the live SDL event loop
-  yet, per the user's explicit choice and the roadmap's own Phase-A sequencing (the debug mission
-  launcher, which will do that wiring, comes after M7.1) — `TurnCoordinator::PressKey`/`ReleaseKey`
-  are ready for that layer to call once it exists. Verified via unit tests only this round (no
-  throwaway smoke-test layer, per the user's explicit choice) — a new **`App-Test`** project
+  to 8-directional movement). No gameplay `Layer` wired any of this to the live SDL event loop
+  this round, per the user's explicit choice and the roadmap's own Phase-A sequencing (`GameplayLayer`,
+  which does that wiring, comes after M7.1 — see its own write-up below). Verified via unit tests
+  only this round (no throwaway smoke-test layer, per the user's explicit choice) — a new **`App-Test`** project
   (`App-Test/Build-App-Test.lua`, registered in `Build.lua`) was added since none existed before,
   mirroring `Core-Test`'s Catch2 setup and reusing the same "compile App's pure-logic subfolders
   directly" trick `Editor/Build-Editor.lua` already established (App is a `ConsoleApp`, can't be
   linked). Catch2 coverage in `App-Test/Source/MoveActionTests.cpp` / `WaitActionTests.cpp` /
   `TweenSystemTests.cpp`; `Core-Test/Source/ActionMapTests.cpp` / `InputBufferTests.cpp` /
   `EasingTests.cpp` cover the new Core-level primitives.
+
+## Gameplay Layer (Phase A item 18)
+
+**Status:** initial landing done (player spawn + movement in a fixed test dungeon)
+
+The permanent gameplay entry point — see the Phase-A deviation note above for why this isn't a
+throwaway launcher. **Done:** two new pieces close the loop from "generated dungeon layout" to
+"player moving around on screen with wall collision," neither of which existed before:
+`Core/Source/Engine/Dungeon/DungeonInstantiator.h/.cpp` (`ComputeDungeonBounds`/
+`InstantiateDungeon`) bridges a `DungeonStitcher`-produced `DungeonLayout` into a live `Grid` of
+entities — stamping every placed piece's cells via `Registry::CreateEntity(prefab_id)`, swapping a
+dead-end socket's own prefab for its `fallback_prefab_id` (mirrors the Dungeon Editor preview's own
+dead-end rendering), and translating the layout's possibly-negative world coordinates into the
+`Grid`'s zero-based space. `App/Source/Layers/GameplayLayer.h/.cpp` is the first real consumer of
+`TileRenderer`/`Camera`/`TextureAtlas`/`TileGpuPipeline` together (M3.1 built them, nothing used
+them as a set until now): on attach it loads content, generates a dungeon (currently a hardcoded
+`test_dungeon` id — no mission-select exists yet, see M10.1 above), instantiates it, spawns the
+player at the entrance from a new `App/Assets/Data/Entities/player.json` prefab (appearance lives
+in data like every other entity, not hand-built in the layer — no character creation yet, see
+M10.3 above, to pick anything other than this one default), and constructs `TurnCoordinator`
+*before* the player's `EnergyComponent` is emplaced (queue membership is driven by that
+construction order). `OnEvent` finally wires `TurnCoordinator::PressKey`/`ReleaseKey` to the live
+SDL event loop, the connection M6.2 left dangling. Also fixed in passing:
+`App/Assets/Data/Entities/basic_socket.json` had an empty `SocketComponent.tags` list, so
+`DungeonStitcher`'s tag-intersection rule could never match any two sockets and generation always
+failed past the Entrance — given a real tag (`["door"]`); and a new throwaway
+`App/Assets/Data/Entities/wall.json` (`blocks_movement` + `geo_wall`) is available for wall cells
+to be authored into pieces via the Piece Editor (not yet placed into any piece — nothing currently
+blocks movement in the test dungeon). Not yet done: mission-select (hardcoded dungeon id),
+character creation (no `EquipmentComponent`/stats populated on spawn), any HUD, enemy spawning.
+
+Brought up to UnnamedRoguelike's `WorldLayer` quality bar (the sibling project's reference
+implementation, per the user's explicit direction) after the initial landing: `OnAttach()`
+originally wrapped every content-load/generation step in its own `try/catch` that logged and
+silently returned, leaving a black screen on failure — `WorldLayer` deliberately does none of this
+(a missing/malformed content file is a build-input bug, not a runtime condition a player can hit,
+so it's allowed to crash loudly with a real exception message instead of being hidden). Matched
+that convention: those `try/catch` blocks are gone, `GenerateDungeon`/`LoadPieceLibrary`/
+`LoadDungeonLibrary`/`JsonEntityLoader::Load` now throw straight through `OnAttach()`, and the two
+remaining non-exception failure checks (no `test_dungeon` definition found, generated dungeon has
+no cells) were converted from log-and-return to `throw std::runtime_error`. `App/Source/main.cpp`
+gets the one addition `WorldLayer`'s own reference doesn't even have: a top-level `try/catch`
+around `PushLayer`/`Run()` that logs the exception and exits(1) cleanly instead of an OS crash
+dialog — verified by deliberately hiding `test_dungeon.json` from the build output and confirming
+`App.exe` logs `"GameplayLayer: no 'test_dungeon' dungeon definition found"` and exits 1, then
+restoring it and confirming normal startup again.
+
+Catch2 coverage in `Core-Test/Source/DungeonInstantiatorTests.cpp`; `GameplayLayer` itself is
+GPU-rendering/live-input code in the same category M3.1 already documented as impractical to
+unit-test — verified instead by running `App.exe` directly and confirming on screen (dungeon
+renders, player sprite appears at the entrance, arrow keys move it turn-by-turn with the camera
+tracking) plus the deliberate-failure check above.
 
 ## M7 — Combat System
 
@@ -516,9 +569,9 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   "every feature needs a UI/editor answer" -- HP is authored content like any other stat. UI:
   HP/action bars, target/range-preview overlay, and combat log are **deliberately deferred this
   round**, per the user's explicit choice matching M6.2's own precedent -- no gameplay `Layer`
-  exists yet to host them in; revisit once the Phase-A debug mission launcher lands. Likewise
-  out of scope: PP/TP costs and Photon Arts/Techniques (7.2), status effects (7.3), and the debug
-  mission launcher itself (a separate Phase A item) -- nothing here wires `AttackAction`/
+  existed yet to host them in; revisit now that `GameplayLayer` (below) exists. Likewise
+  out of scope: PP/TP costs and Photon Arts/Techniques (7.2), status effects (7.3), and
+  `GameplayLayer` itself (a separate Phase A item) -- nothing here wires `AttackAction`/
   `MoveAction` into a live input loop or spawns real entities, so verification stayed unit-test-
   only (no throwaway smoke-test layer), same reasoning M6.2 already gives for logic that's fully
   unit-testable without a live gameplay layer. Catch2 coverage in
@@ -570,8 +623,8 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   meta-registered (`entt::entity` has no `FieldKind` mapping) and never authored in a prefab
   JSON, following `TweenComponent`'s existing precedent for engine-internal runtime-only state
   rather than `PrefabIdComponent`'s `authorable=false`-but-still-registered pattern; it ships
-  unpopulated this round (nothing yet sets it — that's the not-yet-built debug mission
-  launcher's job, later in Phase A). Authored entity-prefab JSON stays a **template**: fields
+  unpopulated this round (nothing yet sets it — populating it for the player is `GameplayLayer`'s
+  job, not yet done as of its own initial landing below). Authored entity-prefab JSON stays a **template**: fields
   like `grind_level`/`race_bonuses`/affix refs are base/default values, not rolled instances —
   the actual random-roll-at-drop logic is M8.2's job (drop tables, not yet started), and the
   monogrinder's consumable-use flow and mod-plugged-into-armor-slot runtime state are likewise

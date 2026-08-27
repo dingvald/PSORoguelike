@@ -1,0 +1,49 @@
+#pragma once
+
+#include "Engine/Dungeon/DungeonStitcher.h"
+#include "Engine/Dungeon/PieceLibrary.h"
+#include "Engine/ECS/Registry.h"
+#include "Engine/Math/Rect.h"
+#include "Engine/Math/Vec2.h"
+#include "Engine/World/Grid.h"
+
+namespace psr {
+
+// The bounding rect, in a DungeonLayout's own (possibly-negative) world
+// coordinates, covering every placed piece's cells -- DungeonStitcher always
+// places the Entrance at world_offset{0,0}, but growth can extend the tree
+// in any of the four directions from there, so a layout's coordinates aren't
+// guaranteed non-negative. Callers use this to size a Grid (Grid is
+// zero-based only) and compute InstantiateDungeon's offset before calling
+// it: Rect bounds = ComputeDungeonBounds(layout, library); Grid grid(bounds.size.x,
+// bounds.size.y); InstantiateDungeon(layout, library, -bounds.origin, registry, grid);
+// An empty layout (no resolvable pieces) returns a zero-sized Rect at the origin.
+Rect ComputeDungeonBounds(const DungeonLayout& layout, const PieceLibrary& library);
+
+// Where a spawning system (e.g. a gameplay layer placing the player) should
+// enter the instantiated dungeon -- the Entrance piece's first authored
+// cell, translated the same way every other cell was. DungeonStitcher always
+// places the Entrance as layout.pieces[0], before growth begins.
+struct DungeonInstantiation
+{
+    Vec2 entrance_tile;
+};
+
+// Stamps every placed piece's cells into grid as live entities: each cell's
+// PieceCellPrefab list is instantiated via registry.CreateEntity(prefab_id)
+// (skipped if that id isn't a registered prefab, or is 0) and added to grid
+// at world_offset + offset + cell.offset -- offset is normally
+// -ComputeDungeonBounds(...).origin, translating the layout's own coordinate
+// space into grid's zero-based one -- with a Position stamped to match. A
+// socket cell layout.dead_ends marks as unconnected has its own prefab_id
+// swapped for that dead end's fallback_prefab_id instead (the cell is left
+// unstamped if fallback_prefab_id is 0), the same substitution the Dungeon
+// Editor's preview already renders for dead ends. grid must already be
+// sized to fit (see ComputeDungeonBounds) -- this function does not resize
+// it. A piece_id from layout.pieces that library can't resolve is skipped
+// (defensive: GenerateDungeon only ever placed pieces it resolved from this
+// same library, so this only matters if a stale/mismatched library is passed).
+DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
+                                         Registry& registry, Grid& grid);
+
+} // namespace psr

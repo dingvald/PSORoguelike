@@ -1,6 +1,6 @@
 {
     "schema_version": 1,
-    "name": "",
+    "name": "test_piece",
     "area_tag": "",
     "category": "room",
     "cells": [
@@ -193,6 +193,10 @@
                 {
                     "prefab_id": 2949673445,
                     "edge": "north"
+                },
+                {
+                    "prefab_id": 1684028391,
+                    "edge": "south"
                 }
             ]
         },
@@ -900,6 +904,10 @@
             "prefabs": [
                 {
                     "prefab_id": 2949673445,
+                    "edge": "north"
+                },
+                {
+                    "prefab_id": 1684028391,
                     "edge": "north"
                 }
             ]
@@ -1261,6 +1269,10 @@
                 {
                     "prefab_id": 2949673445,
                     "edge": "north"
+                },
+                {
+                    "prefab_id": 1684028391,
+                    "edge": "west"
                 }
             ]
         },
@@ -1393,6 +1405,10 @@
                 {
                     "prefab_id": 2949673445,
                     "edge": "north"
+                },
+                {
+                    "prefab_id": 1684028391,
+                    "edge": "east"
                 }
             ]
         },
@@ -1448,282 +1464,6 @@
             "offset": {
                 "x": 16,
                 "y": 6
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 6
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 7
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 8
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 9
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 10
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 11
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 12
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 13
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 14
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 15
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 16
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 17,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 16,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 15,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 14,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 13,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 12,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 11,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 10,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 9,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 8,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 7,
-                "y": 17
-            },
-            "prefabs": [
-                {
-                    "prefab_id": 2949673445,
-                    "edge": "north"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 6,
-                "y": 17
             },
             "prefabs": [
                 {

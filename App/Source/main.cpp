@@ -6,7 +6,7 @@
 
 #include "ApplicationFilepaths.h"
 #include "Engine/Application.h"
-#include "Layers/HelloWorldLayer.h"
+#include "Layers/GameplayLayer.h"
 
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -19,7 +19,19 @@ int main(int /*argc*/, char** /*argv*/)
     if (!app.Initialize(context))
         return 1;
 
-    app.PushLayer<psr::HelloWorldLayer>();
-
-    return app.Run();
+    // GameplayLayer::OnAttach() lets content-load/generation failures
+    // propagate as exceptions (a missing/malformed file is a build-input bug,
+    // not something to hide behind a black screen) -- this is the one place
+    // that turns an uncaught one into a logged, clean exit instead of an OS
+    // crash dialog.
+    try
+    {
+        app.PushLayer<psr::GameplayLayer>();
+        return app.Run();
+    }
+    catch (const std::exception& error)
+    {
+        SDL_Log("PSORoguelike: fatal error: %s", error.what());
+        return 1;
+    }
 }
