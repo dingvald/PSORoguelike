@@ -61,7 +61,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     pp->current_pp -= art->pp_cost;
 
     const Vec2 origin = actor.Get<Position>().tile;
-    const Vec2 selected_tile = actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
+    const Vec2 selected_tile =
+        actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
     const Vec2 offset = selected_tile - origin;
     const float multiplier = TierMultiplier(art->tiers);
 
@@ -128,8 +129,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 if (unit_roll(*m_rng) > hit_chance)
                     continue; // miss
 
-                int damage = static_cast<int>(
-                    std::lround(ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
+                int damage = static_cast<int>(std::lround(
+                    ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
                 damage = ApplyRaceBonus(damage, weapon->race_bonuses, defender_race_id);
 
                 HealthComponent& health = target.Get<HealthComponent>();
@@ -138,8 +139,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 if (art->effect_family == EffectFamily::Drain)
                 {
                     if (HealthComponent* attacker_health = actor.TryGet<HealthComponent>())
-                        attacker_health->current_hp =
-                            std::min(attacker_health->max_hp, attacker_health->current_hp + damage * art->drain_percent / 100);
+                        attacker_health->current_hp = std::min(
+                            attacker_health->max_hp, attacker_health->current_hp + damage * art->drain_percent / 100);
                 }
 
                 if (health.current_hp == 0)

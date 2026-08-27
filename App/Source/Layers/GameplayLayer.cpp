@@ -1,8 +1,8 @@
 #include "Layers/GameplayLayer.h"
 
-#include "ApplicationFilepaths.h"
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
+#include "ApplicationFilepaths.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -66,7 +66,8 @@ namespace {
     std::unordered_map<std::uint32_t, SocketInfo> BuildSocketLookup(Registry& registry)
     {
         std::unordered_map<std::uint32_t, SocketInfo> sockets;
-        for (const JsonDirectoryEntry& entry : LoadJsonDirectory(ApplicationFilepaths::EntitiesPath, kEntitySchemaVersion))
+        for (const JsonDirectoryEntry& entry :
+             LoadJsonDirectory(ApplicationFilepaths::EntitiesPath, kEntitySchemaVersion))
         {
             const std::uint32_t prefab_id = entt::hashed_string::value(entry.id.c_str());
             const entt::entity instance = registry.CreateEntity(prefab_id);
@@ -218,8 +219,8 @@ bool GameplayLayer::TryBeginCast(int key_code)
 
         m_pending_cast_action =
             std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, technique_id, m_rng);
-        m_turn_coordinator->RequestTargeting(
-            TargetRequest{m_pending_cast_action.get(), technique->targeting_mode, technique->range_shape, technique->range});
+        m_turn_coordinator->RequestTargeting(TargetRequest{m_pending_cast_action.get(), technique->targeting_mode,
+                                                           technique->range_shape, technique->range});
         return true;
     }
 

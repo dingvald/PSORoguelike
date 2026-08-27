@@ -17,6 +17,10 @@ project "App-Test"
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",
       "../App/Source/Systems/**.h", "../App/Source/Systems/**.cpp",
+      -- States/ is SDL/RmlUi-free (TargetSelectionState.cpp's own SDL3/
+      -- SDL_keycode.h include is just key-code constants, no windowing/
+      -- rendering link needed) -- same pure-logic-only bar as the folders above.
+      "../App/Source/States/**.h", "../App/Source/States/**.cpp",
    }
 
    includedirs

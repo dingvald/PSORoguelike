@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Engine/ECS/Registry.h"
 #include "Engine/Combat/PhotonArtLibrary.h"
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
+#include "Engine/ECS/Registry.h"
 #include "Engine/Items/AffixLibrary.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/Camera.h"

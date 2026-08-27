@@ -529,7 +529,7 @@ tracking) plus the deliberate-failure check above.
 
 ## M7 — Combat System
 
-**Status:** 7.1 done
+**Status:** 7.1/7.2 done
 
 - **7.1 Melee/ranged resolution:** Engine: Hunter melee (adjacent/cone/line shapes, ATP-vs-ATA
   tradeoff), Ranger ranged (range/spread/hits-per-turn), four-race damage bonus from 5.1.
@@ -583,7 +583,81 @@ tracking) plus the deliberate-failure check above.
   (Force) pools; Photon Art as a chosen PP-cost attack option (not a hidden proc, per GDD's
   turn-based adaptation); Technique spell system with elemental damage + status, tiered by use.
   Editor: **Photon Art / Technique editor** — cost, effect family, tier-scaling fields. UI:
-  PP/TP bars, Photon Art/Technique selection menu, status icons.
+  PP/TP bars, Photon Art/Technique selection menu, status icons. **Done:** the brief evolved twice
+  mid-implementation — first to require a real interactive target-select flow (directional/
+  target-square/self-target) rather than deferred targeting UI, then to require that flow match
+  `UnnamedRoguelike`'s own targeting architecture exactly, confirmed by directly reading that
+  sibling's implementation rather than assumed. `Core/Source/Engine/Combat/TargetingMode.h`
+  (`Directional`/`TargetSquare`/`SelfTarget`) and `EffectFamily.h` (`Damage`/`Drain`/`Status`) are
+  new shared enums; `PhotonArt.h`/`Technique.h` (+ `Schema`/`SchemaEmitter`/`Library`/
+  `LibraryFile`/`Error`, one five-file family each) are standalone bespoke content types mirroring
+  `Affix`'s pattern exactly, not `ComponentSchemaRegistrar` components, each with an authored
+  `tiers` array (`{tier, power_multiplier}`) resolved at `tiers[0]` only — the per-actor
+  usage-counter M11.1 would need to advance tiers doesn't exist yet, same deferral shape as M5.2's
+  spawn-weight. `Technique` deliberately carries no `drain_percent` (unlike `PhotonArt`): a
+  `Drain`-family Technique type-checks (the enum is shared) but resolves identically to `Damage`
+  for lack of an amount to size a restore by. `WeaponComponent` gains `photon_art_ids`/
+  `technique_ids` (`std::vector<std::uint32_t>` NameId refs into the two new libraries) — a Saber
+  grants Photon Arts, a Wand grants Techniques, by content convention, not engine enforcement.
+  `PPComponent`/`TPComponent` (`Core/Source/Engine/ECS/`) are new, same shape as
+  `HealthComponent`, no regen mechanic this round. `CombatMath::ComputeTechniqueDamage` mirrors
+  `ComputeDamage`'s formula keyed on `mst` (`StatsComponent`'s technique-power field, unused until
+  now). `App/Source/Combat/TargetResolution.h/.cpp` lifts `AttackAction`'s own tile-geometry
+  helper out of its anonymous namespace (plus a new `SnapToCardinalDirection`) so
+  `PhotonArtAction`/`TechniqueAction` (`App/Source/Actions/`, new) can share it against their own
+  `range_shape`/`range` fields — both read their target from a new non-authorable
+  `SelectedTargetComponent` (`{Vec2 tile}`, mirrors the sibling's own component of the same name)
+  written at confirm time rather than taking one via constructor, keeping them stateless like
+  every other `IAction`; a `{0,0}` offset (self-target) skips the hit roll entirely. Unlike
+  `AttackAction`'s free-swing-into-empty-air convention, the turn cost is always charged once a
+  cast executes — the player explicitly chose this target through an interactive flow, so there's
+  no accidental miss to refund.
+  <br><br>
+  The targeting flow itself ports `UnnamedRoguelike`'s architecture: `TurnCoordinator` now
+  implements a small `ITargetRequestSink` (`RequestTargeting`/`TakePendingTargetRequest`/
+  `SetPendingAction`), and `Step()` gained `TurnStep::TargetingRequested`. One documented
+  deviation from the sibling: since which Photon Art/Technique is in play depends on the equipped
+  weapon and a placeholder slot number (resolved dynamically, not fixed at `ActionMap` bind time
+  the way the sibling's one hardcoded ranged attack was), `GameplayLayer` calls
+  `RequestTargeting` directly from its own key handler instead of through an `ActionMap`-bound
+  `SelectTargetAction` — so `Step()` checks the pending request at the very top of its loop rather
+  than only right after resolving an action. Per the user's explicit choice, this milestone also
+  ports the sibling's generic pushdown state-machine framework (not a lighter local-flag
+  equivalent), anticipating reuse for Inventory/Equipment/menu states around M8.3/M10:
+  `App/Source/States/GameState.h`/`GameStateMachine.h/.cpp` (renamed from the sibling's
+  `IGameState` — per CLAUDE.md, the `I` prefix is reserved for all-pure-virtual interfaces, and
+  `OnEnter`/`OnExit`/`HandleEvent` have default bodies, the same reasoning that already keeps this
+  project's own `Layer` base class unprefixed), `ExploringState` (wraps the previous direct
+  `TurnCoordinator::Step()` call), and `TargetSelectionState` — the modal cursor, spawned as a
+  real data-driven ECS entity (`App/Assets/Data/Entities/ui/target_select_cursor.json`, a bare
+  `RenderableComponent`) drawn by the ordinary tile-render pass, not a bespoke overlay. All three
+  `TargetingMode` values share one mechanism (spawn/move/render/confirm/cancel identical) varying
+  only the reachable-tile predicate and the arrow-key step function: `SelfTarget` fixes the cursor
+  at the origin; `Directional` jumps it straight to whichever cardinal neighbor is pressed;
+  `TargetSquare` moves it incrementally within a Chebyshev `range` gate. Out-of-range is signaled
+  by recoloring the cursor sprite grey in place, mirroring the sibling's own `Greyed()` helper.
+  `GameplayLayer` now owns a `GameStateMachine` (pushed `ExploringState` at startup) instead of
+  calling `TurnCoordinator::Step()` directly, and gained a placeholder `TryBeginCast` (number keys
+  1–4 for Photon Art slots, 5–8 for Technique slots — throwaway test wiring per CLAUDE.md's
+  fixture exception, real selection-menu UI is still out of scope) that resolves the equipped
+  weapon's Nth granted id, checks PP/TP affordability, and calls `RequestTargeting`. Editor:
+  `PhotonArtEditorLayer`/`TechniqueEditorLayer` (+ `.rml`) are new List/Edit shells mirroring
+  `AffixEditorLayer`, each with a repeatable `tiers` row list; `EditorMenuLayer` gained two rows;
+  `PrefabEditorLayer`'s Weapon card gained two repeatable `BuildIdEnumField` row lists
+  (`photon_art_ids`/`technique_ids`) sourced from the two new libraries, loaded in `OnAttach`
+  alongside the existing Affix library. UI: PP/TP bars, a real Photon Art/Technique selection
+  *menu* (today's number-key slots are a stand-in), and status icons are **deliberately deferred
+  this round**, per the brief — `status_effect_id` ships unconsumed pending M7.3. Catch2 coverage
+  in `Core-Test/Source/PhotonArtSchemaTests.cpp`/`TechniqueSchemaTests.cpp` (schema reflection +
+  round-trip + malformed-content/version-mismatch errors), new `ComputeTechniqueDamage` cases in
+  `CombatMathTests.cpp`, an extended `WeaponComponent` round-trip in `ItemComponentTests.cpp`; and
+  `App-Test/Source/PhotonArtActionTests.cpp`/`TechniqueActionTests.cpp` (no-weapon/ungranted-id/
+  insufficient-pool no-ops, self-target skips the hit roll, lethal resolution, tier multiplier,
+  race bonus), `TargetSelectionStateTests.cpp` (reachable-tile predicate and cursor movement per
+  mode, grid-edge clamping, confirm/cancel, and a full round trip into
+  `TurnCoordinator::SetPendingAction`), `GameStateMachineTests.cpp` (push/pop/replace/dispatch in
+  isolation from any concrete state), and new `RequestTargeting`/`TakePendingTargetRequest`/
+  `SetPendingAction` cases in `TurnCoordinatorTests.cpp`.
 - **7.3 Status effects:** Engine: Freeze/Poison/Shock/Confuse framework (duration, tick, cure).
   Editor: status-effect fields on the 7.2 editor. UI: status icon + duration on HUD and over
   affected entities.

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Components/RenderableComponent.h"
+#include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -105,6 +107,8 @@ private:
     void RefreshAddComponentOptions();
     void RefreshTagRows();
     void RefreshRaceBonusRows();
+    void RefreshPhotonArtIdRows();
+    void RefreshTechniqueIdRows();
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();
@@ -144,6 +148,8 @@ private:
     fieldwidgets::Listeners m_form_listeners;
     fieldwidgets::Listeners m_tag_row_listeners;
     fieldwidgets::Listeners m_race_bonus_row_listeners;
+    fieldwidgets::Listeners m_photon_art_row_listeners;
+    fieldwidgets::Listeners m_technique_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
 
     // Reorder (drag-drop) finalizes here, one frame after the drag gesture
@@ -190,6 +196,12 @@ private:
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
     AffixLibrary m_affixes;
+
+    // Photon Art / Technique libraries, loaded once in OnAttach -- back the
+    // weapon card's photon_art_ids/technique_ids row-list BuildIdEnumField
+    // pickers (see RefreshPhotonArtIdRows/RefreshTechniqueIdRows).
+    PhotonArtLibrary m_photon_arts;
+    TechniqueLibrary m_techniques;
 
     // -- Shared render resources (lazy) --
     bool m_renderer_initialized = false;

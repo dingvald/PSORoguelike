@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Engine/Combat/PhotonArt.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/Technique.h"
+#include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/Layer.h"
 #include "UI/FieldWidgets.h"
 
@@ -20,22 +20,22 @@ namespace psr {
 class Event;
 class RmlClickListener;
 
-// The Photon Art Editor: browse/create/delete weapon-attached Photon Art
-// definitions (see Core/Engine/Combat/PhotonArt.h) -- a flat, bespoke
-// non-ECS content type, so this follows AffixEditorLayer/PieceEditorLayer's
-// List/Edit shell pattern rather than PrefabEditorLayer's entt::meta
-// component-card one. Heavier than AffixEditorLayer (more scalar fields plus
-// a repeatable tiers list), but no preview canvas/spatial editing.
-class PhotonArtEditorLayer : public Layer
+// The Technique Editor: browse/create/delete Wand/Cane-attached Technique
+// definitions (see Core/Engine/Combat/Technique.h) -- mirrors
+// PhotonArtEditorLayer's shape exactly (a flat, bespoke non-ECS content type
+// following AffixEditorLayer's List/Edit shell pattern), differing only in
+// which struct fields the form exposes (tp_cost/element_id instead of
+// pp_cost/hits_per_turn/drain_percent).
+class TechniqueEditorLayer : public Layer
 {
 public:
-    PhotonArtEditorLayer();
-    ~PhotonArtEditorLayer() override;
+    TechniqueEditorLayer();
+    ~TechniqueEditorLayer() override;
 
-    PhotonArtEditorLayer(const PhotonArtEditorLayer&) = delete;
-    PhotonArtEditorLayer& operator=(const PhotonArtEditorLayer&) = delete;
-    PhotonArtEditorLayer(PhotonArtEditorLayer&&) = delete;
-    PhotonArtEditorLayer& operator=(PhotonArtEditorLayer&&) = delete;
+    TechniqueEditorLayer(const TechniqueEditorLayer&) = delete;
+    TechniqueEditorLayer& operator=(const TechniqueEditorLayer&) = delete;
+    TechniqueEditorLayer(TechniqueEditorLayer&&) = delete;
+    TechniqueEditorLayer& operator=(TechniqueEditorLayer&&) = delete;
 
     void OnAttach() override;
     void OnDetach() override;
@@ -85,11 +85,11 @@ private:
     std::function<void()> m_pending_action;
 
     // -- List state --
-    PhotonArtLibrary m_photon_arts;
+    TechniqueLibrary m_techniques;
     std::string m_pending_delete_id;
 
     // -- Edit state --
-    PhotonArt m_draft;
+    Technique m_draft;
     std::string m_draft_id;
     std::string m_original_id;
     bool m_is_new = false;

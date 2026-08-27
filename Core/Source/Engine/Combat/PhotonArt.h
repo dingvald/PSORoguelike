@@ -46,7 +46,7 @@ struct PhotonArt
     int range = 1;
     int hits_per_turn = 1;
     EffectFamily effect_family = EffectFamily::Damage;
-    int drain_percent = 0;          // EffectFamily::Drain only
+    int drain_percent = 0;              // EffectFamily::Drain only
     std::uint32_t status_effect_id = 0; // EffectFamily::Status only; unconsumed until M7.3
     std::vector<PhotonArtTier> tiers;
 };

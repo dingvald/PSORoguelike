@@ -1,6 +1,8 @@
 #include "Layers/PrefabEditorLayer.h"
 
 #include "Components/RegisterComponents.h"
+#include "Engine/Combat/PhotonArtLibraryFile.h"
+#include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/ECS/EntitySchemaEmitter.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
@@ -388,6 +390,40 @@ namespace {
         return array;
     }
 
+    // A flat NameId array field (photon_art_ids/technique_ids), each entry
+    // either an authored string (hashed + captured into NameIdRegistry, same
+    // as ReadNameId) or a raw numeric id.
+    std::vector<std::uint32_t> ReadNameIdArray(const rapidjson::Value& object, const char* key)
+    {
+        std::vector<std::uint32_t> ids;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsArray())
+            return ids;
+        for (const auto& entry : it->value.GetArray())
+        {
+            if (entry.IsString())
+            {
+                const std::uint32_t hash = entt::hashed_string::value(entry.GetString());
+                NameIdRegistry::Register(hash, entry.GetString());
+                ids.push_back(hash);
+            }
+            else if (entry.IsUint())
+                ids.push_back(entry.GetUint());
+            else if (entry.IsInt())
+                ids.push_back(static_cast<std::uint32_t>(entry.GetInt()));
+        }
+        return ids;
+    }
+
+    rapidjson::Value WriteNameIdArray(const std::vector<std::uint32_t>& ids,
+                                      rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (std::uint32_t id : ids)
+            array.PushBack(WriteNameId(id, allocator), allocator);
+        return array;
+    }
+
     WeaponComponent ReadWeaponBody(const rapidjson::Value& body)
     {
         WeaponComponent weapon;
@@ -398,6 +434,8 @@ namespace {
         weapon.prefix_affix_id = ReadNameId(body, "prefix_affix_id", 0);
         weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
+        weapon.photon_art_ids = ReadNameIdArray(body, "photon_art_ids");
+        weapon.technique_ids = ReadNameIdArray(body, "technique_ids");
         return weapon;
     }
 
@@ -411,6 +449,8 @@ namespace {
         object.AddMember("prefix_affix_id", WriteNameId(weapon.prefix_affix_id, allocator), allocator);
         object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
+        object.AddMember("photon_art_ids", WriteNameIdArray(weapon.photon_art_ids, allocator), allocator);
+        object.AddMember("technique_ids", WriteNameIdArray(weapon.technique_ids, allocator), allocator);
         return object;
     }
 
@@ -492,7 +532,11 @@ namespace {
          "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
          "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
          "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
-         "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"},
+         "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
+         "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
+         "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"
+         "<h3>Techniques<span id=\"add-technique\" class=\"btn\">Add Technique</span></h3>"
+         "<div id=\"technique-id-list\" class=\"ref-scroll\"></div>"},
         {"armor", "Armor", "#6f9de8",
          "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
          "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
@@ -535,6 +579,26 @@ void PrefabEditorLayer::OnAttach()
         m_error = error.what();
     }
 
+    try
+    {
+        m_photon_arts = LoadPhotonArtLibrary(EditorFilepaths::PhotonArtsPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_photon_arts = PhotonArtLibrary{};
+        m_error = error.what();
+    }
+
+    try
+    {
+        m_techniques = LoadTechniqueLibrary(EditorFilepaths::TechniquesPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_techniques = TechniqueLibrary{};
+        m_error = error.what();
+    }
+
     LoadDocuments();
     RefreshPrefabList();
     ShowScreen(Mode::List);
@@ -542,6 +606,8 @@ void PrefabEditorLayer::OnAttach()
 
 void PrefabEditorLayer::OnDetach()
 {
+    m_technique_row_listeners.clear();
+    m_photon_art_row_listeners.clear();
     m_race_bonus_row_listeners.clear();
     m_tag_row_listeners.clear();
     m_form_listeners.clear();
@@ -1242,9 +1308,35 @@ void PrefabEditorLayer::RefreshEditForm()
         listener->Attach(*add_race_bonus);
         m_form_listeners.push_back(std::move(listener));
     }
+    if (Rml::Element* add_photon_art = m_editor->GetElementById("add-photon-art"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this]
+            {
+                m_weapon.photon_art_ids.push_back(0);
+                MarkDirty();
+                RefreshPhotonArtIdRows();
+            });
+        listener->Attach(*add_photon_art);
+        m_form_listeners.push_back(std::move(listener));
+    }
+    if (Rml::Element* add_technique = m_editor->GetElementById("add-technique"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this]
+            {
+                m_weapon.technique_ids.push_back(0);
+                MarkDirty();
+                RefreshTechniqueIdRows();
+            });
+        listener->Attach(*add_technique);
+        m_form_listeners.push_back(std::move(listener));
+    }
 
     RefreshTagRows();
     RefreshRaceBonusRows();
+    RefreshPhotonArtIdRows();
+    RefreshTechniqueIdRows();
     RefreshDirtyDisplay();
 }
 
@@ -1381,6 +1473,114 @@ void PrefabEditorLayer::RefreshRaceBonusRows()
     }
     for (auto& listener : result.listeners)
         m_race_bonus_row_listeners.push_back(std::move(listener));
+}
+
+void PrefabEditorLayer::RefreshPhotonArtIdRows()
+{
+    if (!m_editor)
+        return;
+    m_photon_art_row_listeners.clear();
+
+    Rml::Element* list = m_editor->GetElementById("photon-art-id-list");
+    if (!list)
+        return;
+
+    const std::vector<std::string> content(m_weapon.photon_art_ids.size(),
+                                            "<div class=\"pa-id field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No Photon Arts granted.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_weapon.photon_art_ids.size())
+                m_weapon.photon_art_ids.erase(m_weapon.photon_art_ids.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshPhotonArtIdRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_weapon.photon_art_ids, from, to);
+                MarkDirty();
+                RefreshPhotonArtIdRows();
+            };
+        });
+
+    std::vector<std::pair<std::uint32_t, std::string>> options = {{0, "-- Select Photon Art --"}};
+    for (const PhotonArt& photon_art : m_photon_arts.All())
+        options.emplace_back(photon_art.id, photon_art.name.empty() ? photon_art.id_string : photon_art.name);
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_weapon.photon_art_ids.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".pa-id"))
+            for (auto& listener :
+                 fieldwidgets::BuildIdEnumField(*row, "photon_art_id", options, m_weapon.photon_art_ids[i],
+                                                [this, index](std::uint32_t id)
+                                                {
+                                                    if (index < m_weapon.photon_art_ids.size())
+                                                        m_weapon.photon_art_ids[index] = id;
+                                                    MarkDirty();
+                                                }))
+                m_photon_art_row_listeners.push_back(std::move(listener));
+    }
+    for (auto& listener : result.listeners)
+        m_photon_art_row_listeners.push_back(std::move(listener));
+}
+
+void PrefabEditorLayer::RefreshTechniqueIdRows()
+{
+    if (!m_editor)
+        return;
+    m_technique_row_listeners.clear();
+
+    Rml::Element* list = m_editor->GetElementById("technique-id-list");
+    if (!list)
+        return;
+
+    const std::vector<std::string> content(m_weapon.technique_ids.size(),
+                                            "<div class=\"tech-id field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No Techniques granted.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_weapon.technique_ids.size())
+                m_weapon.technique_ids.erase(m_weapon.technique_ids.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshTechniqueIdRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_weapon.technique_ids, from, to);
+                MarkDirty();
+                RefreshTechniqueIdRows();
+            };
+        });
+
+    std::vector<std::pair<std::uint32_t, std::string>> options = {{0, "-- Select Technique --"}};
+    for (const Technique& technique : m_techniques.All())
+        options.emplace_back(technique.id, technique.name.empty() ? technique.id_string : technique.name);
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_weapon.technique_ids.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".tech-id"))
+            for (auto& listener :
+                 fieldwidgets::BuildIdEnumField(*row, "technique_id", options, m_weapon.technique_ids[i],
+                                                [this, index](std::uint32_t id)
+                                                {
+                                                    if (index < m_weapon.technique_ids.size())
+                                                        m_weapon.technique_ids[index] = id;
+                                                    MarkDirty();
+                                                }))
+                m_technique_row_listeners.push_back(std::move(listener));
+    }
+    for (auto& listener : result.listeners)
+        m_technique_row_listeners.push_back(std::move(listener));
 }
 
 void PrefabEditorLayer::ApplyDraftToDocument()

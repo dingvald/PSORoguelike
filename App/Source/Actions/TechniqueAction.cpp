@@ -61,7 +61,8 @@ ActionResult TechniqueAction::Perform(Entity actor)
     tp->current_tp -= technique->tp_cost;
 
     const Vec2 origin = actor.Get<Position>().tile;
-    const Vec2 selected_tile = actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
+    const Vec2 selected_tile =
+        actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
     const Vec2 offset = selected_tile - origin;
     const float multiplier = TierMultiplier(technique->tiers);
 
@@ -79,8 +80,9 @@ ActionResult TechniqueAction::Perform(Entity actor)
         {
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
             {
-                const int damage = static_cast<int>(std::lround(
-                    ComputeTechniqueDamage(attacker_stats.mst, attacker_stats.dfp, variance_roll(*m_rng)) * multiplier));
+                const int damage = static_cast<int>(
+                    std::lround(ComputeTechniqueDamage(attacker_stats.mst, attacker_stats.dfp, variance_roll(*m_rng)) *
+                                multiplier));
                 health->current_hp = std::max(0, health->current_hp - damage);
                 if (health->current_hp == 0)
                     registry.DestroyEntity(actor.Handle());

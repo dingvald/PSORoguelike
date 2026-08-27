@@ -1,6 +1,6 @@
-#include "Layers/PhotonArtEditorLayer.h"
+#include "Layers/TechniqueEditorLayer.h"
 
-#include "Engine/Combat/PhotonArtLibraryFile.h"
+#include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
@@ -26,13 +26,13 @@ namespace psr {
 namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
-    const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "photon_art_editor.rml";
+    const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "technique_editor.rml";
 
-    // Mirrors PieceEditorLayer.cpp/DungeonEditorLayer.cpp/AffixEditorLayer.cpp's
-    // own IdToPath.
+    // Mirrors PieceEditorLayer.cpp/DungeonEditorLayer.cpp/AffixEditorLayer.cpp/
+    // PhotonArtEditorLayer.cpp's own IdToPath.
     std::filesystem::path IdToPath(const std::string& id)
     {
-        std::filesystem::path path = EditorFilepaths::PhotonArtsPath;
+        std::filesystem::path path = EditorFilepaths::TechniquesPath;
         std::string segment;
         for (char c : id)
         {
@@ -88,17 +88,17 @@ namespace {
     }
 } // namespace
 
-PhotonArtEditorLayer::PhotonArtEditorLayer() : Layer("PhotonArtEditorLayer") {}
-PhotonArtEditorLayer::~PhotonArtEditorLayer() = default;
+TechniqueEditorLayer::TechniqueEditorLayer() : Layer("TechniqueEditorLayer") {}
+TechniqueEditorLayer::~TechniqueEditorLayer() = default;
 
 // -- Lifecycle ----------------------------------------------------------------
 
-void PhotonArtEditorLayer::OnAttach()
+void TechniqueEditorLayer::OnAttach()
 {
     if (!Rml::LoadFontFace(kFontPath.string().c_str()))
-        SDL_Log("Warning: PhotonArtEditorLayer failed to load font '%s'", kFontPath.string().c_str());
+        SDL_Log("Warning: TechniqueEditorLayer failed to load font '%s'", kFontPath.string().c_str());
     if (!Rml::LoadFontFace(kFontPathBold.string().c_str()))
-        SDL_Log("Warning: PhotonArtEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
+        SDL_Log("Warning: TechniqueEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
 
     LoadDocuments();
     ReloadLibrary();
@@ -106,7 +106,7 @@ void PhotonArtEditorLayer::OnAttach()
     ShowScreen(Mode::List);
 }
 
-void PhotonArtEditorLayer::OnDetach()
+void TechniqueEditorLayer::OnDetach()
 {
     m_tier_row_listeners.clear();
     m_form_listeners.clear();
@@ -120,7 +120,7 @@ void PhotonArtEditorLayer::OnDetach()
     }
 }
 
-void PhotonArtEditorLayer::LoadDocuments()
+void TechniqueEditorLayer::LoadDocuments()
 {
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
@@ -128,13 +128,13 @@ void PhotonArtEditorLayer::LoadDocuments()
     }
     if (!m_editor)
     {
-        SDL_Log("Warning: PhotonArtEditorLayer has no editor document");
+        SDL_Log("Warning: TechniqueEditorLayer has no editor document");
         return;
     }
 
-    WireButtonClick("new-photon-art", [this] { BeginNew(); });
+    WireButtonClick("new-technique", [this] { BeginNew(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
-    WireButtonClick("save-photon-art", [this] { SaveDraft(); });
+    WireButtonClick("save-technique", [this] { SaveDraft(); });
     WireButtonClick("back-to-list",
                     [this]
                     {
@@ -146,7 +146,7 @@ void PhotonArtEditorLayer::LoadDocuments()
     m_editor->Show();
 }
 
-void PhotonArtEditorLayer::WireButtonClick(const char* element_id, std::function<void()> on_click)
+void TechniqueEditorLayer::WireButtonClick(const char* element_id, std::function<void()> on_click)
 {
     if (!m_editor)
         return;
@@ -158,7 +158,7 @@ void PhotonArtEditorLayer::WireButtonClick(const char* element_id, std::function
     m_listeners.push_back(std::move(listener));
 }
 
-void PhotonArtEditorLayer::ShowScreen(Mode mode)
+void TechniqueEditorLayer::ShowScreen(Mode mode)
 {
     if (!m_editor)
         return;
@@ -169,7 +169,7 @@ void PhotonArtEditorLayer::ShowScreen(Mode mode)
             screen->SetProperty("display", screen_mode == mode ? "block" : "none");
 }
 
-void PhotonArtEditorLayer::RefreshErrorDisplay()
+void TechniqueEditorLayer::RefreshErrorDisplay()
 {
     if (!m_editor)
         return;
@@ -181,43 +181,43 @@ void PhotonArtEditorLayer::RefreshErrorDisplay()
 
 // -- List mode ----------------------------------------------------------------
 
-void PhotonArtEditorLayer::ReloadLibrary()
+void TechniqueEditorLayer::ReloadLibrary()
 {
     try
     {
-        m_photon_arts = LoadPhotonArtLibrary(EditorFilepaths::PhotonArtsPath);
+        m_techniques = LoadTechniqueLibrary(EditorFilepaths::TechniquesPath);
         m_error.clear();
     }
     catch (const std::exception& error)
     {
-        m_photon_arts = PhotonArtLibrary{};
+        m_techniques = TechniqueLibrary{};
         m_error = error.what();
     }
     RefreshErrorDisplay();
 }
 
-void PhotonArtEditorLayer::RefreshList()
+void TechniqueEditorLayer::RefreshList()
 {
     if (!m_editor)
         return;
     m_list_listeners.clear();
 
-    Rml::Element* list = m_editor->GetElementById("photon-art-list");
+    Rml::Element* list = m_editor->GetElementById("technique-list");
     if (!list)
         return;
 
-    const std::vector<PhotonArt>& photon_arts = m_photon_arts.All();
-    if (photon_arts.empty())
+    const std::vector<Technique>& techniques = m_techniques.All();
+    if (techniques.empty())
     {
-        list->SetInnerRML("<div class=\"list-empty\">No Photon Arts yet -- click New Photon Art to create one.</div>");
+        list->SetInnerRML("<div class=\"list-empty\">No Techniques yet -- click New Technique to create one.</div>");
         return;
     }
 
     std::string markup;
-    for (const PhotonArt& art : photon_arts)
+    for (const Technique& technique : techniques)
     {
-        const bool confirming = art.id_string == m_pending_delete_id;
-        const std::string label = art.name.empty() ? art.id_string : art.name;
+        const bool confirming = technique.id_string == m_pending_delete_id;
+        const std::string label = technique.name.empty() ? technique.id_string : technique.name;
         markup += "<div class=\"list-row\"><span class=\"list-name\">" + EscapeRml(label) +
                   "</span><span class=\"btn edit\">Edit</span><span class=\"btn delete\">" +
                   (confirming ? "Confirm?" : "Delete") + "</span></div>";
@@ -226,9 +226,9 @@ void PhotonArtEditorLayer::RefreshList()
 
     Rml::ElementList rows;
     list->QuerySelectorAll(rows, ".list-row");
-    for (std::size_t i = 0; i < rows.size() && i < photon_arts.size(); ++i)
+    for (std::size_t i = 0; i < rows.size() && i < techniques.size(); ++i)
     {
-        const std::string id = photon_arts[i].id_string;
+        const std::string id = techniques[i].id_string;
         if (Rml::Element* edit_button = rows[i]->QuerySelector(".edit"))
         {
             auto listener = std::make_unique<RmlClickListener>([this, id] { OpenForEdit(id); });
@@ -244,7 +244,7 @@ void PhotonArtEditorLayer::RefreshList()
     }
 }
 
-void PhotonArtEditorLayer::RequestDelete(const std::string& id)
+void TechniqueEditorLayer::RequestDelete(const std::string& id)
 {
     if (m_pending_delete_id != id)
     {
@@ -260,9 +260,9 @@ void PhotonArtEditorLayer::RequestDelete(const std::string& id)
     RefreshList();
 }
 
-void PhotonArtEditorLayer::OpenForEdit(const std::string& id)
+void TechniqueEditorLayer::OpenForEdit(const std::string& id)
 {
-    const PhotonArt* found = m_photon_arts.Find(entt::hashed_string::value(id.c_str()));
+    const Technique* found = m_techniques.Find(entt::hashed_string::value(id.c_str()));
     if (!found)
         return;
     m_draft = *found;
@@ -280,9 +280,9 @@ void PhotonArtEditorLayer::OpenForEdit(const std::string& id)
     RefreshErrorDisplay();
 }
 
-void PhotonArtEditorLayer::BeginNew()
+void TechniqueEditorLayer::BeginNew()
 {
-    m_draft = PhotonArt{};
+    m_draft = Technique{};
 
     m_draft_id.clear();
     m_original_id.clear();
@@ -299,26 +299,26 @@ void PhotonArtEditorLayer::BeginNew()
 
 // -- Edit mode ----------------------------------------------------------------
 
-void PhotonArtEditorLayer::MarkDirty()
+void TechniqueEditorLayer::MarkDirty()
 {
     m_dirty = true;
     RefreshDirtyDisplay();
 }
 
-void PhotonArtEditorLayer::RefreshDirtyDisplay()
+void TechniqueEditorLayer::RefreshDirtyDisplay()
 {
     if (m_editor)
         if (Rml::Element* dirty = m_editor->GetElementById("edit-dirty"))
             dirty->SetInnerRML(m_dirty ? "unsaved" : "");
 }
 
-void PhotonArtEditorLayer::RefreshEditForm()
+void TechniqueEditorLayer::RefreshEditForm()
 {
     if (!m_editor)
         return;
     m_form_listeners.clear();
 
-    const std::string display_id = m_draft_id.empty() ? std::string{"(new photon art)"} : m_draft_id;
+    const std::string display_id = m_draft_id.empty() ? std::string{"(new technique)"} : m_draft_id;
     if (Rml::Element* title = m_editor->GetElementById("edit-title"))
         title->SetInnerRML(EscapeRml(display_id));
 
@@ -336,7 +336,7 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                                 if (Rml::Element* title = m_editor->GetElementById("edit-title"))
                                                     title->SetInnerRML(
-                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new photon art)"}
+                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new technique)"}
                                                                                      : m_draft_id));
                                             }));
 
@@ -348,13 +348,23 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                             }));
 
-    if (Rml::Element* row = m_editor->GetElementById("field-pp-cost"))
-        keep(fieldwidgets::BuildIntField(*row, "pp_cost", m_draft.pp_cost,
+    if (Rml::Element* row = m_editor->GetElementById("field-tp-cost"))
+        keep(fieldwidgets::BuildIntField(*row, "tp_cost", m_draft.tp_cost,
                                          [this](int v)
                                          {
-                                             m_draft.pp_cost = v;
+                                             m_draft.tp_cost = v;
                                              MarkDirty();
                                          }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-element"))
+        keep(fieldwidgets::BuildNameIdField(*row, "element_id", m_draft.element_id, LabelFor(m_draft.element_id),
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_draft.element_id = id;
+                                                if (!name.empty())
+                                                    NameIdRegistry::Register(id, name);
+                                                MarkDirty();
+                                            }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-targeting-mode"))
         keep(fieldwidgets::BuildEnumField(*row, "targeting_mode", EnumOptions<TargetingMode>(),
@@ -382,14 +392,6 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
-    if (Rml::Element* row = m_editor->GetElementById("field-hits-per-turn"))
-        keep(fieldwidgets::BuildIntField(*row, "hits_per_turn", m_draft.hits_per_turn,
-                                         [this](int v)
-                                         {
-                                             m_draft.hits_per_turn = v;
-                                             MarkDirty();
-                                         }));
-
     if (Rml::Element* row = m_editor->GetElementById("field-effect-family"))
         keep(fieldwidgets::BuildEnumField(*row, "effect_family", EnumOptions<EffectFamily>(),
                                           EnumToString(m_draft.effect_family),
@@ -398,14 +400,6 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                               m_draft.effect_family = EnumFromString(v, EffectFamily::Damage);
                                               MarkDirty();
                                           }));
-
-    if (Rml::Element* row = m_editor->GetElementById("field-drain-percent"))
-        keep(fieldwidgets::BuildIntField(*row, "drain_percent", m_draft.drain_percent,
-                                         [this](int v)
-                                         {
-                                             m_draft.drain_percent = v;
-                                             MarkDirty();
-                                         }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-status-effect"))
         keep(fieldwidgets::BuildNameIdField(*row, "status_effect_id", m_draft.status_effect_id,
@@ -435,7 +429,7 @@ void PhotonArtEditorLayer::RefreshEditForm()
     RefreshDirtyDisplay();
 }
 
-void PhotonArtEditorLayer::RefreshTierRows()
+void TechniqueEditorLayer::RefreshTierRows()
 {
     if (!m_editor)
         return;
@@ -494,11 +488,11 @@ void PhotonArtEditorLayer::RefreshTierRows()
         m_tier_row_listeners.push_back(std::move(listener));
 }
 
-void PhotonArtEditorLayer::SaveDraft()
+void TechniqueEditorLayer::SaveDraft()
 {
     if (m_draft_id.empty())
     {
-        m_error = "Photon Art id must not be empty";
+        m_error = "Technique id must not be empty";
         RefreshErrorDisplay();
         return;
     }
@@ -506,14 +500,14 @@ void PhotonArtEditorLayer::SaveDraft()
     const std::filesystem::path target = IdToPath(m_draft_id);
     if (m_draft_id != m_original_id && std::filesystem::exists(target))
     {
-        m_error = "A Photon Art already exists at '" + m_draft_id + "'";
+        m_error = "A Technique already exists at '" + m_draft_id + "'";
         RefreshErrorDisplay();
         return;
     }
 
     try
     {
-        SavePhotonArt(target, m_draft);
+        SaveTechnique(target, m_draft);
         if (!m_original_id.empty() && m_original_id != m_draft_id)
         {
             std::error_code error_code;
@@ -529,12 +523,12 @@ void PhotonArtEditorLayer::SaveDraft()
     catch (const std::exception& error)
     {
         m_error = error.what();
-        SDL_Log("PhotonArtEditorLayer: save failed: %s", m_error.c_str());
+        SDL_Log("TechniqueEditorLayer: save failed: %s", m_error.c_str());
     }
     RefreshErrorDisplay();
 }
 
-void PhotonArtEditorLayer::OnRender(SDL_Renderer* renderer)
+void TechniqueEditorLayer::OnRender(SDL_Renderer* renderer)
 {
     (void)renderer;
     // See fieldwidgets::WireDragReorder's doc comment / PrefabEditorLayer's
@@ -549,7 +543,7 @@ void PhotonArtEditorLayer::OnRender(SDL_Renderer* renderer)
 
 // -- Events -------------------------------------------------------------------
 
-void PhotonArtEditorLayer::OnEvent(Event& event)
+void TechniqueEditorLayer::OnEvent(Event& event)
 {
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<KeyPressedEvent>(

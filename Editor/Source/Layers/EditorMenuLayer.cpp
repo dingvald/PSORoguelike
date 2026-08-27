@@ -3,8 +3,10 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/AffixEditorLayer.h"
 #include "Layers/DungeonEditorLayer.h"
+#include "Layers/PhotonArtEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
 #include "Layers/PrefabEditorLayer.h"
+#include "Layers/TechniqueEditorLayer.h"
 #include "UI/RmlClickListener.h"
 
 #include <EditorFilepaths.h>
@@ -134,6 +136,12 @@ void EditorMenuLayer::ConfirmSelection()
         break;
     case RowAffixes:
         TransitionTo<AffixEditorLayer>();
+        break;
+    case RowPhotonArts:
+        TransitionTo<PhotonArtEditorLayer>();
+        break;
+    case RowTechniques:
+        TransitionTo<TechniqueEditorLayer>();
         break;
     case RowExit:
         RequestQuit();

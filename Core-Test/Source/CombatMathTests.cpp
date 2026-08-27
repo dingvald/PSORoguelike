@@ -25,6 +25,14 @@ TEST_CASE("ComputeDamage subtracts half DFP with variance, floored at 1", "[Comb
     CHECK(psr::ComputeDamage(50, 20, 0.9f) == static_cast<int>(std::lround(40.0f * 0.9f)));
 }
 
+TEST_CASE("ComputeTechniqueDamage subtracts half DFP with variance, floored at 1", "[CombatMath]")
+{
+    CHECK(psr::ComputeTechniqueDamage(50, 20, 1.0f) == 40); // 50 - 20/2 = 40
+    CHECK(psr::ComputeTechniqueDamage(10, 100, 1.0f) == 1); // heavily mitigated -- never zero
+    CHECK(psr::ComputeTechniqueDamage(50, 20, 1.1f) == static_cast<int>(std::lround(40.0f * 1.1f)));
+    CHECK(psr::ComputeTechniqueDamage(50, 20, 0.9f) == static_cast<int>(std::lround(40.0f * 0.9f)));
+}
+
 TEST_CASE("ApplyRaceBonus multiplies for a matching entry only", "[CombatMath]")
 {
     const std::vector<psr::RaceBonusEntry> bonuses = {{/*race_id=*/1, /*bonus_percent=*/50},

@@ -160,8 +160,7 @@ void TargetSelectionState::MoveCursor(GameplayContext& context, Vec2 direction)
     if (m_request.mode == TargetingMode::SelfTarget)
         return; // fixed at origin
 
-    const Vec2 new_cursor =
-        m_request.mode == TargetingMode::Directional ? m_origin + direction : m_cursor + direction;
+    const Vec2 new_cursor = m_request.mode == TargetingMode::Directional ? m_origin + direction : m_cursor + direction;
     if (!context.grid.Contains(new_cursor))
         return;
 

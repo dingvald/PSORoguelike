@@ -1,5 +1,6 @@
 #include "Systems/TurnCoordinator.h"
 
+#include "Actions/ITargetRequestSink.h"
 #include "Actions/WaitAction.h"
 #include "Components/EnergyComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -131,4 +132,68 @@ TEST_CASE("TurnCoordinator stops tracking an actor once its EnergyComponent is d
     psr::TurnStep step = coordinator.Step(0.016f);
 
     REQUIRE(step == psr::TurnStep::Resolved);
+}
+
+TEST_CASE("TurnCoordinator surfaces TargetingRequested once RequestTargeting is called, bypassing the queue",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+
+    CountingAction cast_action;
+    coordinator.RequestTargeting(psr::TargetRequest{&cast_action, psr::TargetingMode::Directional,
+                                                     psr::WeaponRangeShape::SingleTarget, 1});
+
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::TargetingRequested);
+    REQUIRE(cast_action.count == 0); // Step() surfaces the request, it doesn't resolve the action itself
+}
+
+TEST_CASE("TurnCoordinator TakePendingTargetRequest consumes and clears the pending request", "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::TurnCoordinator coordinator(registry);
+
+    CountingAction cast_action;
+    const psr::TargetRequest sent{&cast_action, psr::TargetingMode::TargetSquare, psr::WeaponRangeShape::Line, 3};
+    coordinator.RequestTargeting(sent);
+
+    psr::TargetRequest taken = coordinator.TakePendingTargetRequest();
+    REQUIRE(taken.action == &cast_action);
+    REQUIRE(taken.mode == psr::TargetingMode::TargetSquare);
+    REQUIRE(taken.shape == psr::WeaponRangeShape::Line);
+    REQUIRE(taken.range == 3);
+
+    // Consumed -- a second Step() no longer sees a pending request.
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+    psr::TurnStep step = coordinator.Step(0.016f);
+    REQUIRE(step == psr::TurnStep::AwaitingInput);
+}
+
+TEST_CASE("TurnCoordinator SetPendingAction resolves that action for the player, bypassing ActionMap",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+
+    // No key bound, no key pressed -- only SetPendingAction should let this
+    // resolve.
+    CountingAction confirmed_action;
+    coordinator.SetPendingAction(&confirmed_action);
+
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::Resolved);
+    REQUIRE(confirmed_action.count == 1);
 }
