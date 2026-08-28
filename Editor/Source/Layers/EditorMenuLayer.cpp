@@ -6,6 +6,7 @@
 #include "Layers/PhotonArtEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
 #include "Layers/PrefabEditorLayer.h"
+#include "Layers/StatusEffectEditorLayer.h"
 #include "Layers/TechniqueEditorLayer.h"
 #include "UI/RmlClickListener.h"
 
@@ -142,6 +143,9 @@ void EditorMenuLayer::ConfirmSelection()
         break;
     case RowTechniques:
         TransitionTo<TechniqueEditorLayer>();
+        break;
+    case RowStatusEffects:
+        TransitionTo<StatusEffectEditorLayer>();
         break;
     case RowExit:
         RequestQuit();

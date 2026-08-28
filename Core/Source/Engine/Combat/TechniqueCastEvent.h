@@ -17,7 +17,12 @@ namespace psr {
 // EquipmentComponent/WeaponComponent/TPComponent directly, then still
 // performs the actual TP deduction itself once past the gate -- see
 // AfterTechniqueCastEvent, dispatched right after, once the cast is
-// confirmed to happen.
+// confirmed to happen. Unlike BeforeAttackEvent/BeforePhotonArtCastEvent,
+// this event carries no element/status_effect_id fields of its own --
+// Technique's element is spell-authored (Technique::element) rather than
+// weapon-derived, so TechniqueAction reads those straight off the Technique
+// struct instead. StatusEffectComponent's own handler still sets
+// cancelled = true when the caster is Shocked.
 struct BeforeTechniqueCastEvent
 {
     std::uint32_t technique_id = 0;
@@ -27,6 +32,7 @@ struct BeforeTechniqueCastEvent
     bool has_tp_component = false;
     std::vector<RaceBonusEntry> race_bonuses;
     StatsComponent attacker_stats;
+    bool cancelled = false;
 };
 
 struct AfterTechniqueCastEvent

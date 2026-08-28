@@ -7,12 +7,14 @@
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/PhotonArtCastEvent.h"
 #include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
@@ -92,7 +94,8 @@ TEST_CASE("PhotonArtAction with no weapon equipped is a free no-op", "[PhotonArt
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -109,7 +112,8 @@ TEST_CASE("PhotonArtAction with a weapon that doesn't grant the id is a free no-
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -128,7 +132,8 @@ TEST_CASE("PhotonArtAction with insufficient TP is a free no-op", "[PhotonArtAct
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 20;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
@@ -151,7 +156,8 @@ TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -180,7 +186,8 @@ TEST_CASE("PhotonArtAction self-target Drain heals the caster capped at max HP",
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -209,7 +216,8 @@ TEST_CASE("PhotonArtAction eventually destroys a hostile Directional-cast occupa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;
@@ -250,7 +258,8 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
-        psr::SetUpCombatRegistry(registry, affixes);
+        psr::StatusEffectLibrary status_effects;
+        psr::SetUpCombatRegistry(registry, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::PhotonArt art;
@@ -289,7 +298,8 @@ TEST_CASE("PhotonArtAction dispatches AfterPhotonArtCastEvent and AfterDamageEve
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -327,7 +337,8 @@ TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -360,7 +371,8 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/65, /*ata=*/45, /*tp=*/12);
     entt::entity weapon = MakeWeapon(registry);
@@ -375,4 +387,118 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     REQUIRE(event.current_tp == 12);
     REQUIRE(event.attacker_stats.atp == 65);
     REQUIRE(event.attacker_stats.ata == 45);
+}
+
+TEST_CASE("PhotonArtAction no-ops for zero cost when the caster is Shocked", "[PhotonArtAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect shock;
+    shock.id = 1;
+    shock.type = psr::StatusEffectType::Shock;
+    shock.duration = 3;
+    psr::StatusEffectLibrary status_effects{{shock}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::PhotonArt art;
+    art.tp_cost = 0;
+    art.effect_family = psr::EffectFamily::Damage;
+    psr::PhotonArtLibrary arts = MakeLibrary(art);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*tp=*/100);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::ApplyStatusEffect(actor, status_effects, shock.id);
+
+    psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(actor.Get<psr::TPComponent>().current_tp == 100); // untouched -- the cast never happened
+}
+
+TEST_CASE("PhotonArtAction applies the wielded weapon's elemental status on a guaranteed-chance landed hit",
+          "[PhotonArtAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect burn;
+    burn.id = 1;
+    burn.type = psr::StatusEffectType::Burn;
+    burn.magnitude = 2;
+    burn.duration = 3;
+    psr::StatusEffectLibrary status_effects{{burn}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::PhotonArt art;
+    art.tp_cost = 0;
+    art.targeting_mode = psr::TargetingMode::Directional;
+    art.range_shape = psr::WeaponRangeShape::SingleTarget;
+    art.range = 1;
+    art.hits_per_turn = 1;
+    art.effect_family = psr::EffectFamily::Damage;
+    psr::PhotonArtLibrary arts = MakeLibrary(art);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    psr::WeaponComponent& weapon_component = registry.GetComponent<psr::WeaponComponent>(weapon);
+    weapon_component.element = psr::Element::Fire;
+    weapon_component.status_effect_id = burn.id;
+    weapon_component.status_chance_percent = 100;
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    // High HP so the hit lands but doesn't kill.
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000);
+
+    psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
+    action.Perform(actor);
+
+    const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
+    REQUIRE(status != nullptr);
+    REQUIRE_FALSE(status->active.empty());
+    CHECK(status->active.front().status_effect_id == burn.id);
+}
+
+TEST_CASE("PhotonArtAction EffectFamily::Status applies the ailment on hit and deals no damage",
+          "[PhotonArtAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect poison;
+    poison.id = 1;
+    poison.type = psr::StatusEffectType::Poison;
+    poison.magnitude = 2;
+    poison.duration = 3;
+    psr::StatusEffectLibrary status_effects{{poison}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::PhotonArt art;
+    art.tp_cost = 0;
+    art.targeting_mode = psr::TargetingMode::Directional;
+    art.range_shape = psr::WeaponRangeShape::SingleTarget;
+    art.range = 1;
+    art.hits_per_turn = 1;
+    art.effect_family = psr::EffectFamily::Status;
+    art.status_effect_id = poison.id;
+    psr::PhotonArtLibrary arts = MakeLibrary(art);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10);
+
+    psr::PhotonArtAction action(grid, arts, affixes, kArtId, rng);
+    action.Perform(actor);
+
+    CHECK(enemy.Get<psr::HealthComponent>().current_hp == 10); // Status family deals no damage
+    const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
+    REQUIRE(status != nullptr);
+    REQUIRE_FALSE(status->active.empty());
+    CHECK(status->active.front().status_effect_id == poison.id);
 }

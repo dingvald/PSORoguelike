@@ -2,6 +2,7 @@
 
 #include "Components/RegisterComponents.h"
 #include "Engine/Combat/PhotonArtLibraryFile.h"
+#include "Engine/Combat/StatusEffectLibraryFile.h"
 #include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/ECS/EntitySchemaEmitter.h"
 #include "Engine/ECS/NameIdRegistry.h"
@@ -436,6 +437,9 @@ namespace {
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
         weapon.photon_art_ids = ReadNameIdArray(body, "photon_art_ids");
         weapon.technique_ids = ReadNameIdArray(body, "technique_ids");
+        weapon.element = ReadEnum<Element>(body, "element", weapon.element);
+        weapon.status_effect_id = ReadNameId(body, "status_effect_id", 0);
+        weapon.status_chance_percent = ReadInt(body, "status_chance_percent", weapon.status_chance_percent);
         return weapon;
     }
 
@@ -451,6 +455,9 @@ namespace {
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
         object.AddMember("photon_art_ids", WriteNameIdArray(weapon.photon_art_ids, allocator), allocator);
         object.AddMember("technique_ids", WriteNameIdArray(weapon.technique_ids, allocator), allocator);
+        object.AddMember("element", StringValue(std::string{EnumName(weapon.element)}, allocator), allocator);
+        object.AddMember("status_effect_id", WriteNameId(weapon.status_effect_id, allocator), allocator);
+        object.AddMember("status_chance_percent", weapon.status_chance_percent, allocator);
         return object;
     }
 
@@ -531,6 +538,9 @@ namespace {
          "<div id=\"field-grind-level\" class=\"field-row\"></div>"
          "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
          "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
+         "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
+         "<div id=\"field-weapon-status-effect\" class=\"field-row\"></div>"
+         "<div id=\"field-weapon-status-chance\" class=\"field-row\"></div>"
          "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
          "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
          "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
@@ -596,6 +606,16 @@ void PrefabEditorLayer::OnAttach()
     catch (const std::exception& error)
     {
         m_techniques = TechniqueLibrary{};
+        m_error = error.what();
+    }
+
+    try
+    {
+        m_status_effects = LoadStatusEffectLibrary(EditorFilepaths::StatusEffectsPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_status_effects = StatusEffectLibrary{};
         m_error = error.what();
     }
 
@@ -1261,6 +1281,33 @@ void PrefabEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                             }));
     }
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-element"))
+        keep(fieldwidgets::BuildEnumField(*row, "element", EnumOptions<Element>(), std::string{EnumName(m_weapon.element)},
+                                          [this](std::string v)
+                                          {
+                                              m_weapon.element = EnumFromString(v, Element::None);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-status-effect"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> status_effect_options = {{0, "-- Select Status Effect --"}};
+        for (const StatusEffect& status_effect : m_status_effects.All())
+            status_effect_options.emplace_back(status_effect.id,
+                                               status_effect.name.empty() ? status_effect.id_string : status_effect.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "status_effect_id", status_effect_options, m_weapon.status_effect_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_weapon.status_effect_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-status-chance"))
+        keep(fieldwidgets::BuildIntField(*row, "status_chance_percent", m_weapon.status_chance_percent,
+                                         [this](int v)
+                                         {
+                                             m_weapon.status_chance_percent = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-armor-slot"))
         keep(fieldwidgets::BuildEnumField(*row, "slot", EnumOptions<ArmorSlot>(), std::string{EnumName(m_armor.slot)},
                                           [this](std::string v)

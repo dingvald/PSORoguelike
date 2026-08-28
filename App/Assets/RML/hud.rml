@@ -15,6 +15,7 @@
                 <div class="bar-track"><div id="secondary-fill" class="bar-fill secondary"></div></div>
                 <span id="secondary-text" class="bar-text"></span>
             </div>
+            <div id="status-effects"></div>
         </div>
 
         <div id="hotbar">

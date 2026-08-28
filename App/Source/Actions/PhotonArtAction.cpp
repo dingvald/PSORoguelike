@@ -2,12 +2,14 @@
 
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
+#include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/CombatMath.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/PhotonArt.h"
 #include "Engine/Combat/PhotonArtCastEvent.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
@@ -44,6 +46,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     // already passed.
     BeforePhotonArtCastEvent before_cast{m_photon_art_id};
     actor.Dispatch(before_cast);
+    if (before_cast.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
+        return ActionResult(0);
     if (!before_cast.has_weapon || !before_cast.weapon_grants_id)
         return ActionResult(0);
 
@@ -77,8 +81,10 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     {
         // SelfTarget: no attacker-vs-defender roll against yourself. Damage
         // hits the caster directly; Drain is a pure heal sized off the
-        // caster's own ATP; Status carries status_effect_id unconsumed
-        // (M7.3's job) with no immediate effect.
+        // caster's own ATP; Status has no immediate effect here -- unlike the
+        // directional branch below, self-target status application stays out
+        // of scope this pass (no buff-shaped use case exists yet to justify
+        // it).
         if (art->effect_family == EffectFamily::Damage)
         {
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
@@ -142,6 +148,14 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 if (unit_roll(*m_rng) > hit_chance)
                     continue; // miss
 
+                if (art->effect_family == EffectFamily::Status)
+                {
+                    // Landing the cast is the check -- a pure-status art
+                    // deals no damage, it guarantees its ailment on hit.
+                    ApplyStatusEffect(target, registry.GetStatusEffectLibrary(), art->status_effect_id);
+                    continue;
+                }
+
                 int damage = static_cast<int>(std::lround(
                     ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
                 damage = ApplyRaceBonus(damage, before_cast.race_bonuses, defender_race_id);
@@ -170,6 +184,11 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                     registry.DestroyEntity(occupant);
                     break;
                 }
+
+                // The wielded weapon's own elemental flavor (if any) gets a
+                // chance to inflict its ailment on a landed, non-lethal hit.
+                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), before_cast.status_effect_id,
+                                          before_cast.status_chance_percent, *m_rng);
             }
         }
     }

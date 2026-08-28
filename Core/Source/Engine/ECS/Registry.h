@@ -16,6 +16,7 @@
 namespace psr {
 
 class AffixLibrary;
+class StatusEffectLibrary;
 
 // Owning wrapper around a pair of entt::registry instances, so call sites use
 // this class's vocabulary (CreateEntity/Emplace/GetComponent/...) rather than
@@ -221,6 +222,21 @@ public:
     // component handler needs it, so a missing SetAffixLibrary() call is a
     // setup bug, not a runtime condition to handle gracefully.
     const AffixLibrary& GetAffixLibrary();
+
+    // Same purpose as SetAffixLibrary/GetAffixLibrary, for the status-effect
+    // library instead -- StatusEffectComponent's static AttachHandlers-
+    // registered handlers (Confuse/Shock's Before<Action>Event cancellation)
+    // and TurnCoordinator's Freeze check both need to resolve a
+    // status_effect_id into its authored StatusEffectType, and neither can
+    // capture state. Call once, early, before any entity that needs it is
+    // created. status_effects must outlive this Registry.
+    void SetStatusEffectLibrary(const StatusEffectLibrary& status_effects);
+
+    // Returns the StatusEffectLibrary stashed via SetStatusEffectLibrary().
+    // Asserts if none was ever set -- same reasoning as GetAffixLibrary: a
+    // missing SetStatusEffectLibrary() call is a setup bug, not a runtime
+    // condition to handle gracefully.
+    const StatusEffectLibrary& GetStatusEffectLibrary();
 
     // Recovers the owning Registry& from a raw entt::registry& -- needed
     // because entt's on_construct/on_destroy listener signature is fixed as

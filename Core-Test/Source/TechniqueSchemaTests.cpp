@@ -61,9 +61,10 @@ TEST_CASE("BuildTechniqueSchemaModel reflects fields with the expected field kin
     REQUIRE(tp_cost != nullptr);
     CHECK(tp_cost->kind == psr::FieldKind::Integer);
 
-    const psr::FieldSchema* element_id = find("element_id");
-    REQUIRE(element_id != nullptr);
-    CHECK(element_id->kind == psr::FieldKind::NameId);
+    const psr::FieldSchema* element = find("element");
+    REQUIRE(element != nullptr);
+    CHECK(element->kind == psr::FieldKind::Enum);
+    CHECK(element->enum_values == std::vector<std::string>{"none", "fire", "ice", "lightning", "light", "dark"});
 
     const psr::FieldSchema* targeting_mode = find("targeting_mode");
     REQUIRE(targeting_mode != nullptr);
@@ -84,6 +85,10 @@ TEST_CASE("BuildTechniqueSchemaModel reflects fields with the expected field kin
     REQUIRE(status_effect_id != nullptr);
     CHECK(status_effect_id->kind == psr::FieldKind::NameId);
 
+    const psr::FieldSchema* status_chance_percent = find("status_chance_percent");
+    REQUIRE(status_chance_percent != nullptr);
+    CHECK(status_chance_percent->kind == psr::FieldKind::Integer);
+
     const psr::FieldSchema* tiers = find("tiers");
     REQUIRE(tiers != nullptr);
     CHECK(tiers->kind == psr::FieldKind::Array);
@@ -96,10 +101,12 @@ TEST_CASE("SaveTechnique + LoadTechniqueLibrary round-trips every field", "[Tech
     psr::Technique technique;
     technique.name = "Foie";
     technique.tp_cost = 8;
+    technique.element = psr::Element::Fire;
     technique.targeting_mode = psr::TargetingMode::TargetSquare;
     technique.range_shape = psr::WeaponRangeShape::SingleTarget;
     technique.range = 5;
     technique.effect_family = psr::EffectFamily::Damage;
+    technique.status_chance_percent = 25;
     technique.tiers.push_back(psr::TechniqueTier{3, 2.0f});
 
     TempDirectory temp;
@@ -113,10 +120,12 @@ TEST_CASE("SaveTechnique + LoadTechniqueLibrary round-trips every field", "[Tech
     CHECK(loaded.id_string == "foie");
     CHECK(loaded.name == "Foie");
     CHECK(loaded.tp_cost == 8);
+    CHECK(loaded.element == psr::Element::Fire);
     CHECK(loaded.targeting_mode == psr::TargetingMode::TargetSquare);
     CHECK(loaded.range_shape == psr::WeaponRangeShape::SingleTarget);
     CHECK(loaded.range == 5);
     CHECK(loaded.effect_family == psr::EffectFamily::Damage);
+    CHECK(loaded.status_chance_percent == 25);
     REQUIRE(loaded.tiers.size() == 1);
     CHECK(loaded.tiers.front().tier == 3);
     CHECK(loaded.tiers.front().power_multiplier == 2.0f);

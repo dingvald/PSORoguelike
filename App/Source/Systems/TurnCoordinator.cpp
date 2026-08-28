@@ -2,6 +2,9 @@
 
 #include "Components/PlayerControlledComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
+#include "Engine/Actions/TurnEvent.h"
+#include "Engine/Combat/StatusEffectQueries.h"
+#include "Engine/Combat/StatusEffectType.h"
 #include "Systems/TweenSystem.h"
 
 namespace psr {
@@ -48,7 +51,21 @@ TurnStep TurnCoordinator::Step(float delta_time)
         const bool is_player = actor.Has<PlayerControlledComponent>();
 
         IAction* action = nullptr;
-        if (is_player)
+        if (HasActiveStatusType(actor, m_registry->GetStatusEffectLibrary(), StatusEffectType::Freeze))
+        {
+            // Frozen pre-empts action selection entirely (skip Move too, not
+            // just cancel one action type), so it can't be expressed as a
+            // Before<Action>Event cancellation the way Shock is -- see
+            // StatusEffectComponent's own doc comment. Always a real,
+            // energy-costing Wait, never a zero-cost substitution: a
+            // zero-cost turn here would let this same frozen actor come
+            // right back up in this same while loop (the NPC branch below
+            // never returns early) or, for the player, resolve without any
+            // real time passing -- either way the queue would stall on this
+            // actor instead of just skipping their turn.
+            action = &m_forced_wait_action;
+        }
+        else if (is_player)
         {
             if (m_pending_action)
             {
@@ -71,6 +88,26 @@ TurnStep TurnCoordinator::Step(float delta_time)
         }
 
         ActionResult result = ResolveAction(*action, actor);
+
+        // AfterTurnEvent drives StatusEffectComponent's TickStatusEffects
+        // (duration countdown, Poison/Burn damage) -- a lethal tick, or
+        // latently a self-lethal Damage-family Technique/PhotonArt
+        // self-target cast inside ResolveAction itself, can destroy actor;
+        // OnEnergyDestroyed already clears its TurnQueue membership in that
+        // case, so nothing below is safe to touch once that's happened.
+        if (actor.IsValid())
+        {
+            AfterTurnEvent after_turn;
+            actor.Dispatch(after_turn);
+        }
+
+        if (!actor.IsValid())
+        {
+            if (is_player)
+                return TurnStep::Resolved;
+            continue;
+        }
+
         int energy = m_turn_queue.GetEnergy(actor_handle) - result.cost;
         m_turn_queue.Requeue(actor_handle, energy);
         actor.Get<EnergyComponent>().energy = energy;

@@ -13,3 +13,4 @@ const std::filesystem::path EditorFilepaths::EntitiesPath = EditorFilepaths::Dat
 const std::filesystem::path EditorFilepaths::AffixesPath = EditorFilepaths::DataPath / "Affixes";
 const std::filesystem::path EditorFilepaths::PhotonArtsPath = EditorFilepaths::DataPath / "PhotonArts";
 const std::filesystem::path EditorFilepaths::TechniquesPath = EditorFilepaths::DataPath / "Techniques";
+const std::filesystem::path EditorFilepaths::StatusEffectsPath = EditorFilepaths::DataPath / "StatusEffects";

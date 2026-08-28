@@ -60,6 +60,42 @@ body {
     color: #ddd;
 }
 
+#status-effects {
+    display: block;
+    margin-top: 0.4em;
+}
+
+.status-chip {
+    display: inline-block;
+    margin-right: 0.4em;
+    margin-bottom: 0.2em;
+    padding: 0.1em 0.4em;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: #fff;
+    border: 1px #000;
+}
+
+.status-chip.status-poison {
+    background-color: #7a3fd4;
+}
+
+.status-chip.status-burn {
+    background-color: #d4573f;
+}
+
+.status-chip.status-freeze {
+    background-color: #3f9fd4;
+}
+
+.status-chip.status-shock {
+    background-color: #d4c93f;
+}
+
+.status-chip.status-confuse {
+    background-color: #d43fa0;
+}
+
 #hotbar {
     display: flex;
     position: absolute;

@@ -8,11 +8,13 @@
 #include "Components/TweenComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Actions/MoveEvent.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 #include "Engine/World/Grid.h"
 
@@ -22,6 +24,7 @@
 
 namespace {
 psr::AffixLibrary g_no_affixes;
+psr::StatusEffectLibrary g_no_status_effects;
 } // namespace
 
 TEST_CASE("MoveAction moves an actor to an open tile", "[MoveAction]")
@@ -128,7 +131,7 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
 {
     psr::Registry registry;
     psr::Grid grid{3, 3};
-    psr::SetUpCombatRegistry(registry, g_no_affixes);
+    psr::SetUpCombatRegistry(registry, g_no_affixes, g_no_status_effects);
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     actor.Emplace<psr::Position>(psr::Vec2{1, 1});
@@ -212,4 +215,80 @@ TEST_CASE("MoveAction dispatches AfterMoveEvent with the from/to tiles on a succ
     REQUIRE(received.has_value());
     REQUIRE(received->from == psr::Vec2{1, 1});
     REQUIRE(received->to == psr::Vec2{2, 1});
+}
+
+TEST_CASE("MoveAction moves to the BeforeMoveEvent handler's redirected offset, not the originally-requested one",
+          "[MoveAction]")
+{
+    // Deterministic regression guard for the "read offset back after
+    // dispatch" contract StatusEffectComponent's Confuse handling relies on
+    // -- independent of that handler's own RNG, a redirect to any offset
+    // must actually be consumed by MoveAction rather than the original
+    // m_offset silently winning.
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    struct RedirectProbe
+    {
+    };
+    actor.Get<psr::EventHandlerComponent>().Subscribe<psr::BeforeMoveEvent, RedirectProbe>(
+        [](psr::Entity, psr::BeforeMoveEvent& event) { event.offset = psr::Vec2{0, 1}; });
+
+    std::mt19937 rng{1};
+    psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng); // requested: right
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::MoveAction::kMoveCost);
+    REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 2}); // redirected: down, not right
+}
+
+TEST_CASE("MoveAction redirects to a random cardinal direction while the actor is Confused", "[MoveAction][StatusEffect]")
+{
+    psr::StatusEffect confuse;
+    confuse.id = 1;
+    confuse.type = psr::StatusEffectType::Confuse;
+    confuse.duration = 1000; // never expires across the trials below
+    psr::StatusEffectLibrary status_effects{{confuse}};
+
+    const psr::Vec2 origin{2, 2};
+    bool saw_a_redirect = false;
+
+    // Repeated trials rather than a single roll -- StatusEffectComponent's
+    // Confuse handler owns its own self-seeded RNG (see its doc comment),
+    // so this can't be seeded from the test. With a 1-in-4 chance per trial
+    // of coincidentally re-picking the requested direction, the odds of all
+    // 100 trials doing so are astronomically small, so this is deterministic
+    // in practice while still exercising the real (non-seedable) code path.
+    for (int trial = 0; trial < 100; ++trial)
+    {
+        psr::Registry registry;
+        psr::Grid grid{5, 5};
+        registry.SetStatusEffectLibrary(status_effects);
+        registry.BindComponentEvents<psr::StatusEffectComponent>();
+        entt::entity handle = registry.CreateEntity();
+        psr::Entity actor(registry, handle);
+        actor.Emplace<psr::Position>(origin);
+        grid.AddEntity(origin, handle);
+        psr::ApplyStatusEffect(actor, status_effects, confuse.id);
+
+        std::mt19937 rng{1};
+        psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng); // requested: right
+        psr::ActionResult result = action.Perform(actor);
+
+        REQUIRE(result.cost == psr::MoveAction::kMoveCost);
+        const psr::Vec2 landed = actor.Get<psr::Position>().tile;
+        const psr::Vec2 delta = landed - origin;
+        // Always one of the 4 cardinal neighbours -- never the origin tile,
+        // never a diagonal.
+        REQUIRE(((delta == psr::Vec2{0, -1}) || (delta == psr::Vec2{0, 1}) || (delta == psr::Vec2{-1, 0}) ||
+                (delta == psr::Vec2{1, 0})));
+        if (delta != psr::Vec2{1, 0})
+            saw_a_redirect = true;
+    }
+
+    REQUIRE(saw_a_redirect);
 }

@@ -10,11 +10,13 @@ namespace psr {
 
 // The behavioral family a Photon Art/Technique's hit resolves as (docs/GDD.md's
 // example families): Damage is a plain hit/damage roll; Drain additionally
-// restores the caster's HP by a percentage of the damage dealt; Status ships
-// its status_effect_id unconsumed for now (the actual tick/duration/cure
-// framework is M7.3's job). GDD ascribes Drain to Photon Arts specifically,
-// but that's authoring guidance, not an engine restriction -- nothing stops a
-// Technique from using Drain too.
+// restores the caster's HP by a percentage of the damage dealt; Status
+// applies its status_effect_id unconditionally on a landed hit instead of
+// dealing damage (landing the cast is the check -- see StatusEffectApplication.h's
+// ApplyStatusEffect, and TechniqueAction/PhotonArtAction's directional-target
+// loops). GDD ascribes Drain to Photon Arts specifically, but that's
+// authoring guidance, not an engine restriction -- nothing stops a Technique
+// from using Drain too.
 enum class EffectFamily
 {
     Damage,

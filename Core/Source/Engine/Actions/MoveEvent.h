@@ -5,9 +5,12 @@
 namespace psr {
 
 // Dispatched by MoveAction to the actor's own EventHandlerComponent around
-// its Perform(). Nothing subscribes to these today -- no status-effect
-// system exists yet -- they exist as a ready hook for one (e.g. a
-// root/immobilize effect setting cancelled = true).
+// its Perform(). StatusEffectComponent's own handler subscribes: a Confuse
+// stack overwrites offset with a random cardinal direction before
+// MoveAction reads it back (mutable, same "read back after dispatch"
+// contract BeforeDamageEvent::incoming_damage already establishes); a
+// root/immobilize-style effect could instead set cancelled = true, though
+// nothing does yet.
 struct BeforeMoveEvent
 {
     Vec2 offset;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Combat/Element.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/TypeReflection.h"
 
@@ -80,6 +81,20 @@ struct WeaponComponent
     std::vector<std::uint32_t> photon_art_ids;
     std::vector<std::uint32_t> technique_ids;
 
+    // The weapon's own elemental flavor (e.g. a "Fire Saber"): inherited by
+    // both its plain attacks (AttackAction, via BeforeAttackEvent) and its
+    // granted Photon Arts (PhotonArtAction, via BeforePhotonArtCastEvent) --
+    // a Photon Art is "channeled through" its granting weapon, per
+    // Technique.h's own doc comment on how Photon Arts/Techniques are
+    // granted. status_effect_id (NameId into StatusEffectLibrary) is the
+    // ailment status_chance_percent has a chance to apply on a landed hit,
+    // when element != None. A Technique's own element/status_effect_id (see
+    // Technique.h) are spell-authored instead, independent of the wielding
+    // weapon.
+    Element element = Element::None;
+    std::uint32_t status_effect_id = 0;
+    int status_chance_percent = 0;
+
     static void Register(ComponentSchemaRegistrar& reg)
     {
         reg.Component<WeaponComponent>("weapon")
@@ -91,7 +106,10 @@ struct WeaponComponent
             .Data<&WeaponComponent::suffix_affix_id>("suffix_affix_id")
             .Data<&WeaponComponent::race_bonuses>("race_bonuses")
             .Data<&WeaponComponent::photon_art_ids>("photon_art_ids")
-            .Data<&WeaponComponent::technique_ids>("technique_ids");
+            .Data<&WeaponComponent::technique_ids>("technique_ids")
+            .Data<&WeaponComponent::element>("element")
+            .Data<&WeaponComponent::status_effect_id>("status_effect_id")
+            .Data<&WeaponComponent::status_chance_percent>("status_chance_percent");
     }
 };
 

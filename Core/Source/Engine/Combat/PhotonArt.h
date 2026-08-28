@@ -50,7 +50,7 @@ struct PhotonArt
     int hits_per_turn = 1;
     EffectFamily effect_family = EffectFamily::Damage;
     int drain_percent = 0;              // EffectFamily::Drain only
-    std::uint32_t status_effect_id = 0; // EffectFamily::Status only; unconsumed until M7.3
+    std::uint32_t status_effect_id = 0; // EffectFamily::Status only: guaranteed ailment on a landed hit, no damage
     std::vector<PhotonArtTier> tiers;
 };
 

@@ -529,7 +529,7 @@ tracking) plus the deliberate-failure check above.
 
 ## M7 — Combat System
 
-**Status:** 7.1/7.2 done
+**Status:** 7.1/7.2/7.3 done
 
 - **7.1 Melee/ranged resolution:** Engine: Hunter melee (adjacent/cone/line shapes, ATP-vs-ATA
   tradeoff), Ranger ranged (range/spread/hits-per-turn), four-race damage bonus from 5.1.
@@ -660,7 +660,72 @@ tracking) plus the deliberate-failure check above.
   `SetPendingAction` cases in `TurnCoordinatorTests.cpp`.
 - **7.3 Status effects:** Engine: Freeze/Poison/Shock/Confuse framework (duration, tick, cure).
   Editor: status-effect fields on the 7.2 editor. UI: status icon + duration on HUD and over
-  affected entities.
+  affected entities. **Done:** `Burn` was added alongside the four ROADMAP-named types per the
+  user's explicit request, and a genuine elemental-damage layer (`Element`: Fire/Ice/Lightning/
+  Light/Dark) was built alongside the status framework, superseding `Technique::element_id`'s
+  earlier free-form-NameId shape (the GDD's "declines to commit to a fixed roster" framing is now
+  moot -- the user committed to exactly five). `StatusEffect`/`StatusEffectType`/`Element`
+  (+ `Schema`/`SchemaEmitter`/`Library`/`LibraryFile`/`Error`, the usual five-file family) are new
+  `Core/Source/Engine/Combat/` bespoke content types mirroring `Affix`'s pattern exactly, content at
+  `App/Assets/Data/StatusEffects/` (unpopulated, same pre-existing gap as `PhotonArts/`/
+  `Techniques/`/`Affixes/` -- no directory exists on disk yet, so `GameplayLayer::OnAttach`'s
+  `LoadStatusEffectLibrary` call throws today exactly as its Photon-Art/Technique siblings already
+  do). `StatusEffectComponent` (`Core/Source/Engine/ECS/`, not meta-registered -- runtime-only
+  accumulated state, mirrors `TweenComponent`'s precedent) holds `{status_effect_id, stacks,
+  remaining_duration}` stacks, added on demand via `ApplyStatusEffect`
+  (`StatusEffectApplication.h`) -- re-applying the same effect increments its stack count and
+  refreshes remaining_duration to the fresh application's value, per the user's explicit stacking
+  answer. `TickStatusEffects` runs once per turn (see below): Poison/Burn deal `magnitude * stacks`
+  self-inflicted damage (via the same `BeforeDamageEvent`/`AfterDamageEvent` dispatch
+  `TechniqueAction`'s self-target branch already uses) and every stack's `remaining_duration`
+  decrements, expiring at 0 (the "cure" this bullet calls for is natural expiry only -- no Cure
+  item/spell content is authored this pass, per CLAUDE.md's content-authoring boundary).
+  Freeze/Shock/Confuse are presence-based, not magnitude-scaled, per the user's explicit answers:
+  Freeze pre-empts `TurnCoordinator::Step()`'s action selection entirely, substituting a real,
+  energy-costing forced `WaitAction` (never a zero-cost one -- that would stall the turn queue on
+  the same frozen actor); Shock cancels `BeforeAttackEvent`/`BeforePhotonArtCastEvent`/
+  `BeforeTechniqueCastEvent` outright via a new `cancelled` field on each (mirroring
+  `BeforeMoveEvent::cancelled`'s existing veto pattern) -- attack-type actions no-op for zero cost,
+  movement still works; Confuse redirects `BeforeMoveEvent::offset` to a random cardinal direction,
+  which required actually consuming that field in `MoveAction::Perform` for the first time (it
+  existed but was dead -- `m_offset` was read instead). New `Core/Source/Engine/Actions/TurnEvent.h`
+  (`AfterTurnEvent`) is dispatched by `TurnCoordinator::Step()` once per resolved turn (including a
+  forced Wait), driving `TickStatusEffects` via `StatusEffectComponent`'s own subscribed handler --
+  a lethal tick can now destroy the acting entity mid-`Step()`, so the post-`ResolveAction`
+  energy/requeue block gained an `actor.IsValid()` guard (this exact hazard already existed latently
+  for a self-lethal `EffectFamily::Damage` self-target cast; DoT is what makes it routinely
+  reachable). Elemental damage: `WeaponComponent` gained `element`/`status_effect_id`/
+  `status_chance_percent` (a weapon's own flavor, inherited by both its plain attacks and its
+  granted Photon Arts -- "channeled through" the weapon, per the user's explicit
+  "extend to weapons/Photon Arts" answer); `Technique` kept its own spell-authored `element` plus a
+  new `status_chance_percent`. `App/Source/Combat/StatusEffectHooks.h`'s
+  `MaybeApplyElementalStatus` rolls that chance on a landed, non-lethal hit in all three actions.
+  `EffectFamily::Status` is now actually implemented in `TechniqueAction`/`PhotonArtAction`'s
+  directional target loops (previously a pre-M7.3 gap: they dealt damage regardless of
+  `effect_family`) -- landing the hit-chance roll guarantees the ailment with no damage roll;
+  self-target Status stays a no-op (out of scope, no buff-shaped use case exists yet). Editor: new
+  `StatusEffectEditorLayer` (+ `.rml`) mirrors `AffixEditorLayer`'s List/Edit shell exactly;
+  `EditorMenuLayer` gained a row; `TechniqueEditorLayer`'s `element_id` NameId field became an enum
+  dropdown, plus a new `status_chance_percent` field; `PrefabEditorLayer`'s Weapon card gained
+  `element`/`status_effect_id`/`status_chance_percent` rows (`status_effect_id` a real
+  `BuildIdEnumField` picker sourced from a newly-loaded `StatusEffectLibrary`, same treatment as
+  `prefix_affix_id`). UI: `StatusEffectsMessage` + `CombatLogBridge::PublishStatusEffects` (new
+  `AfterStatusEffectsChangedEvent` subscription) feed `HudLayer` a colored icon+stack+duration chip
+  row per active ailment; "over affected entities" reuses M7.2's own target-select-cursor precedent
+  (a real data-driven ECS entity, `App/Assets/Data/Entities/ui/status_effect_marker.json`) instead
+  of touching `TileRenderer` -- a new `StatusEffectWorldMarkers` (mirrors `CombatLogBridge`'s
+  single-tracked-entity scope, "no enemies spawn yet") spawns/repositions one tinted marker per
+  distinct active type, riding the same per-turn `AfterStatusEffectsChangedEvent` cadence so a
+  marker never lags an entity's own movement by more than its last turn. Catch2 coverage in
+  `Core-Test/Source/StatusEffectSchemaTests.cpp`/`StatusEffectApplicationTests.cpp` (stacking,
+  DoT/decrement/expiry, a lethal tick destroying the entity without crashing) and extended
+  `TechniqueSchemaTests.cpp`/`ItemComponentTests.cpp` for the new fields; `App-Test`'s
+  `TurnCoordinatorTests.cpp` (Freeze forces a real-cost Wait pre-empting even a confirmed pending
+  action, `AfterTurnEvent` fires once per turn, survives a lethal tick), `Attack`/`PhotonArt`/
+  `TechniqueActionTests.cpp` (Shock's zero-cost cancel, elemental status on a guaranteed-chance
+  hit, `EffectFamily::Status` dealing no damage), and `MoveActionTests.cpp` (a deterministic
+  redirect-consumption regression guard plus a statistical Confuse trial, since
+  `StatusEffectComponent`'s Confuse handler owns its own unseedable RNG).
 
 ## M8 — Itemization & Economy
 

@@ -25,8 +25,8 @@ class RmlClickListener;
 // PhotonArtEditorLayer's shape exactly (a flat, bespoke non-ECS content type
 // following AffixEditorLayer's List/Edit shell pattern; tp_cost is shared
 // with PhotonArt -- both spend the same TPComponent pool), differing only in
-// which struct fields the form exposes (element_id instead of
-// hits_per_turn/drain_percent).
+// which struct fields the form exposes (element/status_chance_percent
+// instead of hits_per_turn/drain_percent).
 class TechniqueEditorLayer : public Layer
 {
 public:

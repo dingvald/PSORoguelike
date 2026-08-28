@@ -2,6 +2,7 @@
 
 #include "Components/RenderableComponent.h"
 #include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
@@ -202,6 +203,11 @@ private:
     // pickers (see RefreshPhotonArtIdRows/RefreshTechniqueIdRows).
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
+
+    // Status effect library, loaded once in OnAttach -- backs the weapon
+    // card's status_effect_id BuildIdEnumField picker (same "real picker
+    // sourced from a loaded library" treatment as prefix/suffix_affix_id).
+    StatusEffectLibrary m_status_effects;
 
     // -- Shared render resources (lazy) --
     bool m_renderer_initialized = false;

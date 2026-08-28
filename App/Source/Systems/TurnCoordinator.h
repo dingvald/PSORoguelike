@@ -106,6 +106,13 @@ private:
     std::optional<int> m_pending_key;
     std::function<IAction*(Entity)> m_decide_npc_action;
     WaitAction m_default_npc_action;
+
+    // Substituted in place of whatever the player/NPC AI would have chosen
+    // whenever the acting entity is Frozen -- see Step()'s own comment for
+    // why this must be a real, energy-costing Wait rather than a zero-cost
+    // no-op.
+    WaitAction m_forced_wait_action;
+
     TargetRequest m_pending_target_request;
     IAction* m_pending_action = nullptr;
 };

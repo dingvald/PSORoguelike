@@ -20,17 +20,21 @@ MoveAction::MoveAction(Grid& grid, const AffixLibrary& affixes, Vec2 offset, std
 
 ActionResult MoveAction::Perform(Entity actor)
 {
-    // Nothing subscribes to BeforeMoveEvent yet (no status-effect system
-    // exists) -- this is a ready hook for a future root/immobilize effect to
-    // veto the move via cancelled.
+    // StatusEffectComponent's own handler reacts to this: a Confuse stack
+    // overwrites offset with a random cardinal direction before it's read
+    // back below (mutable, same "read back after dispatch" contract
+    // BeforeDamageEvent::incoming_damage already establishes); a
+    // root/immobilize-style effect could instead veto the move via
+    // cancelled.
     BeforeMoveEvent before_move{m_offset};
     actor.Dispatch(before_move);
     if (before_move.cancelled)
         return ActionResult(0);
+    const Vec2 offset = before_move.offset; // may have been redirected above
 
     Position& position = actor.Get<Position>();
     const Vec2 tile = position.tile;
-    const Vec2 target = tile + m_offset;
+    const Vec2 target = tile + offset;
 
     if (!m_grid->Contains(target))
         return ActionResult(0);
@@ -48,7 +52,7 @@ ActionResult MoveAction::Perform(Entity actor)
         if (!IsHostile(actor, Entity(registry, occupant)))
             continue;
 
-        return ActionResult(0, std::make_unique<AttackAction>(*m_grid, *m_affixes, m_offset, *m_rng));
+        return ActionResult(0, std::make_unique<AttackAction>(*m_grid, *m_affixes, offset, *m_rng));
     }
     if (blocked)
         return ActionResult(0);

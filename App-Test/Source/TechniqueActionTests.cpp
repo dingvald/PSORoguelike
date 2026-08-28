@@ -5,6 +5,7 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/Entity.h"
@@ -13,6 +14,7 @@
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
@@ -89,7 +91,8 @@ TEST_CASE("TechniqueAction with no weapon equipped is a free no-op", "[Technique
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -106,7 +109,8 @@ TEST_CASE("TechniqueAction with a weapon that doesn't grant the id is a free no-
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -125,7 +129,8 @@ TEST_CASE("TechniqueAction with insufficient TP is a free no-op", "[TechniqueAct
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 20;
     psr::TechniqueLibrary techniques = MakeLibrary(technique);
@@ -148,7 +153,8 @@ TEST_CASE("TechniqueAction self-target (no SelectedTargetComponent) damages the 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -178,7 +184,8 @@ TEST_CASE("TechniqueAction self-target Drain resolves identically to Damage (no 
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Drain;
@@ -207,7 +214,8 @@ TEST_CASE("TechniqueAction eventually destroys a hostile Directional-cast occupa
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.targeting_mode = psr::TargetingMode::Directional;
@@ -247,7 +255,8 @@ TEST_CASE("TechniqueAction applies a tier power multiplier", "[TechniqueAction]"
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
-        psr::SetUpCombatRegistry(registry, affixes);
+        psr::StatusEffectLibrary status_effects;
+        psr::SetUpCombatRegistry(registry, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -289,7 +298,8 @@ TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
-        psr::SetUpCombatRegistry(registry, affixes);
+        psr::StatusEffectLibrary status_effects;
+        psr::SetUpCombatRegistry(registry, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -326,7 +336,8 @@ TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEve
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -366,7 +377,8 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/70, /*ata=*/40, /*tp=*/33);
     entt::entity weapon = MakeWeapon(registry);
@@ -389,7 +401,8 @@ TEST_CASE("BeforeTechniqueCastEvent reports weapon_grants_id false for an id the
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry, /*grants_technique=*/false);
@@ -400,4 +413,115 @@ TEST_CASE("BeforeTechniqueCastEvent reports weapon_grants_id false for an id the
 
     REQUIRE(event.has_weapon);
     REQUIRE_FALSE(event.weapon_grants_id);
+}
+
+TEST_CASE("TechniqueAction no-ops for zero cost when the caster is Shocked", "[TechniqueAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect shock;
+    shock.id = 1;
+    shock.type = psr::StatusEffectType::Shock;
+    shock.duration = 3;
+    psr::StatusEffectLibrary status_effects{{shock}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::Technique technique;
+    technique.tp_cost = 0;
+    technique.effect_family = psr::EffectFamily::Damage;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/80, /*ata=*/200, /*tp=*/100);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::ApplyStatusEffect(actor, status_effects, shock.id);
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(actor.Get<psr::TPComponent>().current_tp == 100); // untouched -- the cast never happened
+}
+
+TEST_CASE("TechniqueAction applies its own elemental status on a guaranteed-chance landed hit",
+          "[TechniqueAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect burn;
+    burn.id = 1;
+    burn.type = psr::StatusEffectType::Burn;
+    burn.magnitude = 2;
+    burn.duration = 3;
+    psr::StatusEffectLibrary status_effects{{burn}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::Technique technique;
+    technique.tp_cost = 0;
+    technique.targeting_mode = psr::TargetingMode::Directional;
+    technique.range_shape = psr::WeaponRangeShape::SingleTarget;
+    technique.range = 1;
+    technique.effect_family = psr::EffectFamily::Damage;
+    technique.element = psr::Element::Fire;
+    technique.status_effect_id = burn.id;
+    technique.status_chance_percent = 100;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    // High HP so the hit lands but doesn't kill.
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000);
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+    action.Perform(actor);
+
+    const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
+    REQUIRE(status != nullptr);
+    REQUIRE_FALSE(status->active.empty());
+    CHECK(status->active.front().status_effect_id == burn.id);
+}
+
+TEST_CASE("TechniqueAction EffectFamily::Status applies the ailment on hit and deals no damage",
+          "[TechniqueAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect poison;
+    poison.id = 1;
+    poison.type = psr::StatusEffectType::Poison;
+    poison.magnitude = 2;
+    poison.duration = 3;
+    psr::StatusEffectLibrary status_effects{{poison}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::Technique technique;
+    technique.tp_cost = 0;
+    technique.targeting_mode = psr::TargetingMode::Directional;
+    technique.range_shape = psr::WeaponRangeShape::SingleTarget;
+    technique.range = 1;
+    technique.effect_family = psr::EffectFamily::Status;
+    technique.status_effect_id = poison.id;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10);
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+    action.Perform(actor);
+
+    CHECK(enemy.Get<psr::HealthComponent>().current_hp == 10); // Status family deals no damage
+    const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
+    REQUIRE(status != nullptr);
+    REQUIRE_FALSE(status->active.empty());
+    CHECK(status->active.front().status_effect_id == poison.id);
 }

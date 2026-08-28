@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
 #include "Engine/ECS/Registry.h"
@@ -16,6 +17,7 @@
 #include "States/GameStateMachine.h"
 #include "States/TargetSelectionState.h"
 #include "Systems/CombatLogBridge.h"
+#include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
 
 #include <entt/entt.hpp>
@@ -90,6 +92,7 @@ private:
     AffixLibrary m_affixes; // empty: no enemies spawn yet, so MoveAction's attack fallback never triggers
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
+    StatusEffectLibrary m_status_effects;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -109,6 +112,14 @@ private:
     // declaration order relative to them doesn't matter for construction/
     // destruction safety.
     std::optional<CombatLogBridge> m_combat_log_bridge;
+
+    // Draws the player's active status effects as tinted markers in the
+    // world -- see StatusEffectWorldMarkers.h. Holds only pointers into
+    // m_registry/m_grid/m_status_effects (declaration order doesn't matter
+    // for those), but its own destructor removes any outstanding marker
+    // entities from *m_grid, so it must be destroyed before m_grid is --
+    // declared after m_grid (members destroy in reverse declaration order).
+    std::optional<StatusEffectWorldMarkers> m_status_effect_markers;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action

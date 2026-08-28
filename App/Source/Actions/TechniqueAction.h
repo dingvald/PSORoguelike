@@ -17,9 +17,12 @@ namespace psr {
 // rather than ATP-based. Technique carries no drain_percent field (unlike
 // PhotonArt) -- EffectFamily::Drain still type-checks (the enum is shared)
 // but resolves identically to Damage here for lack of an amount to size a
-// restore by. element_id/status_effect_id ship unconsumed (no elemental
-// resistance table or status framework exists yet -- M7.3's job for the
-// latter).
+// restore by. On a directional hit, element/status_effect_id/
+// status_chance_percent have a chance to inflict an ailment (see
+// StatusEffectHooks.h's MaybeApplyElementalStatus); a Status-family cast
+// applies its ailment unconditionally instead of dealing damage. No
+// elemental resistance/multiplier table exists yet -- element is otherwise
+// informational this pass.
 //
 // Same free-no-op/cost rules as PhotonArtAction, and the same TPComponent
 // pool (see docs/GDD.md's "PP vs. TP (revised -- collapsed to one pool)" section): a missing weapon,

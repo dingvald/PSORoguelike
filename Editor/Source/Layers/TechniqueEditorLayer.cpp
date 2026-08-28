@@ -357,14 +357,12 @@ void TechniqueEditorLayer::RefreshEditForm()
                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-element"))
-        keep(fieldwidgets::BuildNameIdField(*row, "element_id", m_draft.element_id, LabelFor(m_draft.element_id),
-                                            [this](std::uint32_t id, std::string name)
-                                            {
-                                                m_draft.element_id = id;
-                                                if (!name.empty())
-                                                    NameIdRegistry::Register(id, name);
-                                                MarkDirty();
-                                            }));
+        keep(fieldwidgets::BuildEnumField(*row, "element", EnumOptions<Element>(), EnumToString(m_draft.element),
+                                          [this](std::string v)
+                                          {
+                                              m_draft.element = EnumFromString(v, Element::None);
+                                              MarkDirty();
+                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-targeting-mode"))
         keep(fieldwidgets::BuildEnumField(*row, "targeting_mode", EnumOptions<TargetingMode>(),
@@ -411,6 +409,14 @@ void TechniqueEditorLayer::RefreshEditForm()
                                                     NameIdRegistry::Register(id, name);
                                                 MarkDirty();
                                             }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-status-chance"))
+        keep(fieldwidgets::BuildIntField(*row, "status_chance_percent", m_draft.status_chance_percent,
+                                         [this](int v)
+                                         {
+                                             m_draft.status_chance_percent = v;
+                                             MarkDirty();
+                                         }));
 
     if (Rml::Element* add_tier = m_editor->GetElementById("add-tier"))
     {

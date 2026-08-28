@@ -4,7 +4,14 @@
 #include "Actions/WaitAction.h"
 #include "Components/EnergyComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Engine/Actions/TurnEvent.h"
+#include "Engine/Combat/StatusEffect.h"
+#include "Engine/Combat/StatusEffectApplication.h"
+#include "Engine/Combat/StatusEffectLibrary.h"
+#include "Engine/ECS/EventHandlerComponent.h"
+#include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -32,6 +39,9 @@ public:
 TEST_CASE("TurnCoordinator yields AwaitingInput when the player has no pending key", "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity player = registry.CreateEntity();
@@ -47,6 +57,9 @@ TEST_CASE("TurnCoordinator yields AwaitingInput when the player has no pending k
 TEST_CASE("TurnCoordinator resolves a bound key for the player and returns Resolved", "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity player = registry.CreateEntity();
@@ -65,6 +78,9 @@ TEST_CASE("TurnCoordinator resolves a bound key for the player and returns Resol
 TEST_CASE("TurnCoordinator lets a non-player actor act before applying the player's pending key", "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     CountingAction npc_action;
@@ -92,6 +108,9 @@ TEST_CASE("TurnCoordinator lets every ready non-player actor act before yielding
           "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     CountingAction npc_action;
@@ -115,6 +134,9 @@ TEST_CASE("TurnCoordinator lets every ready non-player actor act before yielding
 TEST_CASE("TurnCoordinator stops tracking an actor once its EnergyComponent is destroyed", "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity npc = registry.CreateEntity();
@@ -138,6 +160,9 @@ TEST_CASE("TurnCoordinator surfaces TargetingRequested once RequestTargeting is 
           "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity player = registry.CreateEntity();
@@ -157,6 +182,9 @@ TEST_CASE("TurnCoordinator surfaces TargetingRequested once RequestTargeting is 
 TEST_CASE("TurnCoordinator TakePendingTargetRequest consumes and clears the pending request", "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     CountingAction cast_action;
@@ -181,6 +209,9 @@ TEST_CASE("TurnCoordinator SetPendingAction resolves that action for the player,
           "[TurnCoordinator]")
 {
     psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity player = registry.CreateEntity();
@@ -196,4 +227,96 @@ TEST_CASE("TurnCoordinator SetPendingAction resolves that action for the player,
 
     REQUIRE(step == psr::TurnStep::Resolved);
     REQUIRE(confirmed_action.count == 1);
+}
+
+TEST_CASE("TurnCoordinator forces a Wait at normal cost when the actor is Frozen, pre-empting any chosen action",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffect freeze;
+    freeze.id = 1;
+    freeze.type = psr::StatusEffectType::Freeze;
+    freeze.duration = 3;
+    psr::StatusEffectLibrary status_effects{{freeze}};
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+    psr::ApplyStatusEffect(psr::Entity(registry, player), status_effects, freeze.id);
+
+    // Even a confirmed pending action must be pre-empted by Freeze -- it
+    // stays queued for a later, unfrozen turn instead of running now.
+    CountingAction chosen_action;
+    coordinator.SetPendingAction(&chosen_action);
+
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::Resolved);
+    REQUIRE(chosen_action.count == 0);
+    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == -psr::WaitAction::kWaitCost);
+}
+
+TEST_CASE("TurnCoordinator dispatches AfterTurnEvent exactly once per resolved turn", "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+
+    struct TurnProbe
+    {
+    };
+    int turn_events = 0;
+    psr::Entity(registry, player)
+        .Get<psr::EventHandlerComponent>()
+        .Subscribe<psr::AfterTurnEvent, TurnProbe>([&](psr::Entity, psr::AfterTurnEvent&) { ++turn_events; });
+
+    coordinator.KeyBindings().Bind(1, std::make_unique<psr::WaitAction>());
+    coordinator.PressKey(1);
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::Resolved);
+    REQUIRE(turn_events == 1);
+}
+
+TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting entity mid-turn",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffect poison;
+    poison.id = 2;
+    poison.type = psr::StatusEffectType::Poison;
+    poison.magnitude = 999;
+    poison.duration = 3;
+    psr::StatusEffectLibrary status_effects{{poison}};
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+    psr::HealthComponent health;
+    health.current_hp = 5;
+    health.max_hp = 5;
+    registry.Emplace<psr::HealthComponent>(player, health);
+    psr::ApplyStatusEffect(psr::Entity(registry, player), status_effects, poison.id);
+
+    coordinator.KeyBindings().Bind(1, std::make_unique<psr::WaitAction>());
+    coordinator.PressKey(1);
+
+    // Must not crash even though this Wait's own AfterTurnEvent tick kills
+    // player via the Poison stack applied above.
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::Resolved);
+    REQUIRE_FALSE(registry.IsValid(player));
 }

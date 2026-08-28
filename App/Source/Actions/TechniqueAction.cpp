@@ -2,10 +2,12 @@
 
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
+#include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Engine/Combat/CombatMath.h"
 #include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/Combat/Technique.h"
 #include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -44,6 +46,8 @@ ActionResult TechniqueAction::Perform(Entity actor)
     // already passed.
     BeforeTechniqueCastEvent before_cast{m_technique_id};
     actor.Dispatch(before_cast);
+    if (before_cast.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
+        return ActionResult(0);
     if (!before_cast.has_weapon || !before_cast.weapon_grants_id)
         return ActionResult(0);
 
@@ -77,8 +81,10 @@ ActionResult TechniqueAction::Perform(Entity actor)
     {
         // SelfTarget: no attacker-vs-defender roll against yourself. Only
         // Damage has an immediate effect here -- Drain has no drain_percent
-        // to size a heal by on Technique, and Status carries
-        // status_effect_id unconsumed (M7.3's job).
+        // to size a heal by on Technique, and self-target status application
+        // stays out of scope this pass (no buff-shaped use case exists yet
+        // to justify it) -- see the directional branch below for the
+        // target-facing Status implementation.
         if (technique->effect_family == EffectFamily::Damage)
         {
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
@@ -133,6 +139,14 @@ ActionResult TechniqueAction::Perform(Entity actor)
             if (unit_roll(*m_rng) > hit_chance)
                 continue; // miss
 
+            if (technique->effect_family == EffectFamily::Status)
+            {
+                // Landing the cast is the check -- a pure-status Technique
+                // deals no damage, it guarantees its ailment on hit.
+                ApplyStatusEffect(target, registry.GetStatusEffectLibrary(), technique->status_effect_id);
+                continue;
+            }
+
             int damage = static_cast<int>(std::lround(
                 ComputeTechniqueDamage(attacker_stats.mst, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
             damage = ApplyRaceBonus(damage, before_cast.race_bonuses, defender_race_id);
@@ -152,7 +166,15 @@ ActionResult TechniqueAction::Perform(Entity actor)
             {
                 m_grid->RemoveEntity(tile, occupant);
                 registry.DestroyEntity(occupant);
+                continue;
             }
+
+            // element/status_effect_id/status_chance_percent are spell-
+            // authored on Technique itself (independent of the wielding
+            // weapon, unlike PhotonArt) -- see Technique.h's own doc
+            // comment.
+            MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), technique->status_effect_id,
+                                      technique->status_chance_percent, *m_rng);
         }
     }
 

@@ -5,6 +5,7 @@
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/PlayerStatusMessage.h"
+#include "Messages/StatusEffectsMessage.h"
 
 #include "ApplicationFilepaths.h"
 #include "UI/RmlClickListener.h"
@@ -24,6 +25,29 @@ namespace {
         const int clamped_max = std::max(max, 1);
         const int percent = std::clamp(current * 100 / clamped_max, 0, 100);
         return std::to_string(percent) + "%";
+    }
+
+    // A short display label + an rcss class per StatusEffectType -- rcss
+    // (hud.rcss's .status-chip.status-<class> rules) owns the actual color,
+    // this only decides which rule applies. Purely presentational, kept
+    // local to HudLayer rather than on StatusEffectType itself (an engine
+    // enum has no business knowing about UI class names).
+    std::pair<const char*, const char*> StatusEffectDisplay(StatusEffectType type)
+    {
+        switch (type)
+        {
+        case StatusEffectType::Poison:
+            return {"Poison", "poison"};
+        case StatusEffectType::Burn:
+            return {"Burn", "burn"};
+        case StatusEffectType::Freeze:
+            return {"Freeze", "freeze"};
+        case StatusEffectType::Shock:
+            return {"Shock", "shock"};
+        case StatusEffectType::Confuse:
+            return {"Confuse", "confuse"};
+        }
+        return {"?", "poison"}; // unreachable for a valid enum value
     }
 } // namespace
 
@@ -45,6 +69,7 @@ void HudLayer::OnAttach()
     Subscribe<PlayerStatusMessage>(&HudLayer::OnPlayerStatus, this);
     Subscribe<HotbarStateMessage>(&HudLayer::OnHotbarState, this);
     Subscribe<CombatLogEntryMessage>(&HudLayer::OnLogEntry, this);
+    Subscribe<StatusEffectsMessage>(&HudLayer::OnStatusEffects, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -158,6 +183,31 @@ void HudLayer::OnLogEntry(const CombatLogEntryMessage& message)
         markup += "<div class=\"log-line\">" + EscapeRml(line) + "</div>";
     log->SetInnerRML(markup);
     log->SetScrollTop(log->GetScrollHeight());
+}
+
+void HudLayer::OnStatusEffects(const StatusEffectsMessage& message)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* row = m_document->GetElementById("status-effects");
+    if (!row)
+        return;
+
+    if (message.active.empty())
+    {
+        row->SetInnerRML("");
+        return;
+    }
+
+    std::string markup;
+    for (const StatusEffectsMessage::ActiveEntry& entry : message.active)
+    {
+        const auto [label, css_class] = StatusEffectDisplay(entry.type);
+        markup += std::string("<span class=\"status-chip status-") + css_class + "\">" + label + " x" +
+                  std::to_string(entry.stacks) + " (" + std::to_string(entry.remaining_duration) + ")</span>";
+    }
+    row->SetInnerRML(markup);
 }
 
 } // namespace psr

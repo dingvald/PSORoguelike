@@ -5,12 +5,14 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Engine/Combat/AttackEvent.h"
 #include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -76,7 +78,8 @@ TEST_CASE("AttackAction with no weapon equipped is a free no-op", "[AttackAction
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -92,7 +95,8 @@ TEST_CASE("AttackAction against an empty tile is a free no-op", "[AttackAction]"
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -110,7 +114,8 @@ TEST_CASE("AttackAction does not damage a non-hostile occupant", "[AttackAction]
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -132,7 +137,8 @@ TEST_CASE("AttackAction eventually destroys a hostile SingleTarget occupant", "[
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -162,7 +168,8 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{7};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -193,7 +200,8 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
     {
         psr::Registry registry;
         psr::Grid grid{5, 5};
-        psr::SetUpCombatRegistry(registry, affixes);
+        psr::StatusEffectLibrary status_effects;
+        psr::SetUpCombatRegistry(registry, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -221,7 +229,8 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
@@ -255,7 +264,8 @@ TEST_CASE("AttackAction is a free no-op when the weapon carrier lacks WeaponComp
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
@@ -274,7 +284,8 @@ TEST_CASE("EquipmentComponent's handler contributes weapon data and effective st
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
-    psr::SetUpCombatRegistry(registry, affixes);
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
     std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/60, /*player=*/true);
@@ -290,4 +301,67 @@ TEST_CASE("EquipmentComponent's handler contributes weapon data and effective st
     REQUIRE(event.hits_per_turn == 3);
     REQUIRE(event.attacker_stats.atp == 50);
     REQUIRE(event.attacker_stats.ata == 60);
+}
+
+TEST_CASE("AttackAction no-ops for zero cost when the actor is Shocked", "[AttackAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect shock;
+    shock.id = 1;
+    shock.type = psr::StatusEffectType::Shock;
+    shock.duration = 3;
+    psr::StatusEffectLibrary status_effects{{shock}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::ApplyStatusEffect(actor, status_effects, shock.id);
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
+
+    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(enemy.Get<psr::HealthComponent>().current_hp == 10); // untouched -- the attack never happened
+}
+
+TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-chance landed hit",
+          "[AttackAction][StatusEffect]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffect burn;
+    burn.id = 1;
+    burn.type = psr::StatusEffectType::Burn;
+    burn.magnitude = 2;
+    burn.duration = 3;
+    psr::StatusEffectLibrary status_effects{{burn}};
+    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    psr::WeaponComponent& weapon_component = registry.GetComponent<psr::WeaponComponent>(weapon);
+    weapon_component.element = psr::Element::Fire;
+    weapon_component.status_effect_id = burn.id;
+    weapon_component.status_chance_percent = 100;
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    // High HP so the hit lands but doesn't kill -- the elemental status hook
+    // only rolls on a non-lethal hit.
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
+
+    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    action.Perform(actor);
+
+    const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
+    REQUIRE(status != nullptr);
+    REQUIRE_FALSE(status->active.empty());
+    CHECK(status->active.front().status_effect_id == burn.id);
 }

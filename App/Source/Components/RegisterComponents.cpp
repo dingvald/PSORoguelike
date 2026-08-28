@@ -16,6 +16,7 @@
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/SocketComponent.h"
 #include "Engine/ECS/StatsComponent.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/ECS/WeaponComponent.h"
 
@@ -42,14 +43,18 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     TPComponent::Register(reg);
     WeaponComponent::Register(reg);
 
-    // EquipmentComponent is deliberately not meta/schema-registered above
-    // (entt::entity has no FieldKind), but it and TPComponent still need
-    // their own event handlers wired -- see each component's own
-    // AttachHandlers/DetachHandlers doc comment. Registry::BindComponentEvents
-    // just connects entt's on_construct/on_destroy<T> signals, independent of
-    // meta registration, so this is safe to call regardless.
+    // EquipmentComponent/StatusEffectComponent are deliberately not
+    // meta/schema-registered above (entt::entity has no FieldKind;
+    // StatusEffectComponent is runtime-only accumulated state, never
+    // hand-authored in a prefab -- see its own doc comment), but they and
+    // TPComponent still need their own event handlers wired -- see each
+    // component's own AttachHandlers/DetachHandlers doc comment.
+    // Registry::BindComponentEvents just connects entt's
+    // on_construct/on_destroy<T> signals, independent of meta registration,
+    // so this is safe to call regardless.
     registry.BindComponentEvents<EquipmentComponent>();
     registry.BindComponentEvents<TPComponent>();
+    registry.BindComponentEvents<StatusEffectComponent>();
 
     return reg.Model();
 }

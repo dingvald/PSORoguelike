@@ -40,6 +40,9 @@ namespace {
         event.range = weapon->range;
         event.hits_per_turn = weapon->hits_per_turn;
         event.race_bonuses = weapon->race_bonuses;
+        event.element = weapon->element;
+        event.status_effect_id = weapon->status_effect_id;
+        event.status_chance_percent = weapon->status_chance_percent;
     }
 
     void ContributeTechniqueCast(Entity actor, BeforeTechniqueCastEvent& event)
@@ -66,6 +69,9 @@ namespace {
         event.has_weapon = true;
         event.weapon_grants_id = Grants(weapon->photon_art_ids, event.photon_art_id);
         event.race_bonuses = weapon->race_bonuses;
+        event.element = weapon->element;
+        event.status_effect_id = weapon->status_effect_id;
+        event.status_chance_percent = weapon->status_chance_percent;
     }
 } // namespace
 

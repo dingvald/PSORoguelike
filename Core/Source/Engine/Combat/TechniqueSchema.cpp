@@ -23,7 +23,10 @@ TechniqueSchemaModel BuildTechniqueSchemaModel()
     TechniqueSchemaModel model;
     model.fields.push_back(FieldSchema{"name", FieldKind::String});
     model.fields.push_back(FieldSchema{"tp_cost", FieldKind::Integer});
-    model.fields.push_back(FieldSchema{"element_id", FieldKind::NameId});
+
+    FieldSchema element{"element", FieldKind::Enum};
+    element.enum_values = detail::EnsureEnumRegistered<Element>(ctx);
+    model.fields.push_back(std::move(element));
 
     FieldSchema targeting_mode{"targeting_mode", FieldKind::Enum};
     targeting_mode.enum_values = detail::EnsureEnumRegistered<TargetingMode>(ctx);
@@ -40,6 +43,7 @@ TechniqueSchemaModel BuildTechniqueSchemaModel()
     model.fields.push_back(std::move(effect_family));
 
     model.fields.push_back(FieldSchema{"status_effect_id", FieldKind::NameId});
+    model.fields.push_back(FieldSchema{"status_chance_percent", FieldKind::Integer});
 
     FieldSchema tiers{"tiers", FieldKind::Array};
     FieldSchema tier_item{"item", FieldKind::Object};

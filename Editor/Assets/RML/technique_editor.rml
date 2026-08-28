@@ -43,6 +43,8 @@
                 <div id="field-effect-family" class="field-row"></div>
                 <h3>Status Effect</h3>
                 <div id="field-status-effect" class="field-row"></div>
+                <h3>Status Chance %</h3>
+                <div id="field-status-chance" class="field-row"></div>
                 <h3>Tiers <span id="add-tier" class="btn action">Add Tier</span></h3>
                 <div id="tier-list" class="scroll-panel"></div>
             </div>

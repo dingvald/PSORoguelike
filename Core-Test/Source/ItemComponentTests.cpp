@@ -88,7 +88,7 @@ TEST_CASE("Weapon/Armor/Mod/Rarity components register as authorable with the ex
     const psr::ComponentSchema& weapon = model.components[3];
     CHECK(weapon.id == "weapon");
     CHECK(weapon.authorable);
-    REQUIRE(weapon.fields.size() == 9);
+    REQUIRE(weapon.fields.size() == 12);
     CHECK(weapon.fields[0].name == "range_shape");
     CHECK(weapon.fields[0].kind == psr::FieldKind::Enum);
     CHECK(weapon.fields[0].enum_values ==
@@ -118,6 +118,13 @@ TEST_CASE("Weapon/Armor/Mod/Rarity components register as authorable with the ex
     CHECK(weapon.fields[8].name == "technique_ids");
     CHECK(weapon.fields[8].kind == psr::FieldKind::Array);
     CHECK(weapon.fields[8].ElementSchema().kind == psr::FieldKind::NameId);
+    CHECK(weapon.fields[9].name == "element");
+    CHECK(weapon.fields[9].kind == psr::FieldKind::Enum);
+    CHECK(weapon.fields[9].enum_values == std::vector<std::string>{"none", "fire", "ice", "lightning", "light", "dark"});
+    CHECK(weapon.fields[10].name == "status_effect_id");
+    CHECK(weapon.fields[10].kind == psr::FieldKind::NameId);
+    CHECK(weapon.fields[11].name == "status_chance_percent");
+    CHECK(weapon.fields[11].kind == psr::FieldKind::Integer);
 }
 
 TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses and a non-default range_shape",
@@ -148,7 +155,10 @@ TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses 
                               { "race_id": "machine", "bonus_percent": 5 }
                           ],
                           "photon_art_ids": ["rising_strike"],
-                          "technique_ids": []
+                          "technique_ids": [],
+                          "element": "fire",
+                          "status_effect_id": "burn",
+                          "status_chance_percent": 15
                       }
                   }
               })json");
@@ -182,6 +192,9 @@ TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses 
     REQUIRE(weapon.photon_art_ids.size() == 1);
     CHECK(weapon.photon_art_ids[0] == entt::hashed_string::value("rising_strike"));
     CHECK(weapon.technique_ids.empty());
+    CHECK(weapon.element == psr::Element::Fire);
+    CHECK(weapon.status_effect_id == entt::hashed_string::value("burn"));
+    CHECK(weapon.status_chance_percent == 15);
 }
 
 TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")

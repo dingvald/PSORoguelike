@@ -18,15 +18,17 @@ class RmlClickListener;
 struct PlayerStatusMessage;
 struct HotbarStateMessage;
 struct CombatLogEntryMessage;
+struct StatusEffectsMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
-// hotbar, and a scrolling event log. Pushed as an overlay from
-// GameplayLayer::OnAttach (PushOverlay<HudLayer>()), with its own
-// hud.rml/hud.rcss document.
+// hotbar, a status-effect icon+duration row, and a scrolling event log.
+// Pushed as an overlay from GameplayLayer::OnAttach (PushOverlay<HudLayer>()),
+// with its own hud.rml/hud.rcss document.
 //
 // Holds no reference to Registry, any entt::entity, or any content library --
 // pure presentation, driven entirely by messages (PlayerStatusMessage/
-// HotbarStateMessage/CombatLogEntryMessage). It caches the latest values it's
+// HotbarStateMessage/CombatLogEntryMessage/StatusEffectsMessage). It caches
+// the latest values it's
 // been sent and renders from that cache; it never retains the ECS/registry
 // data those messages were built from. Slot clicks are published back onto
 // the bus as HotbarSlotActivatedMessage -- this layer never holds a
@@ -54,6 +56,7 @@ private:
     void OnPlayerStatus(const PlayerStatusMessage& message);
     void OnHotbarState(const HotbarStateMessage& message);
     void OnLogEntry(const CombatLogEntryMessage& message);
+    void OnStatusEffects(const StatusEffectsMessage& message);
 
     Rml::ElementDocument* m_document = nullptr;
     std::vector<std::unique_ptr<RmlClickListener>> m_hotbar_listeners;

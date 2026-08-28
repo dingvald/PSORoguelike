@@ -1,5 +1,6 @@
 #include "Engine/ECS/Registry.h"
 
+#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/Items/AffixLibrary.h"
 
@@ -120,6 +121,18 @@ const AffixLibrary& Registry::GetAffixLibrary()
     auto* affixes = m_runtime_registry->ctx().find<const AffixLibrary*>();
     assert(affixes && "Registry::GetAffixLibrary: SetAffixLibrary() must be called first");
     return **affixes;
+}
+
+void Registry::SetStatusEffectLibrary(const StatusEffectLibrary& status_effects)
+{
+    m_runtime_registry->ctx().insert_or_assign<const StatusEffectLibrary*>(&status_effects);
+}
+
+const StatusEffectLibrary& Registry::GetStatusEffectLibrary()
+{
+    auto* status_effects = m_runtime_registry->ctx().find<const StatusEffectLibrary*>();
+    assert(status_effects && "Registry::GetStatusEffectLibrary: SetStatusEffectLibrary() must be called first");
+    return **status_effects;
 }
 
 std::vector<ComponentValue> Registry::DescribeEntity(entt::entity entity, const EntitySchemaModel& schema) const

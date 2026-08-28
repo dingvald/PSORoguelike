@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Combat/Element.h"
 #include "Engine/ECS/StatsComponent.h"
 #include "Engine/ECS/WeaponComponent.h" // RaceBonusEntry
 
@@ -12,6 +13,12 @@ namespace psr {
 // (Entity::Dispatch) at the very start of Perform() -- see
 // TechniqueCastEvent.h for the full rationale (both spend the same
 // TPComponent pool and follow the identical gather-then-gate pattern).
+// element/status_effect_id/status_chance_percent are the wielded weapon's own
+// elemental flavor (a Photon Art is "channeled through" its granting weapon,
+// per Technique.h's own doc comment on how Photon Arts/Techniques are
+// granted) -- separate from PhotonArt::status_effect_id, which stays
+// reserved for its own EffectFamily::Status branch. StatusEffectComponent's
+// own handler sets cancelled = true when the caster is Shocked.
 struct BeforePhotonArtCastEvent
 {
     std::uint32_t photon_art_id = 0;
@@ -21,6 +28,10 @@ struct BeforePhotonArtCastEvent
     bool has_tp_component = false;
     std::vector<RaceBonusEntry> race_bonuses;
     StatsComponent attacker_stats;
+    Element element = Element::None;
+    std::uint32_t status_effect_id = 0;
+    int status_chance_percent = 0;
+    bool cancelled = false;
 };
 
 struct AfterPhotonArtCastEvent

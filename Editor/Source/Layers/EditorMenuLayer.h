@@ -25,7 +25,9 @@ class RmlClickListener;
 // slice of M5.2, ahead of the M5.1 stat components). Affixes (M8.1) is the
 // bespoke weapon prefix/suffix library, separate from Prefabs since an Affix
 // isn't an entity -- weapon/armor/mod authoring itself stayed folded into
-// the Prefabs row (see PrefabEditorLayer's class doc comment).
+// the Prefabs row (see PrefabEditorLayer's class doc comment). Status Effects
+// (M7.3) is the bespoke Poison/Burn/Freeze/Shock/Confuse ailment library,
+// same non-entity bespoke-library shape as Affixes/PhotonArts/Techniques.
 //
 // Both keyboard (Up/Down/Enter/Space) and mouse (hover selects, click
 // confirms, via RmlClickListener) drive the same MoveSelection()/
@@ -61,13 +63,13 @@ private:
         RowAffixes = 3,
         RowPhotonArts = 4,
         RowTechniques = 5,
-        RowExit = 6,
-        RowCount = 7
+        RowStatusEffects = 6,
+        RowExit = 7,
+        RowCount = 8
     };
-    static constexpr std::array<const char*, RowCount> kRowIds = {"menu-pieces",     "menu-dungeons",
-                                                                   "menu-prefabs",    "menu-affixes",
-                                                                   "menu-photon-arts", "menu-techniques",
-                                                                   "menu-exit"};
+    static constexpr std::array<const char*, RowCount> kRowIds = {
+        "menu-pieces",      "menu-dungeons",  "menu-prefabs",         "menu-affixes",
+        "menu-photon-arts", "menu-techniques", "menu-status-effects", "menu-exit"};
 };
 
 } // namespace psr

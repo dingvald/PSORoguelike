@@ -11,6 +11,7 @@
 #include "Content/KeyBindings.h"
 #include "Engine/Combat/PhotonArt.h"
 #include "Engine/Combat/PhotonArtLibraryFile.h"
+#include "Engine/Combat/StatusEffectLibraryFile.h"
 #include "Engine/Combat/Technique.h"
 #include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
@@ -112,11 +113,23 @@ void GameplayLayer::OnAttach()
     // exit instead of an OS crash dialog.
     const EntitySchemaModel schema = RegisterComponents(m_registry);
 
+    // Loaded before SetStatusEffectLibrary below needs it -- unlike
+    // m_affixes (still empty pending M8.2's drop-table work), status
+    // effects are real, immediately-consumed content: StatusEffectComponent's
+    // handlers and TurnCoordinator's Freeze check both resolve ids through
+    // this library on every turn.
+    m_status_effects = LoadStatusEffectLibrary(ApplicationFilepaths::StatusEffectsPath);
+
     // Lets EquipmentComponent's AttachHandlers-registered handler (which
     // can't capture state) reach affix data when it contributes a
     // Before<Action>Event's effective stats -- must happen before any entity
     // that could carry EquipmentComponent/StatsComponent is created.
     m_registry.SetAffixLibrary(m_affixes);
+
+    // Same purpose, for status effects -- must happen before any turn/entity
+    // work begins (StatusEffectComponent handlers, TurnCoordinator's Freeze
+    // check).
+    m_registry.SetStatusEffectLibrary(m_status_effects);
 
     JsonEntityLoader loader{m_registry.GetMetaContext(), &schema};
     loader.Load(ApplicationFilepaths::EntitiesPath);
@@ -195,8 +208,11 @@ void GameplayLayer::OnAttach()
     hotbar.slots[9].type = HotbarSlotType::Item;
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
-    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_player);
+    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects, m_player);
     m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
+
+    m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
+    m_status_effect_markers->Subscribe(Entity(m_registry, m_player));
 
     Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
     Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
@@ -309,7 +325,10 @@ void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
 {
     PublishHotbarState();
     if (m_combat_log_bridge)
+    {
         m_combat_log_bridge->PublishPlayerStatus();
+        m_combat_log_bridge->PublishStatusEffects();
+    }
 }
 
 void GameplayLayer::PublishHotbarState()

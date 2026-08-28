@@ -145,7 +145,7 @@ Technique ReadTechniqueBody(const rapidjson::Value& technique_def)
     Technique technique;
     technique.name = ReadString(technique_def, "name", technique.name);
     technique.tp_cost = ReadInt(technique_def, "tp_cost", technique.tp_cost);
-    technique.element_id = ReadNameId(technique_def, "element_id", technique.element_id);
+    technique.element = ReadEnum<Element>(technique_def, "element", technique.element, "element");
     technique.targeting_mode =
         ReadEnum<TargetingMode>(technique_def, "targeting_mode", technique.targeting_mode, "targeting mode");
     technique.range_shape =
@@ -154,6 +154,7 @@ Technique ReadTechniqueBody(const rapidjson::Value& technique_def)
     technique.effect_family =
         ReadEnum<EffectFamily>(technique_def, "effect_family", technique.effect_family, "effect family");
     technique.status_effect_id = ReadNameId(technique_def, "status_effect_id", technique.status_effect_id);
+    technique.status_chance_percent = ReadInt(technique_def, "status_chance_percent", technique.status_chance_percent);
     technique.tiers = ReadTiers(technique_def);
     return technique;
 }
@@ -163,10 +164,7 @@ rapidjson::Value WriteTechniqueBody(const Technique& technique, rapidjson::Docum
     rapidjson::Value object(rapidjson::kObjectType);
     object.AddMember("name", StringValue(technique.name, allocator), allocator);
     object.AddMember("tp_cost", technique.tp_cost, allocator);
-    if (std::optional<std::string> label = NameIdRegistry::Find(technique.element_id))
-        object.AddMember("element_id", StringValue(*label, allocator), allocator);
-    else
-        object.AddMember("element_id", technique.element_id, allocator);
+    object.AddMember("element", StringValue(std::string{EnumName(technique.element)}, allocator), allocator);
     object.AddMember("targeting_mode", StringValue(std::string{EnumName(technique.targeting_mode)}, allocator),
                      allocator);
     object.AddMember("range_shape", StringValue(std::string{EnumName(technique.range_shape)}, allocator), allocator);
@@ -177,6 +175,7 @@ rapidjson::Value WriteTechniqueBody(const Technique& technique, rapidjson::Docum
         object.AddMember("status_effect_id", StringValue(*label, allocator), allocator);
     else
         object.AddMember("status_effect_id", technique.status_effect_id, allocator);
+    object.AddMember("status_chance_percent", technique.status_chance_percent, allocator);
     object.AddMember("tiers", WriteTiers(technique.tiers, allocator), allocator);
     return object;
 }

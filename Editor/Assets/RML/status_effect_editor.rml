@@ -1,0 +1,41 @@
+<rml>
+    <head>
+        <title>Status Effect Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Status Effects</h1>
+                <span id="new-status-effect" class="btn action">New Status Effect</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="status-effect-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-status-effect" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div class="scroll-panel">
+                <h3>Id</h3>
+                <div id="field-id" class="field-row"></div>
+                <h3>Name</h3>
+                <div id="field-name" class="field-row"></div>
+                <h3>Type</h3>
+                <div id="field-type" class="field-row"></div>
+                <h3>Magnitude</h3>
+                <div id="field-magnitude" class="field-row"></div>
+                <h3>Duration</h3>
+                <div id="field-duration" class="field-row"></div>
+            </div>
+        </div>
+    </body>
+</rml>

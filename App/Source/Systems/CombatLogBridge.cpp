@@ -2,11 +2,15 @@
 
 #include "Messages/CombatLogEntryMessage.h"
 #include "Messages/PlayerStatusMessage.h"
+#include "Messages/StatusEffectsMessage.h"
 
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/PhotonArt.h"
 #include "Engine/Combat/PhotonArtCastEvent.h"
 #include "Engine/Combat/PhotonArtLibrary.h"
+#include "Engine/Combat/StatusEffect.h"
+#include "Engine/Combat/StatusEffectEvent.h"
+#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/Combat/Technique.h"
 #include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/Combat/TechniqueLibrary.h"
@@ -15,6 +19,7 @@
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/ECS/TPComponent.h"
 #include "Engine/Items/ItemPickupEvent.h"
 #include "Engine/Messages/MessageBus.h"
@@ -24,9 +29,10 @@
 namespace psr {
 
 CombatLogBridge::CombatLogBridge(Registry& registry, MessageBus& message_bus, const TechniqueLibrary& techniques,
-                                 const PhotonArtLibrary& photon_arts, entt::entity player)
+                                 const PhotonArtLibrary& photon_arts, const StatusEffectLibrary& status_effects,
+                                 entt::entity player)
     : m_registry(&registry), m_message_bus(&message_bus), m_techniques(&techniques), m_photon_arts(&photon_arts),
-      m_player(player)
+      m_status_effects(&status_effects), m_player(player)
 {
 }
 
@@ -41,6 +47,8 @@ void CombatLogBridge::Subscribe(Entity actor)
         [this](Entity entity, AfterPhotonArtCastEvent& event) { OnPhotonArtCast(entity, event); });
     events.Subscribe<AfterItemPickupEvent, CombatLogBridge>([this](Entity entity, AfterItemPickupEvent& event)
                                                              { OnItemPickup(entity, event); });
+    events.Subscribe<AfterStatusEffectsChangedEvent, CombatLogBridge>(
+        [this](Entity entity, AfterStatusEffectsChangedEvent& event) { OnStatusEffectsChanged(entity, event); });
 }
 
 void CombatLogBridge::OnDamage(Entity actor, AfterDamageEvent& event)
@@ -103,6 +111,30 @@ void CombatLogBridge::PublishPlayerStatus()
     }
 
     m_message_bus->Publish(status);
+}
+
+void CombatLogBridge::PublishStatusEffects()
+{
+    StatusEffectsMessage message;
+    if (const StatusEffectComponent* status = m_registry->TryGetComponent<StatusEffectComponent>(m_player))
+    {
+        for (const StatusEffectStack& stack : status->active)
+        {
+            const StatusEffect* effect = m_status_effects->Find(stack.status_effect_id);
+            if (!effect)
+                continue;
+            message.active.push_back(
+                StatusEffectsMessage::ActiveEntry{effect->type, stack.stacks, stack.remaining_duration});
+        }
+    }
+
+    m_message_bus->Publish(message);
+}
+
+void CombatLogBridge::OnStatusEffectsChanged(Entity actor, AfterStatusEffectsChangedEvent& /*event*/)
+{
+    if (actor.Handle() == m_player)
+        PublishStatusEffects();
 }
 
 std::string CombatLogBridge::DisplayName(entt::entity entity) const

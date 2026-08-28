@@ -2,6 +2,7 @@
 
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
+#include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
 #include "Engine/Combat/AttackEvent.h"
 #include "Engine/Combat/CombatMath.h"
@@ -29,6 +30,8 @@ ActionResult AttackAction::Perform(Entity actor)
     // this action never reads EquipmentComponent/WeaponComponent directly.
     BeforeAttackEvent before_attack{m_direction};
     actor.Dispatch(before_attack);
+    if (before_attack.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
+        return ActionResult(0);
     if (!before_attack.has_weapon)
         return ActionResult(0);
 
@@ -90,6 +93,11 @@ ActionResult AttackAction::Perform(Entity actor)
                     registry.DestroyEntity(occupant);
                     break;
                 }
+
+                // The weapon's own elemental flavor (if any) gets a chance
+                // to inflict its ailment on a landed, non-lethal hit.
+                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), before_attack.status_effect_id,
+                                          before_attack.status_chance_percent, *m_rng);
             }
         }
     }
