@@ -13,7 +13,6 @@
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatsComponent.h"
 
-#include <algorithm>
 #include <vector>
 
 namespace psr {
@@ -80,19 +79,11 @@ ActionResult AttackAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                HealthComponent& health = target.Get<HealthComponent>();
-                health.current_hp = std::max(0, health.current_hp - damage);
-                const bool defeated = health.current_hp == 0;
+                IncomingDamageEvent incoming{actor, damage};
+                target.Dispatch(incoming);
 
-                AfterDamageEvent after{target, damage, defeated};
-                actor.Dispatch(after);
-
-                if (defeated)
-                {
-                    m_grid->RemoveEntity(tile, occupant);
-                    registry.DestroyEntity(occupant);
+                if (!target.IsValid())
                     break;
-                }
 
                 // The weapon's own elemental flavor (if any) gets a chance
                 // to inflict its ailment on a landed, non-lethal hit.

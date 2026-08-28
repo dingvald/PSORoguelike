@@ -5,6 +5,8 @@
 #include "Components/EnergyComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Engine/Actions/TurnEvent.h"
+#include "Engine/Combat/DeathSystem.h"
+#include "Engine/Combat/HealthSystem.h"
 #include "Engine/Combat/StatusEffect.h"
 #include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/Combat/StatusEffectLibrary.h"
@@ -299,6 +301,8 @@ TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting e
     psr::StatusEffectLibrary status_effects{{poison}};
     registry.SetStatusEffectLibrary(status_effects);
     registry.BindComponentEvents<psr::StatusEffectComponent>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity player = registry.CreateEntity();

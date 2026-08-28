@@ -92,7 +92,7 @@ TEST_CASE("TechniqueAction with no weapon equipped is a free no-op", "[Technique
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -110,7 +110,7 @@ TEST_CASE("TechniqueAction with a weapon that doesn't grant the id is a free no-
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
@@ -130,7 +130,7 @@ TEST_CASE("TechniqueAction with insufficient TP is a free no-op", "[TechniqueAct
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 20;
     psr::TechniqueLibrary techniques = MakeLibrary(technique);
@@ -154,7 +154,7 @@ TEST_CASE("TechniqueAction self-target (no SelectedTargetComponent) damages the 
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -185,7 +185,7 @@ TEST_CASE("TechniqueAction self-target Drain resolves identically to Damage (no 
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Drain;
@@ -215,7 +215,7 @@ TEST_CASE("TechniqueAction eventually destroys a hostile Directional-cast occupa
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.targeting_mode = psr::TargetingMode::Directional;
@@ -256,7 +256,7 @@ TEST_CASE("TechniqueAction applies a tier power multiplier", "[TechniqueAction]"
         psr::Registry registry;
         psr::Grid grid{5, 5};
         psr::StatusEffectLibrary status_effects;
-        psr::SetUpCombatRegistry(registry, affixes, status_effects);
+        psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -299,7 +299,7 @@ TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
         psr::Registry registry;
         psr::Grid grid{5, 5};
         psr::StatusEffectLibrary status_effects;
-        psr::SetUpCombatRegistry(registry, affixes, status_effects);
+        psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::Technique technique;
@@ -337,7 +337,7 @@ TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEve
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 5;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -378,7 +378,7 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/70, /*ata=*/40, /*tp=*/33);
     entt::entity weapon = MakeWeapon(registry);
@@ -402,7 +402,7 @@ TEST_CASE("BeforeTechniqueCastEvent reports weapon_grants_id false for an id the
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/10);
     entt::entity weapon = MakeWeapon(registry, /*grants_technique=*/false);
@@ -425,7 +425,7 @@ TEST_CASE("TechniqueAction no-ops for zero cost when the caster is Shocked", "[T
     shock.type = psr::StatusEffectType::Shock;
     shock.duration = 3;
     psr::StatusEffectLibrary status_effects{{shock}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.effect_family = psr::EffectFamily::Damage;
@@ -456,7 +456,7 @@ TEST_CASE("TechniqueAction applies its own elemental status on a guaranteed-chan
     burn.magnitude = 2;
     burn.duration = 3;
     psr::StatusEffectLibrary status_effects{{burn}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.targeting_mode = psr::TargetingMode::Directional;
@@ -498,7 +498,7 @@ TEST_CASE("TechniqueAction EffectFamily::Status applies the ailment on hit and d
     poison.magnitude = 2;
     poison.duration = 3;
     psr::StatusEffectLibrary status_effects{{poison}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::Technique technique;
     technique.tp_cost = 0;
     technique.targeting_mode = psr::TargetingMode::Directional;

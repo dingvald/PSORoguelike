@@ -95,7 +95,7 @@ TEST_CASE("PhotonArtAction with no weapon equipped is a free no-op", "[PhotonArt
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -113,7 +113,7 @@ TEST_CASE("PhotonArtAction with a weapon that doesn't grant the id is a free no-
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArtLibrary arts = MakeLibrary(psr::PhotonArt{});
     std::mt19937 rng{1};
 
@@ -133,7 +133,7 @@ TEST_CASE("PhotonArtAction with insufficient TP is a free no-op", "[PhotonArtAct
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 20;
     psr::PhotonArtLibrary arts = MakeLibrary(art);
@@ -157,7 +157,7 @@ TEST_CASE("PhotonArtAction self-target (no SelectedTargetComponent) damages the 
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -187,7 +187,7 @@ TEST_CASE("PhotonArtAction self-target Drain heals the caster capped at max HP",
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -217,7 +217,7 @@ TEST_CASE("PhotonArtAction eventually destroys a hostile Directional-cast occupa
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;
@@ -259,7 +259,7 @@ TEST_CASE("PhotonArtAction applies a tier power multiplier", "[PhotonArtAction]"
         psr::Registry registry;
         psr::Grid grid{5, 5};
         psr::StatusEffectLibrary status_effects;
-        psr::SetUpCombatRegistry(registry, affixes, status_effects);
+        psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
         std::mt19937 rng{42};
 
         psr::PhotonArt art;
@@ -299,7 +299,7 @@ TEST_CASE("PhotonArtAction dispatches AfterPhotonArtCastEvent and AfterDamageEve
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Damage;
@@ -338,7 +338,7 @@ TEST_CASE("PhotonArtAction self-target Drain (a pure heal) dispatches no AfterDa
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 5;
     art.effect_family = psr::EffectFamily::Drain;
@@ -372,7 +372,7 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/65, /*ata=*/45, /*tp=*/12);
     entt::entity weapon = MakeWeapon(registry);
@@ -399,7 +399,7 @@ TEST_CASE("PhotonArtAction no-ops for zero cost when the caster is Shocked", "[P
     shock.type = psr::StatusEffectType::Shock;
     shock.duration = 3;
     psr::StatusEffectLibrary status_effects{{shock}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.effect_family = psr::EffectFamily::Damage;
@@ -430,7 +430,7 @@ TEST_CASE("PhotonArtAction applies the wielded weapon's elemental status on a gu
     burn.magnitude = 2;
     burn.duration = 3;
     psr::StatusEffectLibrary status_effects{{burn}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;
@@ -474,7 +474,7 @@ TEST_CASE("PhotonArtAction EffectFamily::Status applies the ailment on hit and d
     poison.magnitude = 2;
     poison.duration = 3;
     psr::StatusEffectLibrary status_effects{{poison}};
-    psr::SetUpCombatRegistry(registry, affixes, status_effects);
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
     psr::PhotonArt art;
     art.tp_cost = 0;
     art.targeting_mode = psr::TargetingMode::Directional;

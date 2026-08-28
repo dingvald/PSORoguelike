@@ -131,7 +131,7 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
 {
     psr::Registry registry;
     psr::Grid grid{3, 3};
-    psr::SetUpCombatRegistry(registry, g_no_affixes, g_no_status_effects);
+    psr::SetUpCombatRegistry(registry, grid, g_no_affixes, g_no_status_effects);
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     actor.Emplace<psr::Position>(psr::Vec2{1, 1});

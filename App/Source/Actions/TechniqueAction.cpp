@@ -17,7 +17,6 @@
 #include "Engine/ECS/StatsComponent.h"
 #include "Engine/ECS/TPComponent.h"
 
-#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -87,7 +86,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
         // target-facing Status implementation.
         if (technique->effect_family == EffectFamily::Damage)
         {
-            if (HealthComponent* health = actor.TryGet<HealthComponent>())
+            if (actor.Has<HealthComponent>())
             {
                 int damage = static_cast<int>(
                     std::lround(ComputeTechniqueDamage(attacker_stats.mst, attacker_stats.dfp, variance_roll(*m_rng)) *
@@ -97,14 +96,8 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                health->current_hp = std::max(0, health->current_hp - damage);
-                const bool defeated = health->current_hp == 0;
-
-                AfterDamageEvent after{actor, damage, defeated};
-                actor.Dispatch(after);
-
-                if (defeated)
-                    registry.DestroyEntity(actor.Handle());
+                IncomingDamageEvent incoming{actor, damage};
+                actor.Dispatch(incoming);
             }
         }
         return ActionResult(kTechniqueCost);
@@ -155,19 +148,11 @@ ActionResult TechniqueAction::Perform(Entity actor)
             actor.Dispatch(before);
             damage = before.incoming_damage;
 
-            HealthComponent& health = target.Get<HealthComponent>();
-            health.current_hp = std::max(0, health.current_hp - damage);
-            const bool defeated = health.current_hp == 0;
+            IncomingDamageEvent incoming{actor, damage};
+            target.Dispatch(incoming);
 
-            AfterDamageEvent after{target, damage, defeated};
-            actor.Dispatch(after);
-
-            if (defeated)
-            {
-                m_grid->RemoveEntity(tile, occupant);
-                registry.DestroyEntity(occupant);
+            if (!target.IsValid())
                 continue;
-            }
 
             // element/status_effect_id/status_chance_percent are spell-
             // authored on Technique itself (independent of the wielding

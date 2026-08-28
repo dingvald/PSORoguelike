@@ -6,7 +6,6 @@
 #include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/Combat/StatusEffectType.h"
 #include "Engine/ECS/HealthComponent.h"
-#include "Engine/ECS/Registry.h"
 #include "Engine/ECS/StatusEffectComponent.h"
 
 #include <algorithm>
@@ -48,13 +47,12 @@ void TickStatusEffects(Entity actor, const StatusEffectLibrary& library)
     if (!status || status->active.empty())
         return;
 
-    Registry& registry = actor.GetRegistry();
-
     // Snapshot before dealing any damage -- a lethal DoT tick destroys actor
-    // mid-loop (registry.DestroyEntity below), at which point re-touching
-    // actor/status would be invalid; the snapshot lets every remaining stack
-    // still get evaluated fairly rather than depending on iteration order
-    // over a container that might be mutated out from under it.
+    // mid-loop (via IncomingDamageEvent -> HealthSystem -> DeathEvent ->
+    // DeathSystem), at which point re-touching actor/status would be
+    // invalid; the snapshot lets every remaining stack still get evaluated
+    // fairly rather than depending on iteration order over a container that
+    // might be mutated out from under it.
     const std::vector<StatusEffectStack> stacks = status->active;
     for (const StatusEffectStack& stack : stacks)
     {
@@ -70,21 +68,14 @@ void TickStatusEffects(Entity actor, const StatusEffectLibrary& library)
         actor.Dispatch(before);
         const int applied = before.incoming_damage;
 
-        HealthComponent* health = actor.TryGet<HealthComponent>();
-        if (!health)
+        if (!actor.Has<HealthComponent>())
             continue;
 
-        health->current_hp = std::max(0, health->current_hp - applied);
-        const bool defeated = health->current_hp == 0;
+        IncomingDamageEvent incoming{actor, applied};
+        actor.Dispatch(incoming);
 
-        AfterDamageEvent after{actor, applied, defeated};
-        actor.Dispatch(after);
-
-        if (defeated)
-        {
-            registry.DestroyEntity(actor.Handle());
+        if (!actor.IsValid())
             return; // actor (and its StatusEffectComponent) no longer exists
-        }
     }
 
     // Decrement/expire against the live component -- re-fetch rather than

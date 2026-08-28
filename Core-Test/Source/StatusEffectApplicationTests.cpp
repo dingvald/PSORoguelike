@@ -1,5 +1,7 @@
 #include "Engine/Combat/StatusEffectApplication.h"
 
+#include "Engine/Combat/DeathSystem.h"
+#include "Engine/Combat/HealthSystem.h"
 #include "Engine/Combat/StatusEffect.h"
 #include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/Entity.h"
@@ -75,6 +77,8 @@ TEST_CASE("TickStatusEffects deals Poison damage scaled by stacks and decrements
 {
     psr::StatusEffectLibrary library{{MakeEffect(1, psr::StatusEffectType::Poison, /*magnitude=*/3, /*duration=*/2)}};
     psr::Registry registry;
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     psr::HealthComponent health;
@@ -97,6 +101,8 @@ TEST_CASE("TickStatusEffects removes a stack once its duration reaches 0", "[Sta
 {
     psr::StatusEffectLibrary library{{MakeEffect(1, psr::StatusEffectType::Poison, /*magnitude=*/1, /*duration=*/1)}};
     psr::Registry registry;
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     psr::HealthComponent health;
@@ -116,6 +122,8 @@ TEST_CASE("TickStatusEffects deals no damage for presence-based types (Freeze/Sh
     psr::StatusEffectLibrary library{
         {MakeEffect(1, psr::StatusEffectType::Freeze, /*magnitude=*/50, /*duration=*/3)}};
     psr::Registry registry;
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     psr::HealthComponent health;
@@ -135,6 +143,8 @@ TEST_CASE("TickStatusEffects destroys the entity on a lethal tick without crashi
     psr::StatusEffectLibrary library{
         {MakeEffect(1, psr::StatusEffectType::Poison, /*magnitude=*/999, /*duration=*/3)}};
     psr::Registry registry;
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
     psr::HealthComponent health;
