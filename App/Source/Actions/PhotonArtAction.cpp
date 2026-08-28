@@ -87,7 +87,7 @@ ActionResult PhotonArtAction::Perform(Entity actor)
         // it).
         if (art->effect_family == EffectFamily::Damage)
         {
-            if (HealthComponent* health = actor.TryGet<HealthComponent>())
+            if (actor.Has<HealthComponent>())
             {
                 int damage = static_cast<int>(std::lround(
                     ComputeDamage(attacker_stats.atp, attacker_stats.dfp, variance_roll(*m_rng)) * multiplier));
@@ -96,14 +96,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                health->current_hp = std::max(0, health->current_hp - damage);
-                const bool defeated = health->current_hp == 0;
-
-                AfterDamageEvent after{actor, damage, defeated};
-                actor.Dispatch(after);
-
-                if (defeated)
-                    registry.DestroyEntity(actor.Handle());
+                IncomingDamageEvent incoming{actor, damage};
+                actor.Dispatch(incoming);
             }
         }
         else if (art->effect_family == EffectFamily::Drain)
@@ -164,8 +158,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                HealthComponent& health = target.Get<HealthComponent>();
-                health.current_hp = std::max(0, health.current_hp - damage);
+                IncomingDamageEvent incoming{actor, damage};
+                target.Dispatch(incoming);
 
                 if (art->effect_family == EffectFamily::Drain)
                 {
@@ -174,16 +168,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                             attacker_health->max_hp, attacker_health->current_hp + damage * art->drain_percent / 100);
                 }
 
-                const bool defeated = health.current_hp == 0;
-                AfterDamageEvent after{target, damage, defeated};
-                actor.Dispatch(after);
-
-                if (defeated)
-                {
-                    m_grid->RemoveEntity(tile, occupant);
-                    registry.DestroyEntity(occupant);
+                if (!target.IsValid())
                     break;
-                }
 
                 // The wielded weapon's own elemental flavor (if any) gets a
                 // chance to inflict its ailment on a landed, non-lethal hit.

@@ -17,6 +17,7 @@ namespace psr {
 
 class AffixLibrary;
 class StatusEffectLibrary;
+class Grid;
 
 // Owning wrapper around a pair of entt::registry instances, so call sites use
 // this class's vocabulary (CreateEntity/Emplace/GetComponent/...) rather than
@@ -167,6 +168,18 @@ public:
         m_runtime_registry->on_destroy<TComponent>().template connect<&TComponent::DetachHandlers>();
     }
 
+    // Same purpose as BindComponentEvents, for a system whose reactive
+    // behavior doesn't live on TComponent itself -- e.g. HealthSystem and
+    // DeathSystem both react to HealthComponent's construct/destroy
+    // lifecycle without being HealthComponent (see HealthSystem.h's own doc
+    // comment for why they're kept separate). TSystem must expose the same
+    // static AttachHandlers/DetachHandlers signature TComponent's own would.
+    template <typename TComponent, typename TSystem> void BindSystemEvents()
+    {
+        m_runtime_registry->on_construct<TComponent>().template connect<&TSystem::AttachHandlers>();
+        m_runtime_registry->on_destroy<TComponent>().template connect<&TSystem::DetachHandlers>();
+    }
+
     // Connects a member function -- signature void(entt::registry&,
     // entt::entity), entt's fixed listener shape -- to fire whenever TComponent
     // is added to / removed from an entity. Unlike BindComponentEvents (which
@@ -237,6 +250,19 @@ public:
     // missing SetStatusEffectLibrary() call is a setup bug, not a runtime
     // condition to handle gracefully.
     const StatusEffectLibrary& GetStatusEffectLibrary();
+
+    // Stashes a reference to grid in this registry's ctx(), same mechanism as
+    // SetAffixLibrary -- lets DeathSystem's static AttachHandlers-registered
+    // handler (which can't capture state) reach the dungeon's Grid to remove
+    // a dying entity from tile occupancy. Call once, early (before any
+    // entity that could die is created). grid must outlive this Registry.
+    void SetGrid(Grid& grid);
+
+    // Returns the Grid stashed via SetGrid(). Asserts if none was ever set --
+    // same reasoning as GetAffixLibrary. Only called for an entity that has
+    // a Position (see DeathSystem), so a test with no grid-placed entities
+    // never needs to call SetGrid() at all.
+    Grid& GetGrid();
 
     // Recovers the owning Registry& from a raw entt::registry& -- needed
     // because entt's on_construct/on_destroy listener signature is fixed as

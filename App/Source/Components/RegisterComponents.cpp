@@ -6,6 +6,8 @@
 #include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
+#include "Engine/Combat/DeathSystem.h"
+#include "Engine/Combat/HealthSystem.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -55,6 +57,13 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     registry.BindComponentEvents<EquipmentComponent>();
     registry.BindComponentEvents<TPComponent>();
     registry.BindComponentEvents<StatusEffectComponent>();
+
+    // HealthSystem/DeathSystem react to HealthComponent's own lifecycle
+    // rather than being HealthComponent's own AttachHandlers -- see
+    // HealthSystem.h's doc comment -- so they're wired via BindSystemEvents
+    // instead of the BindComponentEvents calls above.
+    registry.BindSystemEvents<HealthComponent, HealthSystem>();
+    registry.BindSystemEvents<HealthComponent, DeathSystem>();
 
     return reg.Model();
 }

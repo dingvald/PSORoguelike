@@ -157,6 +157,13 @@ void GameplayLayer::OnAttach()
     if (bounds.Empty())
         throw std::runtime_error("GameplayLayer: generated dungeon has no cells");
     m_grid.emplace(bounds.size.x, bounds.size.y);
+
+    // Must happen before any HealthComponent-carrying entity that could die
+    // is created (InstantiateDungeon below, then the player) -- DeathSystem
+    // resolves Registry::GetGrid() when it removes a dying entity from tile
+    // occupancy.
+    m_registry.SetGrid(*m_grid);
+
     const DungeonInstantiation instantiation =
         InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid);
 

@@ -3,6 +3,7 @@
 #include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/Items/AffixLibrary.h"
+#include "Engine/World/Grid.h"
 
 #include <cassert>
 
@@ -133,6 +134,15 @@ const StatusEffectLibrary& Registry::GetStatusEffectLibrary()
     auto* status_effects = m_runtime_registry->ctx().find<const StatusEffectLibrary*>();
     assert(status_effects && "Registry::GetStatusEffectLibrary: SetStatusEffectLibrary() must be called first");
     return **status_effects;
+}
+
+void Registry::SetGrid(Grid& grid) { m_runtime_registry->ctx().insert_or_assign<Grid*>(&grid); }
+
+Grid& Registry::GetGrid()
+{
+    auto* grid = m_runtime_registry->ctx().find<Grid*>();
+    assert(grid && "Registry::GetGrid: SetGrid() must be called first");
+    return **grid;
 }
 
 std::vector<ComponentValue> Registry::DescribeEntity(entt::entity entity, const EntitySchemaModel& schema) const

@@ -24,4 +24,31 @@ struct AfterDamageEvent
     bool target_defeated = false;
 };
 
+// Dispatched by a damage source (AttackAction/PhotonArtAction/TechniqueAction/
+// StatusEffectApplication) to the *target itself* -- Entity::Dispatch, i.e.
+// "self", unlike Before/AfterDamageEvent above which always go to the actor
+// -- once a final amount has been resolved (post BeforeDamageEvent
+// mitigation). HealthSystem is the sole intended handler: it applies amount
+// to the target's own HealthComponent, dispatches AfterDamageEvent back at
+// source on its behalf (so that still fires before the entity can be
+// destroyed -- see HealthSystem.h), and if that reduces current_hp to 0,
+// dispatches DeathEvent to the target. Damage sources never touch
+// HealthComponent directly any more -- see AttackAction::Perform for the
+// call-site pattern.
+struct IncomingDamageEvent
+{
+    Entity source; // who to dispatch AfterDamageEvent at once this is applied
+    int amount = 0;
+};
+
+// Dispatched by HealthSystem to an entity whose HealthComponent::current_hp
+// it just reduced to 0 (self-dispatched, same convention as
+// IncomingDamageEvent). DeathSystem is the sole intended handler: it removes
+// the entity from the Grid (if placed on one) and destroys it. Carries no
+// data -- "self" (the handler's Entity parameter) is the entity that died;
+// nothing downstream needs more than that yet.
+struct DeathEvent
+{
+};
+
 } // namespace psr
