@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Engine/Input/ActionMap.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/World/Grid.h"
+#include "Items/AffixLibrary.h"
 
 #include <random>
 

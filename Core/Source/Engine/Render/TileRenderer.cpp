@@ -33,7 +33,7 @@ TileRenderer::TileRenderer(Grid& grid, TextureAtlas& atlas, TileGpuPipeline& gpu
 }
 
 void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window_width, int window_height,
-                        float zoom) const
+                        float zoom, Vec2f camera_offset) const
 {
     if (!m_atlas->IsLoaded() || !m_gpu_pipeline->IsLoaded())
         return;
@@ -108,7 +108,7 @@ void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window
             continue;
 
         PixelPosition dst = TileToPixel(item.position, item.offset, camera_position, window_width, window_height,
-                                        zoomed_tile_width, zoomed_tile_height);
+                                        zoomed_tile_width, zoomed_tile_height, camera_offset);
         float dst_w = static_cast<float>(item.texture_size.x) * zoom;
         float dst_h = static_cast<float>(item.texture_size.y) * zoom;
 

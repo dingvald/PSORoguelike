@@ -1,17 +1,17 @@
 #include "Layers/PrefabEditorLayer.h"
 
+#include "Combat/PhotonArtLibraryFile.h"
+#include "Combat/StatusEffectLibraryFile.h"
+#include "Combat/TechniqueLibraryFile.h"
 #include "Components/RegisterComponents.h"
-#include "Engine/Combat/PhotonArtLibraryFile.h"
-#include "Engine/Combat/StatusEffectLibraryFile.h"
-#include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/ECS/EntitySchemaEmitter.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
-#include "Engine/Items/AffixLibraryFile.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Persistence/JsonFile.h"
+#include "Items/AffixLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
@@ -174,7 +174,7 @@ namespace {
         }
         if (it->value.IsObject())
             return Color{ReadChannel(it->value, "r", 0), ReadChannel(it->value, "g", 0), ReadChannel(it->value, "b", 0),
-                        ReadChannel(it->value, "a", 255)};
+                         ReadChannel(it->value, "a", 255)};
         return fallback;
     }
 
@@ -185,26 +185,6 @@ namespace {
         char buffer[10];
         std::snprintf(buffer, sizeof(buffer), "#%02x%02x%02x%02x", color.r, color.g, color.b, color.a);
         return StringValue(buffer, allocator);
-    }
-
-    std::vector<std::string> ReadTags(const rapidjson::Value& object, const char* key)
-    {
-        std::vector<std::string> tags;
-        auto it = object.FindMember(key);
-        if (it == object.MemberEnd() || !it->value.IsArray())
-            return tags;
-        for (const auto& entry : it->value.GetArray())
-            if (entry.IsString())
-                tags.emplace_back(entry.GetString(), entry.GetStringLength());
-        return tags;
-    }
-
-    rapidjson::Value WriteTags(const std::vector<std::string>& tags, rapidjson::Document::AllocatorType& allocator)
-    {
-        rapidjson::Value array(rapidjson::kArrayType);
-        for (const std::string& tag : tags)
-            array.PushBack(StringValue(tag, allocator), allocator);
-        return array;
     }
 
     RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
@@ -231,22 +211,6 @@ namespace {
         object.AddMember("color_1", WriteColor(renderable.color_1, allocator), allocator);
         object.AddMember("color_2", WriteColor(renderable.color_2, allocator), allocator);
         object.AddMember("render_layer", renderable.render_layer, allocator);
-        return object;
-    }
-
-    SocketComponent ReadSocketBody(const rapidjson::Value& body)
-    {
-        SocketComponent socket;
-        socket.tags = ReadTags(body, "tags");
-        socket.fallback_prefab_id = ReadNameId(body, "fallback_prefab_id", 0);
-        return socket;
-    }
-
-    rapidjson::Value WriteSocketBody(const SocketComponent& socket, rapidjson::Document::AllocatorType& allocator)
-    {
-        rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("tags", WriteTags(socket.tags, allocator), allocator);
-        object.AddMember("fallback_prefab_id", WriteNameId(socket.fallback_prefab_id, allocator), allocator);
         return object;
     }
 
@@ -477,7 +441,10 @@ namespace {
         return object;
     }
 
-    rapidjson::Value WriteModBody(rapidjson::Document::AllocatorType&) { return rapidjson::Value(rapidjson::kObjectType); }
+    rapidjson::Value WriteModBody(rapidjson::Document::AllocatorType&)
+    {
+        return rapidjson::Value(rapidjson::kObjectType);
+    }
 
     RarityComponent ReadRarityBody(const rapidjson::Value& body)
     {
@@ -508,50 +475,46 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 9> kComponentKinds = {
+    constexpr std::array<ComponentKind, 8> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
-         "<div id=\"field-texture-id\" class=\"field-row\"></div>"
-         "<div id=\"field-texture-size\" class=\"field-row\"></div>"
-         "<div id=\"field-uv\" class=\"field-row\"></div>"
-         "<div id=\"field-color-1\" class=\"field-row\"></div>"
-         "<div id=\"field-color-2\" class=\"field-row\"></div>"
-         "<div id=\"field-render-layer\" class=\"field-row\"></div>"},
-        {"socket", "Socket", "#4caf82",
-         "<div id=\"field-fallback-prefab\" class=\"field-row\"></div>"
-         "<h3>Tags<span id=\"add-tag\" class=\"btn\">Add Tag</span></h3>"
-         "<div id=\"tag-list\" class=\"ref-scroll\"></div>"},
-        {"stats", "Stats", "#e8a33d",
-         "<div id=\"field-atp\" class=\"field-row\"></div>"
-         "<div id=\"field-ata\" class=\"field-row\"></div>"
-         "<div id=\"field-mst\" class=\"field-row\"></div>"
-         "<div id=\"field-dfp\" class=\"field-row\"></div>"
-         "<div id=\"field-evp\" class=\"field-row\"></div>"
-         "<div id=\"field-lck\" class=\"field-row\"></div>"},
-        {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
-        {"health", "Health", "#5de88f",
-         "<div id=\"field-current-hp\" class=\"field-row\"></div>"
-         "<div id=\"field-max-hp\" class=\"field-row\"></div>"},
-        {"weapon", "Weapon", "#e85d5d",
-         "<div id=\"field-range-shape\" class=\"field-row\"></div>"
-         "<div id=\"field-range\" class=\"field-row\"></div>"
-         "<div id=\"field-hits-per-turn\" class=\"field-row\"></div>"
-         "<div id=\"field-grind-level\" class=\"field-row\"></div>"
-         "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
-         "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
-         "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
-         "<div id=\"field-weapon-status-effect\" class=\"field-row\"></div>"
-         "<div id=\"field-weapon-status-chance\" class=\"field-row\"></div>"
-         "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
-         "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
-         "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
-         "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"
-         "<h3>Techniques<span id=\"add-technique\" class=\"btn\">Add Technique</span></h3>"
-         "<div id=\"technique-id-list\" class=\"ref-scroll\"></div>"},
-        {"armor", "Armor", "#6f9de8",
-         "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
-         "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
-        {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-        {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"}}};
+          "<div id=\"field-texture-id\" class=\"field-row\"></div>"
+          "<div id=\"field-texture-size\" class=\"field-row\"></div>"
+          "<div id=\"field-uv\" class=\"field-row\"></div>"
+          "<div id=\"field-color-1\" class=\"field-row\"></div>"
+          "<div id=\"field-color-2\" class=\"field-row\"></div>"
+          "<div id=\"field-render-layer\" class=\"field-row\"></div>"},
+         {"stats", "Stats", "#e8a33d",
+          "<div id=\"field-atp\" class=\"field-row\"></div>"
+          "<div id=\"field-ata\" class=\"field-row\"></div>"
+          "<div id=\"field-mst\" class=\"field-row\"></div>"
+          "<div id=\"field-dfp\" class=\"field-row\"></div>"
+          "<div id=\"field-evp\" class=\"field-row\"></div>"
+          "<div id=\"field-lck\" class=\"field-row\"></div>"},
+         {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
+         {"health", "Health", "#5de88f",
+          "<div id=\"field-current-hp\" class=\"field-row\"></div>"
+          "<div id=\"field-max-hp\" class=\"field-row\"></div>"},
+         {"weapon", "Weapon", "#e85d5d",
+          "<div id=\"field-range-shape\" class=\"field-row\"></div>"
+          "<div id=\"field-range\" class=\"field-row\"></div>"
+          "<div id=\"field-hits-per-turn\" class=\"field-row\"></div>"
+          "<div id=\"field-grind-level\" class=\"field-row\"></div>"
+          "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
+          "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-status-effect\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-status-chance\" class=\"field-row\"></div>"
+          "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
+          "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
+          "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
+          "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"
+          "<h3>Techniques<span id=\"add-technique\" class=\"btn\">Add Technique</span></h3>"
+          "<div id=\"technique-id-list\" class=\"ref-scroll\"></div>"},
+         {"armor", "Armor", "#6f9de8",
+          "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
+          "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
+         {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
+         {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -629,7 +592,6 @@ void PrefabEditorLayer::OnDetach()
     m_technique_row_listeners.clear();
     m_photon_art_row_listeners.clear();
     m_race_bonus_row_listeners.clear();
-    m_tag_row_listeners.clear();
     m_form_listeners.clear();
     m_preview_chrome_listeners.clear();
     m_preview_listeners.clear();
@@ -686,21 +648,21 @@ void PrefabEditorLayer::LoadDocuments()
     WireButtonClick("save-prefab", [this] { SaveDraft(); });
     if (Rml::Element* add_component = m_editor->GetElementById("add-component-select"))
     {
-        auto listener = std::make_unique<RmlEventListener>(
-            "change",
-            [this](Rml::Event&)
-            {
-                auto* select =
-                    rmlui_dynamic_cast<Rml::ElementFormControlSelect*>(m_editor->GetElementById("add-component-select"));
-                if (!select)
-                    return;
-                const std::string key = select->GetValue();
-                if (key.empty() || HasComponent(key))
-                    return;
-                m_component_order.push_back(key);
-                MarkDirty();
-                RefreshEditForm();
-            });
+        auto listener =
+            std::make_unique<RmlEventListener>("change",
+                                               [this](Rml::Event&)
+                                               {
+                                                   auto* select = rmlui_dynamic_cast<Rml::ElementFormControlSelect*>(
+                                                       m_editor->GetElementById("add-component-select"));
+                                                   if (!select)
+                                                       return;
+                                                   const std::string key = select->GetValue();
+                                                   if (key.empty() || HasComponent(key))
+                                                       return;
+                                                   m_component_order.push_back(key);
+                                                   MarkDirty();
+                                                   RefreshEditForm();
+                                               });
         listener->Attach(*add_component);
         m_add_component_listener = std::move(listener);
     }
@@ -739,23 +701,22 @@ void PrefabEditorLayer::WirePreviewInteraction()
     if (!target)
         return;
 
-    auto down = std::make_unique<RmlEventListener>(
-        "mousedown", [this](Rml::Event& event) { HandlePreviewMouseDown(event); });
+    auto down =
+        std::make_unique<RmlEventListener>("mousedown", [this](Rml::Event& event) { HandlePreviewMouseDown(event); });
     down->Attach(*target);
     m_preview_listeners.push_back(std::move(down));
 
-    auto move = std::make_unique<RmlEventListener>(
-        "mousemove", [this](Rml::Event& event) { HandlePreviewMouseMove(event); });
+    auto move =
+        std::make_unique<RmlEventListener>("mousemove", [this](Rml::Event& event) { HandlePreviewMouseMove(event); });
     move->Attach(*target);
     m_preview_listeners.push_back(std::move(move));
 
-    auto up =
-        std::make_unique<RmlEventListener>("mouseup", [this](Rml::Event& event) { HandlePreviewMouseUp(event); });
+    auto up = std::make_unique<RmlEventListener>("mouseup", [this](Rml::Event& event) { HandlePreviewMouseUp(event); });
     up->Attach(*target);
     m_preview_listeners.push_back(std::move(up));
 
-    auto scroll = std::make_unique<RmlEventListener>(
-        "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
+    auto scroll = std::make_unique<RmlEventListener>("mousescroll",
+                                                     [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
     scroll->Attach(*target);
     m_preview_listeners.push_back(std::move(scroll));
 }
@@ -941,16 +902,14 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "socket" || key == "stats" || key == "race" || key == "health" ||
-            key == "weapon" || key == "armor" || key == "mod" || key == "rarity")
+        if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
+            key == "armor" || key == "mod" || key == "rarity")
             m_component_order.emplace_back(key);
     }
 
-    m_renderable = components.HasMember("renderable") ? ReadRenderableBody(components["renderable"]) : RenderableComponent{};
+    m_renderable =
+        components.HasMember("renderable") ? ReadRenderableBody(components["renderable"]) : RenderableComponent{};
     m_renderable_texture_name = LabelFor(m_renderable.texture_id);
-
-    m_socket = components.HasMember("socket") ? ReadSocketBody(components["socket"]) : SocketComponent{};
-    m_socket_fallback_name = LabelFor(m_socket.fallback_prefab_id);
 
     m_stats = components.HasMember("stats") ? ReadStatsBody(components["stats"]) : StatsComponent{};
 
@@ -1015,9 +974,8 @@ void PrefabEditorLayer::RefreshEditForm()
                                                 m_draft_id = std::move(v);
                                                 MarkDirty();
                                                 if (Rml::Element* title = m_editor->GetElementById("edit-title"))
-                                                    title->SetInnerRML(
-                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new prefab)"}
-                                                                                     : m_draft_id));
+                                                    title->SetInnerRML(EscapeRml(
+                                                        m_draft_id.empty() ? std::string{"(new prefab)"} : m_draft_id));
                                             }));
 
     // -- Component cards: one Inspector-style card per m_component_order
@@ -1093,18 +1051,19 @@ void PrefabEditorLayer::RefreshEditForm()
     // in the DOM, same as the old checkbox-hidden-but-present convention
     // this replaces.
     if (Rml::Element* row = m_editor->GetElementById("field-texture-id"))
-        keep(fieldwidgets::BuildTextureField(*row, "texture_id", m_renderable.texture_id, m_renderable_texture_name,
-                                             [this](std::uint32_t id, std::string name)
-                                             {
-                                                 m_renderable.texture_id = id;
-                                                 if (!name.empty())
-                                                 {
-                                                     NameIdRegistry::Register(id, name);
-                                                     m_renderable_texture_name = std::move(name);
-                                                 }
-                                                 MarkDirty();
-                                             },
-                                             m_pickers.open_texture_picker));
+        keep(fieldwidgets::BuildTextureField(
+            *row, "texture_id", m_renderable.texture_id, m_renderable_texture_name,
+            [this](std::uint32_t id, std::string name)
+            {
+                m_renderable.texture_id = id;
+                if (!name.empty())
+                {
+                    NameIdRegistry::Register(id, name);
+                    m_renderable_texture_name = std::move(name);
+                }
+                MarkDirty();
+            },
+            m_pickers.open_texture_picker));
     if (Rml::Element* row = m_editor->GetElementById("field-texture-size"))
         keep(fieldwidgets::BuildVec2Field(*row, "texture_size", m_renderable.texture_size,
                                           [this](Vec2 v)
@@ -1120,21 +1079,23 @@ void PrefabEditorLayer::RefreshEditForm()
                                               MarkDirty();
                                           }));
     if (Rml::Element* row = m_editor->GetElementById("field-color-1"))
-        keep(fieldwidgets::BuildColorField(*row, "color_1", m_renderable.color_1,
-                                           [this](Color v)
-                                           {
-                                               m_renderable.color_1 = v;
-                                               MarkDirty();
-                                           },
-                                           m_pickers.open_color_picker));
+        keep(fieldwidgets::BuildColorField(
+            *row, "color_1", m_renderable.color_1,
+            [this](Color v)
+            {
+                m_renderable.color_1 = v;
+                MarkDirty();
+            },
+            m_pickers.open_color_picker));
     if (Rml::Element* row = m_editor->GetElementById("field-color-2"))
-        keep(fieldwidgets::BuildColorField(*row, "color_2", m_renderable.color_2,
-                                           [this](Color v)
-                                           {
-                                               m_renderable.color_2 = v;
-                                               MarkDirty();
-                                           },
-                                           m_pickers.open_color_picker));
+        keep(fieldwidgets::BuildColorField(
+            *row, "color_2", m_renderable.color_2,
+            [this](Color v)
+            {
+                m_renderable.color_2 = v;
+                MarkDirty();
+            },
+            m_pickers.open_color_picker));
     if (Rml::Element* row = m_editor->GetElementById("field-render-layer"))
         keep(fieldwidgets::BuildIntField(*row, "render_layer", m_renderable.render_layer,
                                          [this](int v)
@@ -1142,19 +1103,6 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_renderable.render_layer = v;
                                              MarkDirty();
                                          }));
-    if (Rml::Element* row = m_editor->GetElementById("field-fallback-prefab"))
-        keep(fieldwidgets::BuildNameIdField(*row, "fallback_prefab_id", m_socket.fallback_prefab_id,
-                                            m_socket_fallback_name,
-                                            [this](std::uint32_t id, std::string name)
-                                            {
-                                                m_socket.fallback_prefab_id = id;
-                                                if (!name.empty())
-                                                {
-                                                    NameIdRegistry::Register(id, name);
-                                                    m_socket_fallback_name = std::move(name);
-                                                }
-                                                MarkDirty();
-                                            }));
     if (Rml::Element* row = m_editor->GetElementById("field-atp"))
         keep(fieldwidgets::BuildIntField(*row, "atp", m_stats.atp,
                                          [this](int v)
@@ -1230,8 +1178,7 @@ void PrefabEditorLayer::RefreshEditForm()
                                           std::string{EnumName(m_weapon.range_shape)},
                                           [this](std::string v)
                                           {
-                                              m_weapon.range_shape =
-                                                  EnumFromString(v, WeaponRangeShape::SingleTarget);
+                                              m_weapon.range_shape = EnumFromString(v, WeaponRangeShape::SingleTarget);
                                               MarkDirty();
                                           }));
     if (Rml::Element* row = m_editor->GetElementById("field-range"))
@@ -1282,7 +1229,8 @@ void PrefabEditorLayer::RefreshEditForm()
                                             }));
     }
     if (Rml::Element* row = m_editor->GetElementById("field-weapon-element"))
-        keep(fieldwidgets::BuildEnumField(*row, "element", EnumOptions<Element>(), std::string{EnumName(m_weapon.element)},
+        keep(fieldwidgets::BuildEnumField(*row, "element", EnumOptions<Element>(),
+                                          std::string{EnumName(m_weapon.element)},
                                           [this](std::string v)
                                           {
                                               m_weapon.element = EnumFromString(v, Element::None);
@@ -1292,8 +1240,8 @@ void PrefabEditorLayer::RefreshEditForm()
     {
         std::vector<std::pair<std::uint32_t, std::string>> status_effect_options = {{0, "-- Select Status Effect --"}};
         for (const StatusEffect& status_effect : m_status_effects.All())
-            status_effect_options.emplace_back(status_effect.id,
-                                               status_effect.name.empty() ? status_effect.id_string : status_effect.name);
+            status_effect_options.emplace_back(status_effect.id, status_effect.name.empty() ? status_effect.id_string
+                                                                                            : status_effect.name);
         keep(fieldwidgets::BuildIdEnumField(*row, "status_effect_id", status_effect_options, m_weapon.status_effect_id,
                                             [this](std::uint32_t id)
                                             {
@@ -1331,18 +1279,6 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
-    if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
-    {
-        auto listener = std::make_unique<RmlClickListener>(
-            [this]
-            {
-                m_socket.tags.emplace_back();
-                MarkDirty();
-                RefreshTagRows();
-            });
-        listener->Attach(*add_tag);
-        m_form_listeners.push_back(std::move(listener));
-    }
     if (Rml::Element* add_race_bonus = m_editor->GetElementById("add-race-bonus"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1380,7 +1316,6 @@ void PrefabEditorLayer::RefreshEditForm()
         m_form_listeners.push_back(std::move(listener));
     }
 
-    RefreshTagRows();
     RefreshRaceBonusRows();
     RefreshPhotonArtIdRows();
     RefreshTechniqueIdRows();
@@ -1407,54 +1342,6 @@ void PrefabEditorLayer::RefreshAddComponentOptions()
             if (const ComponentKind* kind = FindComponentKind(component.id))
                 select->Add(kind->title, kind->key);
     select->SetValue("");
-}
-
-void PrefabEditorLayer::RefreshTagRows()
-{
-    if (!m_editor)
-        return;
-    m_tag_row_listeners.clear();
-
-    Rml::Element* list = m_editor->GetElementById("tag-list");
-    if (!list)
-        return;
-
-    const std::vector<std::string> content(m_socket.tags.size(), "<div class=\"tag-id field-row\"></div>");
-
-    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
-        *list, content, "<div class=\"list-empty\">No tags configured.</div>",
-        [this](std::size_t index)
-        {
-            if (index < m_socket.tags.size())
-                m_socket.tags.erase(m_socket.tags.begin() + static_cast<std::ptrdiff_t>(index));
-            MarkDirty();
-            RefreshTagRows();
-        },
-        [this](std::size_t from, std::size_t to)
-        {
-            m_pending_action = [this, from, to]
-            {
-                fieldwidgets::MoveElement(m_socket.tags, from, to);
-                MarkDirty();
-                RefreshTagRows();
-            };
-        });
-
-    for (std::size_t i = 0; i < result.rows.size() && i < m_socket.tags.size(); ++i)
-    {
-        const std::size_t index = i;
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".tag-id"))
-            for (auto& listener : fieldwidgets::BuildStringField(*row, "tag", m_socket.tags[i],
-                                                                  [this, index](std::string v)
-                                                                  {
-                                                                      if (index < m_socket.tags.size())
-                                                                          m_socket.tags[index] = std::move(v);
-                                                                      MarkDirty();
-                                                                  }))
-                m_tag_row_listeners.push_back(std::move(listener));
-    }
-    for (auto& listener : result.listeners)
-        m_tag_row_listeners.push_back(std::move(listener));
 }
 
 void PrefabEditorLayer::RefreshRaceBonusRows()
@@ -1494,18 +1381,17 @@ void PrefabEditorLayer::RefreshRaceBonusRows()
     {
         const std::size_t index = i;
         if (Rml::Element* row = result.rows[i]->QuerySelector(".bonus-race"))
-            for (auto& listener :
-                 fieldwidgets::BuildNameIdField(*row, "race_id", m_weapon.race_bonuses[i].race_id,
-                                                LabelFor(m_weapon.race_bonuses[i].race_id),
-                                                [this, index](std::uint32_t id, std::string name)
-                                                {
-                                                    if (index >= m_weapon.race_bonuses.size())
-                                                        return;
-                                                    m_weapon.race_bonuses[index].race_id = id;
-                                                    if (!name.empty())
-                                                        NameIdRegistry::Register(id, name);
-                                                    MarkDirty();
-                                                }))
+            for (auto& listener : fieldwidgets::BuildNameIdField(*row, "race_id", m_weapon.race_bonuses[i].race_id,
+                                                                 LabelFor(m_weapon.race_bonuses[i].race_id),
+                                                                 [this, index](std::uint32_t id, std::string name)
+                                                                 {
+                                                                     if (index >= m_weapon.race_bonuses.size())
+                                                                         return;
+                                                                     m_weapon.race_bonuses[index].race_id = id;
+                                                                     if (!name.empty())
+                                                                         NameIdRegistry::Register(id, name);
+                                                                     MarkDirty();
+                                                                 }))
                 m_race_bonus_row_listeners.push_back(std::move(listener));
         if (Rml::Element* row = result.rows[i]->QuerySelector(".bonus-percent"))
             for (auto& listener :
@@ -1532,8 +1418,7 @@ void PrefabEditorLayer::RefreshPhotonArtIdRows()
     if (!list)
         return;
 
-    const std::vector<std::string> content(m_weapon.photon_art_ids.size(),
-                                            "<div class=\"pa-id field-row\"></div>");
+    const std::vector<std::string> content(m_weapon.photon_art_ids.size(), "<div class=\"pa-id field-row\"></div>");
 
     fieldwidgets::RowList result = fieldwidgets::BuildRowList(
         *list, content, "<div class=\"list-empty\">No Photon Arts granted.</div>",
@@ -1586,8 +1471,7 @@ void PrefabEditorLayer::RefreshTechniqueIdRows()
     if (!list)
         return;
 
-    const std::vector<std::string> content(m_weapon.technique_ids.size(),
-                                            "<div class=\"tech-id field-row\"></div>");
+    const std::vector<std::string> content(m_weapon.technique_ids.size(), "<div class=\"tech-id field-row\"></div>");
 
     fieldwidgets::RowList result = fieldwidgets::BuildRowList(
         *list, content, "<div class=\"list-empty\">No Techniques granted.</div>",
@@ -1643,7 +1527,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "socket", "stats", "race", "health", "weapon", "armor", "mod", "rarity"})
+    for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1652,8 +1536,6 @@ void PrefabEditorLayer::ApplyDraftToDocument()
         rapidjson::Value body;
         if (key == "renderable")
             body = WriteRenderableBody(m_renderable, allocator);
-        else if (key == "socket")
-            body = WriteSocketBody(m_socket, allocator);
         else if (key == "stats")
             body = WriteStatsBody(m_stats, allocator);
         else if (key == "race")
@@ -1757,7 +1639,7 @@ void PrefabEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int 
 
     const SDL_FRect panel_rect{panel_offset.x, panel_offset.y, panel_size.x, panel_size.y};
     const SDL_FRect content_bounds{0.0f, 0.0f, static_cast<float>(m_renderable.texture_size.x),
-                                    static_cast<float>(m_renderable.texture_size.y)};
+                                   static_cast<float>(m_renderable.texture_size.y)};
     m_preview_canvas.Update(panel_rect, content_bounds);
     RefreshZoomReadout();
 

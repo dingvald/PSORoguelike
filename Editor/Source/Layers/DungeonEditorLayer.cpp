@@ -5,7 +5,6 @@
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/SocketComponent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
@@ -113,7 +112,6 @@ void DungeonEditorLayer::OnDetach()
 void DungeonEditorLayer::BuildPrefabCaches()
 {
     m_renderables.clear();
-    m_sockets.clear();
     try
     {
         Registry registry;
@@ -137,14 +135,6 @@ void DungeonEditorLayer::BuildPrefabCaches()
                 visual.has_renderable = true;
             }
             m_renderables.emplace(prefab_id, visual);
-
-            if (const SocketComponent* socket = registry.TryGetComponent<SocketComponent>(instance))
-            {
-                SocketInfo info;
-                info.tags = socket->tags;
-                info.fallback_prefab_id = socket->fallback_prefab_id;
-                m_sockets.emplace(prefab_id, std::move(info));
-            }
         }
     }
     catch (const std::exception& error)
@@ -697,12 +687,7 @@ void DungeonEditorLayer::RegeneratePreview()
     m_preview_error.clear();
     try
     {
-        SocketLookup lookup = [this](std::uint32_t id) -> std::optional<SocketInfo>
-        {
-            auto it = m_sockets.find(id);
-            return it == m_sockets.end() ? std::nullopt : std::make_optional(it->second);
-        };
-        m_preview = GenerateDungeon(m_draft, m_pieces, lookup, m_preview_seed);
+        m_preview = GenerateDungeon(m_draft, m_pieces, m_preview_seed);
     }
     catch (const std::exception& error)
     {
@@ -815,15 +800,30 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
                     const RenderableTile& r = it->second.renderable;
                     if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x,
                                                                                    r.texture_size.y, r.uv.x, r.uv.y))
-                        AppendSpriteQuad(vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size, r.color_1,
-                                         r.color_2, output_w, output_h);
+                        AppendSpriteQuad(vertices, ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()),
+                                         *src, atlas_size, r.color_1, r.color_2, output_w, output_h);
                 }
             }
+        }
+    if (gpu_ready && atlas_size.x > 0 && atlas_size.y > 0)
+        for (const DeadEndSocket& dead_end : m_preview->dead_ends)
+        {
+            auto it = m_renderables.find(dead_end.fallback_prefab_id);
+            if (it == m_renderables.end() || !it->second.has_renderable)
+                continue;
+            const SDL_FRect box = cell_box(dead_end.world_cell);
+            const RenderableTile& r = it->second.renderable;
+            if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x,
+                                                                           r.texture_size.y, r.uv.x, r.uv.y))
+                AppendSpriteQuad(vertices, ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()), *src,
+                                 atlas_size, r.color_1, r.color_2, output_w, output_h);
         }
     if (!vertices.empty())
         m_gpu_pipeline->Draw(renderer, *m_tile_atlas->GetGpuTexture(), vertices, output_w, output_h);
 
-    // Debug overlay: outline every cell, tint dead-end sockets amber, tint the
+    // Debug overlay: outline every cell, tint dead-end sockets amber (their
+    // fallback prefab's sprite, if any, was already drawn in the sprite pass
+    // above -- this just marks the cell as a dead end on top of it), tint the
     // key room for each lock cyan, and outline locked connections red -- so
     // the loopback/dead-end/lock-key structure is visually inspectable while
     // tuning the draft's params.

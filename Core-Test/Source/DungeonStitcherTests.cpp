@@ -12,22 +12,13 @@ namespace {
 
 using namespace psr;
 
-// Prefab ids for a small synthetic Forest-shaped test fixture: a floor tile
-// (no socket) and one socket flavor per connection direction, all sharing the
-// "corridor" tag so pieces chain freely. Throwaway test fixtures only, per
-// CLAUDE.md's carve-out -- not real Forest content.
+// Prefab id for a small synthetic Forest-shaped test fixture: a single floor
+// tile every cell stamps, sockets living as piece data rather than as their
+// own stamped prefab. All sockets share the "corridor" tag (both as `tags`
+// and `connects_to_tags`) so pieces chain freely under the one-way-OR match
+// rule. Throwaway test fixtures only, per CLAUDE.md's carve-out -- not real
+// Forest content.
 constexpr std::uint32_t kFloorPrefab = 1;
-constexpr std::uint32_t kSocketPrefab = 2; // one generic socket prefab, tags supplied by the test
-
-std::optional<SocketInfo> LookupCorridorSocket(std::uint32_t prefab_id)
-{
-    if (prefab_id != kSocketPrefab)
-        return std::nullopt;
-    SocketInfo info;
-    info.tags = {"corridor"};
-    info.fallback_prefab_id = kFloorPrefab;
-    return info;
-}
 
 DungeonPiece MakePiece(std::uint32_t id, PieceCategory category, std::vector<std::pair<Vec2, EdgeDirection>> socket_cells)
 {
@@ -58,11 +49,14 @@ DungeonPiece MakePiece(std::uint32_t id, PieceCategory category, std::vector<std
     // these tests, only socket placement/tag-matching/connectivity do.
     for (const auto& [offset, edge] : socket_cells)
     {
-        PieceCell& cell = cell_for(offset);
-        PieceCellPrefab socket;
-        socket.prefab_id = kSocketPrefab;
+        cell_for(offset); // ensure the floor cell under this socket exists
+        PieceSocket socket;
+        socket.cell_offset = offset;
         socket.edge = edge;
-        cell.prefabs.push_back(socket);
+        socket.tags = {"corridor"};
+        socket.connects_to_tags = {"corridor"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        piece.sockets.push_back(socket);
     }
 
     for (auto& [key, cell] : cells)
@@ -130,7 +124,7 @@ TEST_CASE("GenerateDungeon places exactly one Entrance and one Exit, fully conne
     PieceLibrary library = MakeTestLibrary();
     Dungeon dungeon = MakeTestDungeon(4, 6, 0, 0);
 
-    DungeonLayout layout = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 12345);
+    DungeonLayout layout = GenerateDungeon(dungeon, library, 12345);
 
     REQUIRE(layout.pieces.front().piece_id == 100);
 
@@ -155,7 +149,7 @@ TEST_CASE("GenerateDungeon never overlaps two pieces' cells", "[DungeonStitcher]
     PieceLibrary library = MakeTestLibrary();
     Dungeon dungeon = MakeTestDungeon(5, 8, 0, 1);
 
-    DungeonLayout layout = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 777);
+    DungeonLayout layout = GenerateDungeon(dungeon, library, 777);
 
     std::unordered_set<std::int64_t> occupied;
     std::size_t total_cells = 0;
@@ -185,7 +179,7 @@ TEST_CASE("GenerateDungeon respects a piece ref's max_occurrences", "[DungeonSti
         if (ref.piece_id == 300)
             ref.max_occurrences = 2;
 
-    DungeonLayout layout = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 42);
+    DungeonLayout layout = GenerateDungeon(dungeon, library, 42);
 
     int corridor_count = 0;
     for (const PlacedPiece& piece : layout.pieces)
@@ -199,8 +193,8 @@ TEST_CASE("GenerateDungeon is deterministic for a fixed seed", "[DungeonStitcher
     PieceLibrary library = MakeTestLibrary();
     Dungeon dungeon = MakeTestDungeon(4, 7, 0, 1);
 
-    DungeonLayout a = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 999);
-    DungeonLayout b = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 999);
+    DungeonLayout a = GenerateDungeon(dungeon, library, 999);
+    DungeonLayout b = GenerateDungeon(dungeon, library, 999);
 
     REQUIRE(a.pieces.size() == b.pieces.size());
     for (std::size_t i = 0; i < a.pieces.size(); ++i)
@@ -216,7 +210,7 @@ TEST_CASE("GenerateDungeon places a solvable lock: its key is reachable without 
     Dungeon dungeon = MakeTestDungeon(6, 8, 0, 0);
     dungeon.locks.push_back(DungeonLockConfig{"red_key", 1});
 
-    DungeonLayout layout = GenerateDungeon(dungeon, library, &LookupCorridorSocket, 2024);
+    DungeonLayout layout = GenerateDungeon(dungeon, library, 2024);
 
     REQUIRE(layout.locks.size() == 1);
     const LockAnnotation& lock = layout.locks.front();
@@ -274,5 +268,5 @@ TEST_CASE("GenerateDungeon throws DungeonError when no Entrance piece is availab
     dungeon.area_tag = "Forest";
     dungeon.pieces.push_back(DungeonPieceRef{200, 1.0f, 1});
 
-    REQUIRE_THROWS_AS(GenerateDungeon(dungeon, library, &LookupCorridorSocket, 1), DungeonError);
+    REQUIRE_THROWS_AS(GenerateDungeon(dungeon, library, 1), DungeonError);
 }

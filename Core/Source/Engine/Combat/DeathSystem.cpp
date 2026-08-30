@@ -24,7 +24,7 @@ void DeathSystem::AttachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.Get<EventHandlerComponent>().Subscribe<DeathEvent, DeathSystem>(
+    self.GetOrEmplace<EventHandlerComponent>().Subscribe<DeathEvent, DeathSystem>(
         [](Entity target, DeathEvent& event) { HandleDeath(target, event); });
 }
 
@@ -32,7 +32,7 @@ void DeathSystem::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.Get<EventHandlerComponent>().Unsubscribe<DeathEvent, DeathSystem>();
+    self.GetOrEmplace<EventHandlerComponent>().Unsubscribe<DeathEvent, DeathSystem>();
 }
 
 } // namespace psr

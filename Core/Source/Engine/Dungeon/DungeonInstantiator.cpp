@@ -60,6 +60,15 @@ namespace {
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                          Registry& registry, Grid& grid)
 {
+    const auto stamp = [&](Vec2 grid_cell, std::uint32_t prefab_id)
+    {
+        if (prefab_id == 0 || !registry.HasPrefab(prefab_id))
+            return;
+        const entt::entity entity = registry.CreateEntity(prefab_id);
+        registry.Emplace<Position>(entity, Position{grid_cell});
+        grid.AddEntity(grid_cell, entity);
+    };
+
     for (std::size_t piece_index = 0; piece_index < layout.pieces.size(); ++piece_index)
     {
         const PlacedPiece& placed = layout.pieces[piece_index];
@@ -69,22 +78,16 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
 
         for (const PieceCell& cell : piece->cells)
         {
-            const Vec2 world_cell = placed.world_offset + cell.offset;
-            const Vec2 grid_cell = world_cell + offset;
-
+            const Vec2 grid_cell = placed.world_offset + cell.offset + offset;
             for (const PieceCellPrefab& prefab : cell.prefabs)
-            {
-                std::uint32_t prefab_id = prefab.prefab_id;
-                if (const DeadEndSocket* dead_end = FindDeadEnd(layout, piece_index, world_cell, prefab.edge))
-                    prefab_id = dead_end->fallback_prefab_id;
+                stamp(grid_cell, prefab.prefab_id);
+        }
 
-                if (prefab_id == 0 || !registry.HasPrefab(prefab_id))
-                    continue;
-
-                const entt::entity entity = registry.CreateEntity(prefab_id);
-                registry.Emplace<Position>(entity, Position{grid_cell});
-                grid.AddEntity(grid_cell, entity);
-            }
+        for (const PieceSocket& socket : piece->sockets)
+        {
+            const Vec2 world_cell = placed.world_offset + socket.cell_offset;
+            if (const DeadEndSocket* dead_end = FindDeadEnd(layout, piece_index, world_cell, socket.edge))
+                stamp(world_cell + offset, dead_end->fallback_prefab_id);
         }
     }
 

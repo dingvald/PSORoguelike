@@ -1,19 +1,19 @@
 #include "Actions/AttackAction.h"
 
+#include "Combat/AttackEvent.h"
+#include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
-#include "Engine/Combat/AttackEvent.h"
+#include "Components/RaceComponent.h"
+#include "Components/StatsComponent.h"
+#include "Components/StatusEffectComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/Combat/DamageEvent.h"
-#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
-#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/StatusEffectComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
 

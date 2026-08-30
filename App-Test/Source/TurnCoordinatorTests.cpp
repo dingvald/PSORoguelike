@@ -2,18 +2,18 @@
 
 #include "Actions/ITargetRequestSink.h"
 #include "Actions/WaitAction.h"
+#include "Combat/StatusEffect.h"
+#include "Combat/StatusEffectApplication.h"
+#include "Combat/StatusEffectLibrary.h"
 #include "Components/EnergyComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/StatusEffectComponent.h"
 #include "Engine/Actions/TurnEvent.h"
 #include "Engine/Combat/DeathSystem.h"
 #include "Engine/Combat/HealthSystem.h"
-#include "Engine/Combat/StatusEffect.h"
-#include "Engine/Combat/StatusEffectApplication.h"
-#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatusEffectComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -172,8 +172,8 @@ TEST_CASE("TurnCoordinator surfaces TargetingRequested once RequestTargeting is 
     registry.Emplace<psr::EnergyComponent>(player);
 
     CountingAction cast_action;
-    coordinator.RequestTargeting(psr::TargetRequest{&cast_action, psr::TargetingMode::Directional,
-                                                     psr::WeaponRangeShape::SingleTarget, 1});
+    coordinator.RequestTargeting(
+        psr::TargetRequest{&cast_action, psr::TargetingMode::Directional, psr::WeaponRangeShape::SingleTarget, 1});
 
     psr::TurnStep step = coordinator.Step(0.016f);
 
@@ -258,7 +258,11 @@ TEST_CASE("TurnCoordinator forces a Wait at normal cost when the actor is Frozen
 
     REQUIRE(step == psr::TurnStep::Resolved);
     REQUIRE(chosen_action.count == 0);
-    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == -psr::WaitAction::kWaitCost);
+    // TurnQueue's NextActor() fast-forwards a freshly-enqueued actor's energy
+    // up to the action threshold before Step() resolves anything -- same
+    // post-WaitAction value as "resolves a bound key"'s identical setup, not
+    // a plain 0 - kWaitCost.
+    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == 0);
 }
 
 TEST_CASE("TurnCoordinator dispatches AfterTurnEvent exactly once per resolved turn", "[TurnCoordinator]")
@@ -289,8 +293,7 @@ TEST_CASE("TurnCoordinator dispatches AfterTurnEvent exactly once per resolved t
     REQUIRE(turn_events == 1);
 }
 
-TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting entity mid-turn",
-          "[TurnCoordinator]")
+TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting entity mid-turn", "[TurnCoordinator]")
 {
     psr::Registry registry;
     psr::StatusEffect poison;

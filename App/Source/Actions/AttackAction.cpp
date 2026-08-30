@@ -1,17 +1,17 @@
 #include "Actions/AttackAction.h"
 
+#include "Combat/AttackEvent.h"
+#include "Combat/CombatMath.h"
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
 #include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
-#include "Engine/Combat/AttackEvent.h"
-#include "Engine/Combat/CombatMath.h"
+#include "Components/RaceComponent.h"
+#include "Components/StatsComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
-#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatsComponent.h"
 
 #include <vector>
 
@@ -36,8 +36,8 @@ ActionResult AttackAction::Perform(Entity actor)
 
     Registry& registry = actor.GetRegistry();
     const Vec2 origin = actor.Get<Position>().tile;
-    const std::vector<Vec2> target_tiles = ResolveTargetTiles(*m_grid, registry, origin, m_direction,
-                                                               before_attack.range_shape, before_attack.range);
+    const std::vector<Vec2> target_tiles =
+        ResolveTargetTiles(*m_grid, registry, origin, m_direction, before_attack.range_shape, before_attack.range);
 
     const StatsComponent& attacker_stats = before_attack.attacker_stats;
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);

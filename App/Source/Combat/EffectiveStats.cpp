@@ -1,8 +1,8 @@
 #include "Combat/EffectiveStats.h"
 
 #include "Components/EquipmentComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 namespace psr {
 

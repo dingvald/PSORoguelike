@@ -1,14 +1,15 @@
 #include "Systems/CombatLogBridge.h"
 
+#include "Combat/PhotonArtCastEvent.h"
+#include "Combat/PhotonArtLibrary.h"
+#include "Combat/StatusEffectLibrary.h"
+#include "Combat/TechniqueCastEvent.h"
+#include "Combat/TechniqueLibrary.h"
+#include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
-#include "Engine/Combat/PhotonArtCastEvent.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
-#include "Engine/Combat/TechniqueCastEvent.h"
-#include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/TPComponent.h"
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/Messages/MessageQueue.h"
 #include "Messages/CombatLogEntryMessage.h"
@@ -47,19 +48,20 @@ TEST_CASE("CombatLogBridge publishes a log entry and a fresh PlayerStatusMessage
     psr::MessageQueue hud_queue;
     psr::TechniqueLibrary techniques;
     psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
 
     psr::Entity player = MakePlayer(registry, /*hp=*/50, /*tp=*/20);
     entt::entity enemy = registry.CreateEntity();
 
     std::vector<std::string> log_lines;
-    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>(
-        [&](const psr::CombatLogEntryMessage& message) { log_lines.push_back(message.text); });
+    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>([&](const psr::CombatLogEntryMessage& message)
+                                                          { log_lines.push_back(message.text); });
     int status_updates = 0;
     hud_queue.RegisterHandler<psr::PlayerStatusMessage>([&](const psr::PlayerStatusMessage&) { ++status_updates; });
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.Subscribe(player);
 
     psr::AfterDamageEvent event{psr::Entity(registry, enemy), /*amount=*/7, /*target_defeated=*/false};
@@ -80,18 +82,19 @@ TEST_CASE("CombatLogBridge publishes a defeat line when AfterDamageEvent reports
     psr::MessageQueue hud_queue;
     psr::TechniqueLibrary techniques;
     psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
 
     psr::Entity player = MakePlayer(registry, /*hp=*/50, /*tp=*/20);
     entt::entity enemy = registry.CreateEntity();
 
     std::vector<std::string> log_lines;
-    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>(
-        [&](const psr::CombatLogEntryMessage& message) { log_lines.push_back(message.text); });
+    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>([&](const psr::CombatLogEntryMessage& message)
+                                                          { log_lines.push_back(message.text); });
     hud_queue.RegisterHandler<psr::PlayerStatusMessage>([](const psr::PlayerStatusMessage&) {});
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.Subscribe(player);
 
     psr::AfterDamageEvent event{psr::Entity(registry, enemy), /*amount=*/50, /*target_defeated=*/true};
@@ -116,17 +119,18 @@ TEST_CASE("CombatLogBridge publishes a cast line on AfterTechniqueCastEvent, res
     technique.name = "Foie";
     psr::TechniqueLibrary techniques(std::vector<psr::Technique>{technique});
     psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
 
     psr::Entity player = MakePlayer(registry, /*hp=*/50, /*tp=*/20);
 
     std::vector<std::string> log_lines;
-    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>(
-        [&](const psr::CombatLogEntryMessage& message) { log_lines.push_back(message.text); });
+    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>([&](const psr::CombatLogEntryMessage& message)
+                                                          { log_lines.push_back(message.text); });
     hud_queue.RegisterHandler<psr::PlayerStatusMessage>([](const psr::PlayerStatusMessage&) {});
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.Subscribe(player);
 
     psr::AfterTechniqueCastEvent event{technique.id};
@@ -149,18 +153,19 @@ TEST_CASE("CombatLogBridge publishes a use line on AfterPhotonArtCastEvent, reso
     art.id = 1;
     art.name = "Rising Strike";
     psr::PhotonArtLibrary photon_arts(std::vector<psr::PhotonArt>{art});
+    psr::StatusEffectLibrary status_effects;
     psr::TechniqueLibrary techniques;
 
     psr::Entity player = MakePlayer(registry, /*hp=*/50, /*tp=*/20);
 
     std::vector<std::string> log_lines;
-    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>(
-        [&](const psr::CombatLogEntryMessage& message) { log_lines.push_back(message.text); });
+    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>([&](const psr::CombatLogEntryMessage& message)
+                                                          { log_lines.push_back(message.text); });
     hud_queue.RegisterHandler<psr::PlayerStatusMessage>([](const psr::PlayerStatusMessage&) {});
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.Subscribe(player);
 
     psr::AfterPhotonArtCastEvent event{art.id};
@@ -179,15 +184,16 @@ TEST_CASE("CombatLogBridge::PublishPlayerStatus reports TP as the player's secon
     psr::MessageQueue hud_queue;
     psr::TechniqueLibrary techniques;
     psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
 
     psr::Entity player = MakePlayer(registry, /*hp=*/30, /*tp=*/15);
 
     std::optional<psr::PlayerStatusMessage> received;
-    hud_queue.RegisterHandler<psr::PlayerStatusMessage>(
-        [&](const psr::PlayerStatusMessage& message) { received = message; });
+    hud_queue.RegisterHandler<psr::PlayerStatusMessage>([&](const psr::PlayerStatusMessage& message)
+                                                        { received = message; });
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.PublishPlayerStatus();
 
     hud_queue.HandleQueuedMessages();
@@ -207,6 +213,7 @@ TEST_CASE("CombatLogBridge::PublishPlayerStatus reports no secondary resource wh
     psr::MessageQueue hud_queue;
     psr::TechniqueLibrary techniques;
     psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
 
     entt::entity handle = registry.CreateEntity();
     psr::Entity player(registry, handle);
@@ -216,11 +223,11 @@ TEST_CASE("CombatLogBridge::PublishPlayerStatus reports no secondary resource wh
     player.Emplace<psr::HealthComponent>(health);
 
     std::optional<psr::PlayerStatusMessage> received;
-    hud_queue.RegisterHandler<psr::PlayerStatusMessage>(
-        [&](const psr::PlayerStatusMessage& message) { received = message; });
+    hud_queue.RegisterHandler<psr::PlayerStatusMessage>([&](const psr::PlayerStatusMessage& message)
+                                                        { received = message; });
     bus.Subscribe<psr::PlayerStatusMessage>(hud_queue);
 
-    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, player.Handle());
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
     bridge.PublishPlayerStatus();
 
     hud_queue.HandleQueuedMessages();

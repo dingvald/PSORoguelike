@@ -87,8 +87,50 @@ namespace {
             throw DungeonError("piece file: each cell prefab must be an object");
         PieceCellPrefab prefab;
         prefab.prefab_id = ReadNameId(entry, "prefab_id", 0);
-        prefab.edge = ReadEnum<EdgeDirection>(entry, "edge", EdgeDirection::North, "edge");
         return prefab;
+    }
+
+    std::vector<std::string> ReadStringArray(const rapidjson::Value& object, const char* key)
+    {
+        std::vector<std::string> values;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd())
+            return values;
+        if (!it->value.IsArray())
+            throw DungeonError(std::string("piece file: '") + key + "' must be an array of strings");
+        for (const auto& entry : it->value.GetArray())
+        {
+            if (!entry.IsString())
+                throw DungeonError(std::string("piece file: '") + key + "' entries must be strings");
+            values.emplace_back(entry.GetString());
+        }
+        return values;
+    }
+
+    PieceSocket ReadSocket(const rapidjson::Value& entry)
+    {
+        if (!entry.IsObject())
+            throw DungeonError("piece file: each socket must be an object");
+        PieceSocket socket;
+        socket.cell_offset = ReadVec2(entry, "cell_offset");
+        socket.edge = ReadEnum<EdgeDirection>(entry, "edge", EdgeDirection::North, "edge");
+        socket.tags = ReadStringArray(entry, "tags");
+        socket.connects_to_tags = ReadStringArray(entry, "connects_to_tags");
+        socket.fallback_prefab_id = ReadNameId(entry, "fallback_prefab_id", 0);
+        return socket;
+    }
+
+    std::vector<PieceSocket> ReadSockets(const rapidjson::Value& piece_def)
+    {
+        std::vector<PieceSocket> sockets;
+        auto it = piece_def.FindMember("sockets");
+        if (it == piece_def.MemberEnd())
+            return sockets;
+        if (!it->value.IsArray())
+            throw DungeonError("piece file: 'sockets' must be an array");
+        for (const auto& entry : it->value.GetArray())
+            sockets.push_back(ReadSocket(entry));
+        return sockets;
     }
 
     PieceCell ReadCell(const rapidjson::Value& entry)
@@ -144,20 +186,53 @@ namespace {
         return EnumNames<E>::kValues.front().first; // unreachable for a valid enum value
     }
 
+    // A NameId field's write-side: label from NameIdRegistry when known, not
+    // recovered any other way -- hashing is one-way (see DungeonPiece.h).
+    // Falls back to the raw id if it was never registered in this process
+    // (authored as a bare number, or hashed before this process ever saw the
+    // source string).
+    void AddNameIdMember(rapidjson::Value& object, const char* key, std::uint32_t id,
+                         rapidjson::Document::AllocatorType& allocator)
+    {
+        if (std::optional<std::string> label = NameIdRegistry::Find(id))
+            object.AddMember(rapidjson::StringRef(key), StringValue(*label, allocator), allocator);
+        else
+            object.AddMember(rapidjson::StringRef(key), id, allocator);
+    }
+
     rapidjson::Value WriteCellPrefab(const PieceCellPrefab& prefab, rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value object(rapidjson::kObjectType);
-        // prefab_id is written from its label in NameIdRegistry when known,
-        // not recovered any other way -- hashing is one-way (see
-        // DungeonPiece.h). Falls back to the raw id if it was never
-        // registered in this process (authored as a bare number, or hashed
-        // before this process ever saw the source string).
-        if (std::optional<std::string> label = NameIdRegistry::Find(prefab.prefab_id))
-            object.AddMember("prefab_id", StringValue(*label, allocator), allocator);
-        else
-            object.AddMember("prefab_id", prefab.prefab_id, allocator);
-        object.AddMember("edge", StringValue(std::string{EnumName(prefab.edge)}, allocator), allocator);
+        AddNameIdMember(object, "prefab_id", prefab.prefab_id, allocator);
         return object;
+    }
+
+    rapidjson::Value WriteStringArray(const std::vector<std::string>& values,
+                                      rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const std::string& value : values)
+            array.PushBack(StringValue(value, allocator), allocator);
+        return array;
+    }
+
+    rapidjson::Value WriteSocket(const PieceSocket& socket, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("cell_offset", WriteVec2(socket.cell_offset, allocator), allocator);
+        object.AddMember("edge", StringValue(std::string{EnumName(socket.edge)}, allocator), allocator);
+        object.AddMember("tags", WriteStringArray(socket.tags, allocator), allocator);
+        object.AddMember("connects_to_tags", WriteStringArray(socket.connects_to_tags, allocator), allocator);
+        AddNameIdMember(object, "fallback_prefab_id", socket.fallback_prefab_id, allocator);
+        return object;
+    }
+
+    rapidjson::Value WriteSockets(const std::vector<PieceSocket>& sockets, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const PieceSocket& socket : sockets)
+            array.PushBack(WriteSocket(socket, allocator), allocator);
+        return array;
     }
 
     rapidjson::Value WriteCell(const PieceCell& cell, rapidjson::Document::AllocatorType& allocator)
@@ -188,6 +263,7 @@ DungeonPiece ReadPieceBody(const rapidjson::Value& piece_def)
     piece.area_tag = ReadString(piece_def, "area_tag", piece.area_tag);
     piece.category = ReadEnum<PieceCategory>(piece_def, "category", PieceCategory::Room, "category");
     piece.cells = ReadCells(piece_def);
+    piece.sockets = ReadSockets(piece_def);
     return piece;
 }
 
@@ -198,6 +274,7 @@ rapidjson::Value WritePieceBody(const DungeonPiece& piece, rapidjson::Document::
     object.AddMember("area_tag", StringValue(piece.area_tag, allocator), allocator);
     object.AddMember("category", StringValue(std::string{EnumName(piece.category)}, allocator), allocator);
     object.AddMember("cells", WriteCells(piece.cells, allocator), allocator);
+    object.AddMember("sockets", WriteSockets(piece.sockets, allocator), allocator);
     return object;
 }
 

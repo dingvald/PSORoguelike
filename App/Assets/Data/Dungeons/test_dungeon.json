@@ -21,6 +21,11 @@
             "piece_id": 1278703254,
             "weight": 1.0,
             "max_occurrences": 1
+        },
+        {
+            "piece_id": 1232894280,
+            "weight": 1.0,
+            "max_occurrences": 0
         }
     ],
     "locks": []

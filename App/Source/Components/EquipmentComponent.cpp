@@ -1,13 +1,13 @@
 #include "Components/EquipmentComponent.h"
 
+#include "Combat/AttackEvent.h"
 #include "Combat/EffectiveStats.h"
-#include "Engine/Combat/AttackEvent.h"
-#include "Engine/Combat/PhotonArtCastEvent.h"
-#include "Engine/Combat/TechniqueCastEvent.h"
+#include "Combat/PhotonArtCastEvent.h"
+#include "Combat/TechniqueCastEvent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 #include <algorithm>
 
@@ -79,21 +79,21 @@ void EquipmentComponent::AttachHandlers(entt::registry& registry, entt::entity e
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.Get<EventHandlerComponent>();
+    EventHandlerComponent& events = self.GetOrEmplace<EventHandlerComponent>();
 
-    events.Subscribe<BeforeAttackEvent, EquipmentComponent>(
-        [](Entity actor, BeforeAttackEvent& event) { ContributeAttack(actor, event); });
-    events.Subscribe<BeforeTechniqueCastEvent, EquipmentComponent>(
-        [](Entity actor, BeforeTechniqueCastEvent& event) { ContributeTechniqueCast(actor, event); });
-    events.Subscribe<BeforePhotonArtCastEvent, EquipmentComponent>(
-        [](Entity actor, BeforePhotonArtCastEvent& event) { ContributePhotonArtCast(actor, event); });
+    events.Subscribe<BeforeAttackEvent, EquipmentComponent>([](Entity actor, BeforeAttackEvent& event)
+                                                            { ContributeAttack(actor, event); });
+    events.Subscribe<BeforeTechniqueCastEvent, EquipmentComponent>([](Entity actor, BeforeTechniqueCastEvent& event)
+                                                                   { ContributeTechniqueCast(actor, event); });
+    events.Subscribe<BeforePhotonArtCastEvent, EquipmentComponent>([](Entity actor, BeforePhotonArtCastEvent& event)
+                                                                   { ContributePhotonArtCast(actor, event); });
 }
 
 void EquipmentComponent::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.Get<EventHandlerComponent>();
+    EventHandlerComponent& events = self.GetOrEmplace<EventHandlerComponent>();
 
     events.Unsubscribe<BeforeAttackEvent, EquipmentComponent>();
     events.Unsubscribe<BeforeTechniqueCastEvent, EquipmentComponent>();

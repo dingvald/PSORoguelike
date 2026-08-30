@@ -38,6 +38,12 @@ PieceSchemaModel BuildPieceSchemaModel()
     cells.children.push_back(std::move(cell_item));
     model.fields.push_back(std::move(cells));
 
+    FieldSchema sockets{"sockets", FieldKind::Array};
+    FieldSchema socket_item{"item", FieldKind::Object};
+    socket_item.children = ReflectFields<PieceSocket>(ctx);
+    sockets.children.push_back(std::move(socket_item));
+    model.fields.push_back(std::move(sockets));
+
     return model;
 }
 

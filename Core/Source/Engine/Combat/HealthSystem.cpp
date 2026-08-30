@@ -32,7 +32,7 @@ void HealthSystem::AttachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.Get<EventHandlerComponent>().Subscribe<IncomingDamageEvent, HealthSystem>(
+    self.GetOrEmplace<EventHandlerComponent>().Subscribe<IncomingDamageEvent, HealthSystem>(
         [](Entity target, IncomingDamageEvent& event) { ApplyIncomingDamage(target, event); });
 }
 
@@ -40,7 +40,7 @@ void HealthSystem::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.Get<EventHandlerComponent>().Unsubscribe<IncomingDamageEvent, HealthSystem>();
+    self.GetOrEmplace<EventHandlerComponent>().Unsubscribe<IncomingDamageEvent, HealthSystem>();
 }
 
 } // namespace psr

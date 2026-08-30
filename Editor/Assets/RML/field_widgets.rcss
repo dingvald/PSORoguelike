@@ -183,9 +183,10 @@ selectbox option:checked {
 
 /* Shared addable/removable row-list chrome (see fieldwidgets::BuildRowList)
    -- every editor's "list of things that can be added or removed" (Dungeon's
-   piece-refs/locks, Prefab's socket tags, Piece's per-cell stamped prefabs,
-   ...) renders through this one row shape instead of each screen inventing
-   its own, so add/remove/drag-reorder look and behave identically everywhere. */
+   piece-refs/locks, Prefab's race bonuses, Piece's per-cell stamped prefabs/
+   sockets, ...) renders through this one row shape instead of each screen
+   inventing its own, so add/remove/drag-reorder look and behave identically
+   everywhere. */
 .row-card {
     display: flex;
     align-items: center;

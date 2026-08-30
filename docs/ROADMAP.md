@@ -303,7 +303,17 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
   World/Grid.h`) now stores `std::vector<std::vector<entt::entity>>`, preserving stamp/insertion
   order per cell; `TileRenderer.cpp` was updated to iterate `GetEntities` (switched `sort` to
   `stable_sort` so same-layer stamps keep their authored order). Catch2 coverage in
-  `Core-Test/Source/GridTests.cpp`.
+  `Core-Test/Source/GridTests.cpp`. **Follow-up redesign:** a socket is no longer a stamped
+  entity prefab carrying `SocketComponent` — that component and its `basic_socket` prefab are
+  gone. Sockets are now data authored directly on `DungeonPiece` (`PieceSocket`:
+  `cell_offset`, `edge`, `tags`, `connects_to_tags`, `fallback_prefab_id`,
+  `Core/Source/Engine/Dungeon/DungeonPiece.h`), since a socket has no visual of its own and
+  doesn't belong in a cell's stamped-prefab list. `PieceCellPrefab` correspondingly lost its
+  per-stamp `edge` override (nothing reads it once sockets moved off it). Matching also
+  changed from a single symmetric `tags`-to-`tags` intersection to a one-way filter checked
+  both directions: socket A connects to B iff `A.connects_to_tags ∩ B.tags` or
+  `B.connects_to_tags ∩ A.tags` is non-empty (`tags` is what a socket *is*, `connects_to_tags`
+  what it *accepts*).
 - **4.2 Piece editor:** Engine: none new. Editor: **Piece editor layer**. **Done:**
   `Editor/Source/Layers/PieceEditorLayer` — List/Edit shell consistent with the other content
   editors (mirrors `FeatureEditorLayer`'s shell almost directly, closer than expected once
@@ -330,9 +340,10 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
   path already exists), processed outward from Entrance so a later key is never blocked by an
   earlier lock, each verified solvable via BFS before being recorded. Deliberately an
   **abstract, verified-solvable annotation** on the layout, not a spawned in-world lock/key
-  entity — items (M8) and interaction (M6/M7) don't exist yet for that wiring. A `SocketLookup`
-  callback boundary keeps the stitcher itself free of any ECS/Registry dependency, so it's
-  fully unit-testable against synthetic fixture pieces with no live engine state. Catch2
+  entity — items (M8) and interaction (M6/M7) don't exist yet for that wiring. The stitcher
+  reads socket data straight off each piece's own `DungeonPiece::sockets` (see 4.1's follow-up
+  redesign) and has no ECS/Registry dependency of its own, so it's fully unit-testable against
+  synthetic fixture pieces with no live engine state. Catch2
   coverage in `Core-Test/Source/DungeonSchemaTests.cpp` /
   `Core-Test/Source/DungeonStitcherTests.cpp` (connectivity, no cell/socket overlap,
   `max_occurrences`/`weight` respected, room/loopback ranges honoured, every lock's key
@@ -383,10 +394,10 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
 - **5.1 Core stat components:** Engine: ATP/ATA/MST/DFP/EVP/LCK components, four-race tagging
   (Native/A.Beast/Machine/Dark) on enemy prefabs. Editor: wired into the Prefab Editor now (pulled
   forward from 5.2, per the user's brief) rather than deferred to a dedicated entity/enemy editor
-  pass. **Done:** `StatsComponent` (`Core/Source/Engine/ECS/StatsComponent.h`) is a single struct
+  pass. **Done:** `StatsComponent` (`Core/Source/Components/StatsComponent.h`) is a single struct
   of six `int` fields (`atp`/`ata`/`mst`/`dfp`/`evp`/`lck`, all defaulting to `0` — no balance
   numbers are authored here per CLAUDE.md's division of labor). `RaceComponent`
-  (`Core/Source/Engine/ECS/RaceComponent.h`) holds a single `race_id` field — deliberately a
+  (`Core/Source/Components/RaceComponent.h`) holds a single `race_id` field — deliberately a
   `NameId` (a string hashed via `entt::hashed_string`, resolved through `NameIdRegistry`), not a
   compile-time `enum class`, per the user's explicit brief: new races can be added or removed
   purely as authored data, no engine recompile, the same convention already used for
@@ -400,7 +411,7 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   no new widget types. Verified live in the running Editor (added both cards to the `test` prefab,
   edited values, saved, confirmed the JSON round-trip, e.g. `"race": { "race_id": "native" }`) —
   the test prefab itself was reverted afterward, per this file's own throwaway-fixture convention.
-  Catch2 coverage in `Core-Test/Source/StatsRaceComponentTests.cpp` (schema shape/authorable, plus
+  Catch2 coverage in `App-Test/Source/StatsRaceComponentTests.cpp` (schema shape/authorable, plus
   a `JsonEntityLoader` round-trip asserting `race_id` hashes and registers its label correctly).
 - **5.2 Entity/enemy editor:** Engine: enemy prefab schema (stats, race, sprite ref, spawn
   weight). Editor: **Entity editor layer** — stat field forms, race picker, sprite picker
@@ -484,9 +495,11 @@ throwaway launcher. **Done:** two new pieces close the loop from "generated dung
 "player moving around on screen with wall collision," neither of which existed before:
 `Core/Source/Engine/Dungeon/DungeonInstantiator.h/.cpp` (`ComputeDungeonBounds`/
 `InstantiateDungeon`) bridges a `DungeonStitcher`-produced `DungeonLayout` into a live `Grid` of
-entities — stamping every placed piece's cells via `Registry::CreateEntity(prefab_id)`, swapping a
-dead-end socket's own prefab for its `fallback_prefab_id` (mirrors the Dungeon Editor preview's own
-dead-end rendering), and translating the layout's possibly-negative world coordinates into the
+entities — stamping every placed piece's cells via `Registry::CreateEntity(prefab_id)`, additionally
+stamping a dead-end socket's own `fallback_prefab_id` (mirrors the Dungeon Editor preview's own
+dead-end rendering; see 4.1's follow-up redesign — a socket carries no prefab of its own to swap,
+so its fallback stamps in addition to the cell's ordinary prefabs rather than replacing one), and
+translating the layout's possibly-negative world coordinates into the
 `Grid`'s zero-based space. `App/Source/Layers/GameplayLayer.h/.cpp` is the first real consumer of
 `TileRenderer`/`Camera`/`TextureAtlas`/`TileGpuPipeline` together (M3.1 built them, nothing used
 them as a set until now): on attach it loads content, generates a dungeon (currently a hardcoded
@@ -537,7 +550,7 @@ tracking) plus the deliberate-failure check above.
   (M8.1). UI: HP/action bars, target/range-preview overlay, combat log. **Done:** a new
   `HealthComponent` (`Core/Source/Engine/ECS/HealthComponent.h` -- `current_hp`/`max_hp`, same
   shape as `StatsComponent`) fills the gap M8.1 left open: nothing could be damaged or killed
-  before this, since no HP concept existed anywhere. `Core/Source/Engine/Combat/CombatMath.h/
+  before this, since no HP concept existed anywhere. `Core/Source/Combat/CombatMath.h/
   .cpp` holds the pure formula: `ComputeHitChance` (ATA-vs-EVP ratio, clamped to [0.05, 0.95] so
   a hit is never guaranteed or impossible), `ComputeDamage` (ATP minus half DFP, a small
   \[0.9, 1.1\] random variance band, floored at 1), and `ApplyRaceBonus` (the 5.1 four-race %
@@ -648,7 +661,7 @@ tracking) plus the deliberate-failure check above.
   alongside the existing Affix library. UI: PP/TP bars, a real Photon Art/Technique selection
   *menu* (today's number-key slots are a stand-in), and status icons are **deliberately deferred
   this round**, per the brief — `status_effect_id` ships unconsumed pending M7.3. Catch2 coverage
-  in `Core-Test/Source/PhotonArtSchemaTests.cpp`/`TechniqueSchemaTests.cpp` (schema reflection +
+  in `App-Test/Source/PhotonArtSchemaTests.cpp`/`TechniqueSchemaTests.cpp` (schema reflection +
   round-trip + malformed-content/version-mismatch errors), new `ComputeTechniqueDamage` cases in
   `CombatMathTests.cpp`, an extended `WeaponComponent` round-trip in `ItemComponentTests.cpp`; and
   `App-Test/Source/PhotonArtActionTests.cpp`/`TechniqueActionTests.cpp` (no-weapon/ungranted-id/
@@ -717,7 +730,7 @@ tracking) plus the deliberate-failure check above.
   single-tracked-entity scope, "no enemies spawn yet") spawns/repositions one tinted marker per
   distinct active type, riding the same per-turn `AfterStatusEffectsChangedEvent` cadence so a
   marker never lags an entity's own movement by more than its last turn. Catch2 coverage in
-  `Core-Test/Source/StatusEffectSchemaTests.cpp`/`StatusEffectApplicationTests.cpp` (stacking,
+  `App-Test/Source/StatusEffectSchemaTests.cpp`/`StatusEffectApplicationTests.cpp` (stacking,
   DoT/decrement/expiry, a lethal tick destroying the entity without crashing) and extended
   `TechniqueSchemaTests.cpp`/`ItemComponentTests.cpp` for the new fields; `App-Test`'s
   `TurnCoordinatorTests.cpp` (Freeze forces a real-cost Wait pre-empting even a confirmed pending
@@ -793,7 +806,7 @@ tracking) plus the deliberate-failure check above.
   `Core-Test/Source/ItemComponentTests.cpp` (schema shape/authorable flags for all four new
   components, plus full `JsonEntityLoader` round-trips for a weapon entity — including
   `race_bonuses` and a non-default `range_shape` — an armor entity, and a mod entity) and
-  `Core-Test/Source/AffixSchemaTests.cpp` (schema reflection, save/load round-trip, and the
+  `App-Test/Source/AffixSchemaTests.cpp` (schema reflection, save/load round-trip, and the
   unknown-stat-name / schema-version-mismatch error paths), mirroring
   `StatsRaceComponentTests.cpp`/`DungeonSchemaTests.cpp`'s existing structure. Content authoring
   (real starter Hunter/Ranger weapons, per this milestone's own Phase-A scope) is the user's own

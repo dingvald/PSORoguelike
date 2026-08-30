@@ -13,11 +13,23 @@ ActionMap<int> CreateDefaultKeyBindings(Grid& grid, const AffixLibrary& affixes,
 {
     ActionMap<int> map;
 
+    // Arrow keys for movement, space for wait.
     map.Bind(SDLK_UP, std::make_unique<MoveAction>(grid, affixes, Vec2{0, -1}, rng));
     map.Bind(SDLK_DOWN, std::make_unique<MoveAction>(grid, affixes, Vec2{0, 1}, rng));
     map.Bind(SDLK_LEFT, std::make_unique<MoveAction>(grid, affixes, Vec2{-1, 0}, rng));
     map.Bind(SDLK_RIGHT, std::make_unique<MoveAction>(grid, affixes, Vec2{1, 0}, rng));
     map.Bind(SDLK_SPACE, std::make_unique<WaitAction>());
+
+    // Numpad keys for movement, numpad 5 for wait.
+    map.Bind(SDLK_KP_8, std::make_unique<MoveAction>(grid, affixes, Vec2{0, -1}, rng));
+    map.Bind(SDLK_KP_9, std::make_unique<MoveAction>(grid, affixes, Vec2{1, -1}, rng));
+    map.Bind(SDLK_KP_2, std::make_unique<MoveAction>(grid, affixes, Vec2{0, 1}, rng));
+    map.Bind(SDLK_KP_1, std::make_unique<MoveAction>(grid, affixes, Vec2{-1, 1}, rng));
+    map.Bind(SDLK_KP_7, std::make_unique<MoveAction>(grid, affixes, Vec2{-1, -1}, rng));
+    map.Bind(SDLK_KP_4, std::make_unique<MoveAction>(grid, affixes, Vec2{-1, 0}, rng));
+    map.Bind(SDLK_KP_6, std::make_unique<MoveAction>(grid, affixes, Vec2{1, 0}, rng));
+    map.Bind(SDLK_KP_3, std::make_unique<MoveAction>(grid, affixes, Vec2{1, 1}, rng));
+    map.Bind(SDLK_KP_5, std::make_unique<WaitAction>());
 
     return map;
 }

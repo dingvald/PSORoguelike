@@ -1,6 +1,6 @@
 #include "Layers/TechniqueEditorLayer.h"
 
-#include "Engine/Combat/TechniqueLibraryFile.h"
+#include "Combat/TechniqueLibraryFile.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
@@ -329,16 +329,15 @@ void TechniqueEditorLayer::RefreshEditForm()
     };
 
     if (Rml::Element* row = m_editor->GetElementById("field-id"))
-        keep(fieldwidgets::BuildStringField(*row, "id", m_draft_id,
-                                            [this](std::string v)
-                                            {
-                                                m_draft_id = std::move(v);
-                                                MarkDirty();
-                                                if (Rml::Element* title = m_editor->GetElementById("edit-title"))
-                                                    title->SetInnerRML(
-                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new technique)"}
-                                                                                     : m_draft_id));
-                                            }));
+        keep(fieldwidgets::BuildStringField(
+            *row, "id", m_draft_id,
+            [this](std::string v)
+            {
+                m_draft_id = std::move(v);
+                MarkDirty();
+                if (Rml::Element* title = m_editor->GetElementById("edit-title"))
+                    title->SetInnerRML(EscapeRml(m_draft_id.empty() ? std::string{"(new technique)"} : m_draft_id));
+            }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-name"))
         keep(fieldwidgets::BuildStringField(*row, "name", m_draft.name,
@@ -446,7 +445,8 @@ void TechniqueEditorLayer::RefreshTierRows()
         return;
 
     const std::vector<std::string> content(
-        m_draft.tiers.size(), "<div class=\"tier-value field-row\"></div><div class=\"tier-multiplier field-row\"></div>");
+        m_draft.tiers.size(),
+        "<div class=\"tier-value field-row\"></div><div class=\"tier-multiplier field-row\"></div>");
 
     fieldwidgets::RowList result = fieldwidgets::BuildRowList(
         *list, content, "<div class=\"list-empty\">No tiers configured (defaults to a flat 1.0x multiplier).</div>",
@@ -472,12 +472,12 @@ void TechniqueEditorLayer::RefreshTierRows()
         const std::size_t index = i;
         if (Rml::Element* row = result.rows[i]->QuerySelector(".tier-value"))
             for (auto& listener : fieldwidgets::BuildIntField(*row, "tier", m_draft.tiers[i].tier,
-                                                               [this, index](int v)
-                                                               {
-                                                                   if (index < m_draft.tiers.size())
-                                                                       m_draft.tiers[index].tier = v;
-                                                                   MarkDirty();
-                                                               }))
+                                                              [this, index](int v)
+                                                              {
+                                                                  if (index < m_draft.tiers.size())
+                                                                      m_draft.tiers[index].tier = v;
+                                                                  MarkDirty();
+                                                              }))
                 m_tier_row_listeners.push_back(std::move(listener));
         if (Rml::Element* row = result.rows[i]->QuerySelector(".tier-multiplier"))
             for (auto& listener :

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <fstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -80,6 +81,33 @@ TEST_CASE("BuildPieceSchemaModel reflects the piece's top-level and cell/prefab 
     }
     REQUIRE(has_offset);
     REQUIRE(has_prefabs);
+
+    const psr::FieldSchema* sockets = find("sockets");
+    REQUIRE(sockets != nullptr);
+    REQUIRE(sockets->kind == psr::FieldKind::Array);
+    const psr::FieldSchema& socket_item = sockets->ElementSchema();
+    REQUIRE(socket_item.kind == psr::FieldKind::Object);
+
+    bool has_cell_offset = false, has_edge = false, has_tags = false, has_connects_to_tags = false,
+         has_fallback_prefab_id = false;
+    for (const psr::FieldSchema& field : socket_item.children)
+    {
+        if (field.name == "cell_offset")
+            has_cell_offset = true;
+        if (field.name == "edge")
+            has_edge = true;
+        if (field.name == "tags")
+            has_tags = true;
+        if (field.name == "connects_to_tags")
+            has_connects_to_tags = true;
+        if (field.name == "fallback_prefab_id")
+            has_fallback_prefab_id = true;
+    }
+    REQUIRE(has_cell_offset);
+    REQUIRE(has_edge);
+    REQUIRE(has_tags);
+    REQUIRE(has_connects_to_tags);
+    REQUIRE(has_fallback_prefab_id);
 }
 
 TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangular footprint",
@@ -107,12 +135,16 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
 
     psr::PieceCell c;
     c.offset = psr::Vec2{1, 1};
-    psr::PieceCellPrefab socket_prefab;
-    socket_prefab.prefab_id = 222;
-    socket_prefab.edge = psr::EdgeDirection::South;
     c.prefabs.push_back(floor_prefab);
-    c.prefabs.push_back(socket_prefab);
     piece.cells.push_back(c);
+
+    psr::PieceSocket socket;
+    socket.cell_offset = psr::Vec2{1, 1};
+    socket.edge = psr::EdgeDirection::South;
+    socket.tags = {"door"};
+    socket.connects_to_tags = {"door", "corridor"};
+    socket.fallback_prefab_id = 333;
+    piece.sockets.push_back(socket);
 
     TempDirectory temp;
     const std::filesystem::path path = temp.path / "forest_l_corridor.json";
@@ -141,9 +173,15 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
         if (cell.offset == psr::Vec2{1, 1})
             corner = &cell;
     REQUIRE(corner != nullptr);
-    REQUIRE(corner->prefabs.size() == 2);
-    REQUIRE(corner->prefabs[1].prefab_id == 222);
-    REQUIRE(corner->prefabs[1].edge == psr::EdgeDirection::South);
+    REQUIRE(corner->prefabs.size() == 1);
+
+    REQUIRE(loaded.sockets.size() == 1);
+    const psr::PieceSocket& loaded_socket = loaded.sockets.front();
+    REQUIRE(loaded_socket.cell_offset == psr::Vec2{1, 1});
+    REQUIRE(loaded_socket.edge == psr::EdgeDirection::South);
+    REQUIRE(loaded_socket.tags == std::vector<std::string>{"door"});
+    REQUIRE(loaded_socket.connects_to_tags == std::vector<std::string>{"door", "corridor"});
+    REQUIRE(loaded_socket.fallback_prefab_id == 333);
 }
 
 TEST_CASE("LoadPieceLibrary throws DungeonError for an unknown category name", "[DungeonPieceSchema]")

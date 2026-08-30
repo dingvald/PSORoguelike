@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Components/StatsComponent.h"
 #include "Engine/ECS/Entity.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/Items/AffixLibrary.h"
+#include "Items/AffixLibrary.h"
 
 namespace psr {
 

@@ -63,9 +63,11 @@ public:
     }
 };
 
-// One piece: a floor-only cell at local (0,0), and a floor+door cell (the
-// door facing East) at local (1,0) -- exercises a cell with more than one
-// stamped prefab and a socket cell distinct from a plain floor cell.
+// One piece: a floor-only cell at local (0,0), and a floor+door cell at
+// local (1,0) -- exercises a cell with more than one ordinary stamped
+// prefab. No PieceSocket here; see MakePieceWithSocket below for the
+// dead-end-fallback tests, since a socket is piece-authored data now, not a
+// stamped prefab occupying a cell slot.
 DungeonPiece MakeTwoCellPiece(std::uint32_t id)
 {
     DungeonPiece piece;
@@ -74,14 +76,42 @@ DungeonPiece MakeTwoCellPiece(std::uint32_t id)
 
     PieceCell floor_only;
     floor_only.offset = Vec2{0, 0};
-    floor_only.prefabs.push_back(PieceCellPrefab{kFloorPrefab, EdgeDirection::North});
+    floor_only.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
     piece.cells.push_back(floor_only);
 
     PieceCell floor_and_door;
     floor_and_door.offset = Vec2{1, 0};
-    floor_and_door.prefabs.push_back(PieceCellPrefab{kFloorPrefab, EdgeDirection::North});
-    floor_and_door.prefabs.push_back(PieceCellPrefab{kDoorPrefab, EdgeDirection::East});
+    floor_and_door.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+    floor_and_door.prefabs.push_back(PieceCellPrefab{kDoorPrefab});
     piece.cells.push_back(floor_and_door);
+
+    return piece;
+}
+
+// One piece: a floor-only cell at local (0,0), and a floor-only cell at
+// local (1,0) carrying a socket (edge East, no visual of its own) -- for
+// exercising InstantiateDungeon's dead-end fallback stamp, which reads
+// DungeonPiece::sockets directly rather than anything in cell.prefabs.
+DungeonPiece MakePieceWithSocket(std::uint32_t id)
+{
+    DungeonPiece piece;
+    piece.id = id;
+    piece.category = PieceCategory::Room;
+
+    PieceCell floor_only_a;
+    floor_only_a.offset = Vec2{0, 0};
+    floor_only_a.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+    piece.cells.push_back(floor_only_a);
+
+    PieceCell floor_only_b;
+    floor_only_b.offset = Vec2{1, 0};
+    floor_only_b.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+    piece.cells.push_back(floor_only_b);
+
+    PieceSocket socket;
+    socket.cell_offset = Vec2{1, 0};
+    socket.edge = EdgeDirection::East;
+    piece.sockets.push_back(socket);
 
     return piece;
 }
@@ -160,7 +190,7 @@ TEST_CASE("InstantiateDungeon stamps every cell's prefabs into the grid at trans
     CHECK(result.entrance_tile == Vec2{0, 0});
 }
 
-TEST_CASE("InstantiateDungeon substitutes a dead end's fallback prefab for its socket", "[DungeonInstantiator]")
+TEST_CASE("InstantiateDungeon additionally stamps a dead end socket's fallback prefab", "[DungeonInstantiator]")
 {
     Registry registry;
     FloorMarker::Register(registry.GetMetaContext());
@@ -169,7 +199,7 @@ TEST_CASE("InstantiateDungeon substitutes a dead end's fallback prefab for its s
     TestEntityLoader loader;
     registry.RegisterPrefabs(loader);
 
-    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    PieceLibrary library{{MakePieceWithSocket(10)}};
     DungeonLayout layout;
     layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
     layout.dead_ends.push_back(DeadEndSocket{0, Vec2{1, 0}, EdgeDirection::East, kFallbackPrefab});
@@ -179,8 +209,7 @@ TEST_CASE("InstantiateDungeon substitutes a dead end's fallback prefab for its s
 
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
     CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{1, 0})[0]));
-    // The door prefab was swapped for the dead end's fallback, not stamped as-is.
-    CHECK_FALSE(registry.HasComponent<DoorMarker>(grid.GetEntities(Vec2{1, 0})[1]));
+    // The dead end's fallback stamps in addition to the cell's own prefabs.
     CHECK(registry.HasComponent<FallbackMarker>(grid.GetEntities(Vec2{1, 0})[1]));
 }
 
@@ -192,7 +221,7 @@ TEST_CASE("InstantiateDungeon leaves a dead end unstamped when fallback_prefab_i
     TestEntityLoader loader;
     registry.RegisterPrefabs(loader);
 
-    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    PieceLibrary library{{MakePieceWithSocket(10)}};
     DungeonLayout layout;
     layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
     layout.dead_ends.push_back(DeadEndSocket{0, Vec2{1, 0}, EdgeDirection::East, /*fallback_prefab_id=*/0});
@@ -200,7 +229,7 @@ TEST_CASE("InstantiateDungeon leaves a dead end unstamped when fallback_prefab_i
     Grid grid(2, 1);
     InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    // Only the floor prefab stamps -- the door's dead end has no fallback.
+    // Only the floor prefab stamps -- the dead end's socket has no fallback.
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 1);
     CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{1, 0})[0]));
 }

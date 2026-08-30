@@ -3,8 +3,8 @@
 #include "Components/RegisterComponents.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
+#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/SocketComponent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
@@ -178,7 +178,6 @@ void PieceEditorLayer::BuildPalette()
                     palette_entry.renderable = *tile;
                     palette_entry.has_renderable = true;
                 }
-                palette_entry.is_socket = registry.HasComponent<SocketComponent>(instance);
             }
             m_palette.push_back(std::move(palette_entry));
         }
@@ -460,7 +459,7 @@ void PieceEditorLayer::RefreshPaletteList()
                          "class=\"palette-name\">(eraser)</span></div>";
     for (const PaletteEntry& entry : m_palette)
         markup += "<div class=\"palette-row\"><div class=\"palette-icon\"></div><span class=\"palette-name\">" +
-                  EscapeRml(entry.id_string) + (entry.is_socket ? " (socket)" : "") + "</span></div>";
+                  EscapeRml(entry.id_string) + "</span></div>";
     list->SetInnerRML(markup);
 
     Rml::ElementList rows;
@@ -533,8 +532,10 @@ void PieceEditorLayer::RefreshInspector()
         return;
     }
 
-    panel->SetInnerRML("<div class=\"cell-head\">Cell (" + std::to_string(offset.x) + ", " + std::to_string(offset.y) +
-                       ")</div><div id=\"cell-prefabs\"></div>");
+    panel->SetInnerRML(
+        "<div class=\"cell-head\">Cell (" + std::to_string(offset.x) + ", " + std::to_string(offset.y) +
+        ")</div><div id=\"cell-prefabs\"></div>"
+        "<h3>Sockets<span id=\"add-socket\" class=\"btn\">Add Socket</span></h3><div id=\"cell-sockets\"></div>");
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
     {
@@ -552,10 +553,7 @@ void PieceEditorLayer::RefreshInspector()
     {
         const PaletteEntry* entry = PaletteFor(prefab.prefab_id);
         const std::string label = entry ? entry->id_string : std::string{"(unknown)"};
-        std::string row = "<span class=\"prefab-name\">" + EscapeRml(label) + "</span>";
-        if (entry && entry->is_socket)
-            row += "<div class=\"prefab-edge field-row\"></div>";
-        content.push_back(std::move(row));
+        content.push_back("<span class=\"prefab-name\">" + EscapeRml(label) + "</span>");
     }
 
     fieldwidgets::RowList result = fieldwidgets::BuildRowList(
@@ -585,21 +583,186 @@ void PieceEditorLayer::RefreshInspector()
             };
         });
 
-    for (std::size_t i = 0; i < result.rows.size() && i < cell->prefabs.size(); ++i)
+    for (auto& listener : result.listeners)
+        m_inspector_listeners.push_back(std::move(listener));
+
+    // -- Sockets on this cell -- piece-authored data, not stamped prefabs
+    // (see DungeonPiece.h's PieceSocket), so this is a second, independent
+    // row list keyed by DungeonPiece::sockets' own cell_offset match rather
+    // than anything in cell->prefabs.
+    Rml::Element* sockets_container = m_editor->GetElementById("cell-sockets");
+    if (sockets_container)
     {
-        const std::size_t index = i;
-        if (Rml::Element* edge_row = result.rows[i]->QuerySelector(".prefab-edge"))
-            keep(fieldwidgets::BuildEnumField(*edge_row, "edge", EdgeOptions(), EdgeToString(cell->prefabs[i].edge),
-                                              [this, offset, index](std::string v)
-                                              {
-                                                  PieceCell* c = FindCell(offset);
-                                                  if (!c || index >= c->prefabs.size())
-                                                      return;
-                                                  c->prefabs[index].edge = EdgeFromString(v);
-                                                  MarkDirty();
-                                              }));
+        std::vector<std::size_t> socket_indices;
+        for (std::size_t i = 0; i < m_draft.sockets.size(); ++i)
+            if (m_draft.sockets[i].cell_offset == offset)
+                socket_indices.push_back(i);
+
+        const std::vector<std::string> socket_content(
+            socket_indices.size(), "<div class=\"socket-edge field-row\"></div>"
+                                   "<div class=\"socket-fallback field-row\"></div>"
+                                   "<h3>Tags<span class=\"btn add-socket-tag\">Add Tag</span></h3>"
+                                   "<div class=\"socket-tag-list ref-scroll\"></div>"
+                                   "<h3>Connects To Tags<span class=\"btn add-socket-connects\">Add Tag</span></h3>"
+                                   "<div class=\"socket-connects-list ref-scroll\"></div>");
+
+        fieldwidgets::RowList socket_result = fieldwidgets::BuildRowList(
+            *sockets_container, socket_content, "<div class=\"list-empty\">No sockets on this cell.</div>",
+            [this, offset](std::size_t row_index)
+            {
+                std::vector<std::size_t> indices;
+                for (std::size_t i = 0; i < m_draft.sockets.size(); ++i)
+                    if (m_draft.sockets[i].cell_offset == offset)
+                        indices.push_back(i);
+                if (row_index < indices.size())
+                    m_draft.sockets.erase(m_draft.sockets.begin() + static_cast<std::ptrdiff_t>(indices[row_index]));
+                MarkDirty();
+                RefreshInspector();
+            },
+            [](std::size_t, std::size_t) {}); // order among a cell's sockets carries no meaning
+
+        for (std::size_t row = 0; row < socket_result.rows.size() && row < socket_indices.size(); ++row)
+        {
+            const std::size_t socket_index = socket_indices[row];
+            Rml::Element& row_element = *socket_result.rows[row];
+
+            if (Rml::Element* edge_row = row_element.QuerySelector(".socket-edge"))
+                keep(fieldwidgets::BuildEnumField(
+                    *edge_row, "edge", EdgeOptions(), EdgeToString(m_draft.sockets[socket_index].edge),
+                    [this, socket_index](std::string v)
+                    {
+                        if (socket_index < m_draft.sockets.size())
+                            m_draft.sockets[socket_index].edge = EdgeFromString(v);
+                        MarkDirty();
+                    }));
+
+            if (Rml::Element* fallback_row = row_element.QuerySelector(".socket-fallback"))
+            {
+                const PieceSocket& socket = m_draft.sockets[socket_index];
+                const PaletteEntry* fallback_entry = PaletteFor(socket.fallback_prefab_id);
+                const std::string fallback_name = fallback_entry
+                                                       ? fallback_entry->id_string
+                                                       : NameIdRegistry::Find(socket.fallback_prefab_id).value_or("");
+                keep(fieldwidgets::BuildNameIdField(
+                    *fallback_row, "fallback_prefab_id", socket.fallback_prefab_id, fallback_name,
+                    [this, socket_index](std::uint32_t id, std::string name)
+                    {
+                        if (socket_index >= m_draft.sockets.size())
+                            return;
+                        m_draft.sockets[socket_index].fallback_prefab_id = id;
+                        if (!name.empty())
+                            NameIdRegistry::Register(id, name);
+                        MarkDirty();
+                    }));
+            }
+
+            if (Rml::Element* tags_list = row_element.QuerySelector(".socket-tag-list"))
+                RefreshSocketTagRows(*tags_list, socket_index, false);
+            if (Rml::Element* connects_list = row_element.QuerySelector(".socket-connects-list"))
+                RefreshSocketTagRows(*connects_list, socket_index, true);
+
+            if (Rml::Element* add_tag = row_element.QuerySelector(".add-socket-tag"))
+            {
+                auto listener = std::make_unique<RmlClickListener>(
+                    [this, socket_index]
+                    {
+                        if (socket_index < m_draft.sockets.size())
+                            m_draft.sockets[socket_index].tags.emplace_back();
+                        MarkDirty();
+                        RefreshInspector();
+                    });
+                listener->Attach(*add_tag);
+                m_inspector_listeners.push_back(std::move(listener));
+            }
+            if (Rml::Element* add_connects = row_element.QuerySelector(".add-socket-connects"))
+            {
+                auto listener = std::make_unique<RmlClickListener>(
+                    [this, socket_index]
+                    {
+                        if (socket_index < m_draft.sockets.size())
+                            m_draft.sockets[socket_index].connects_to_tags.emplace_back();
+                        MarkDirty();
+                        RefreshInspector();
+                    });
+                listener->Attach(*add_connects);
+                m_inspector_listeners.push_back(std::move(listener));
+            }
+        }
+        for (auto& listener : socket_result.listeners)
+            m_inspector_listeners.push_back(std::move(listener));
     }
 
+    if (Rml::Element* add_socket = m_editor->GetElementById("add-socket"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, offset]
+            {
+                PieceSocket socket;
+                socket.cell_offset = offset;
+                socket.edge = DefaultExposedEdge(offset);
+                m_draft.sockets.push_back(std::move(socket));
+                MarkDirty();
+                RefreshInspector();
+            });
+        listener->Attach(*add_socket);
+        m_inspector_listeners.push_back(std::move(listener));
+    }
+}
+
+void PieceEditorLayer::RefreshSocketTagRows(Rml::Element& container, std::size_t socket_index, bool connects_to)
+{
+    if (socket_index >= m_draft.sockets.size())
+        return;
+    const std::vector<std::string>& tags =
+        connects_to ? m_draft.sockets[socket_index].connects_to_tags : m_draft.sockets[socket_index].tags;
+
+    const std::vector<std::string> content(tags.size(), "<div class=\"tag-id field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        container, content, "<div class=\"list-empty\">No tags.</div>",
+        [this, socket_index, connects_to](std::size_t index)
+        {
+            if (socket_index >= m_draft.sockets.size())
+                return;
+            std::vector<std::string>& t =
+                connects_to ? m_draft.sockets[socket_index].connects_to_tags : m_draft.sockets[socket_index].tags;
+            if (index < t.size())
+                t.erase(t.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshInspector();
+        },
+        [this, socket_index, connects_to](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, socket_index, connects_to, from, to]
+            {
+                if (socket_index >= m_draft.sockets.size())
+                    return;
+                std::vector<std::string>& t =
+                    connects_to ? m_draft.sockets[socket_index].connects_to_tags : m_draft.sockets[socket_index].tags;
+                fieldwidgets::MoveElement(t, from, to);
+                MarkDirty();
+                RefreshInspector();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < tags.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".tag-id"))
+            for (auto& listener : fieldwidgets::BuildStringField(
+                     *row, "tag", tags[i],
+                     [this, socket_index, connects_to, index](std::string v)
+                     {
+                         if (socket_index >= m_draft.sockets.size())
+                             return;
+                         std::vector<std::string>& t = connects_to ? m_draft.sockets[socket_index].connects_to_tags
+                                                                    : m_draft.sockets[socket_index].tags;
+                         if (index < t.size())
+                             t[index] = std::move(v);
+                         MarkDirty();
+                     }))
+                m_inspector_listeners.push_back(std::move(listener));
+    }
     for (auto& listener : result.listeners)
         m_inspector_listeners.push_back(std::move(listener));
 }
@@ -709,8 +872,6 @@ void PieceEditorLayer::PaintCell(Vec2 offset)
     {
         PieceCellPrefab prefab;
         prefab.prefab_id = entry.prefab_id;
-        if (entry.is_socket)
-            prefab.edge = DefaultExposedEdge(offset);
         cell.prefabs.push_back(prefab);
     }
     MarkDirty();
@@ -809,8 +970,9 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                     const RenderableTile& r = entry->renderable;
                     if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x,
                                                                                    r.texture_size.y, r.uv.x, r.uv.y))
-                        AppendSpriteQuad(grid_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size,
-                                         r.color_1, r.color_2, output_w, output_h);
+                        AppendSpriteQuad(grid_vertices,
+                                         ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()), *src,
+                                         atlas_size, r.color_1, r.color_2, output_w, output_h);
                 }
             }
 

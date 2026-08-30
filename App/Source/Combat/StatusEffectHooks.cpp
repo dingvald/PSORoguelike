@@ -1,6 +1,6 @@
 #include "Combat/StatusEffectHooks.h"
 
-#include "Engine/Combat/StatusEffectApplication.h"
+#include "Combat/StatusEffectApplication.h"
 
 namespace psr {
 

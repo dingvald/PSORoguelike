@@ -1,6 +1,7 @@
 #include "States/TargetSelectionState.h"
 
 #include "Actions/WaitAction.h"
+#include "Combat/StatusEffectLibrary.h"
 #include "Components/EnergyComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
@@ -46,6 +47,7 @@ struct Fixture
 {
     psr::Registry registry;
     psr::Grid grid{7, 7};
+    psr::StatusEffectLibrary status_effects;
     psr::TurnCoordinator turn_coordinator{registry};
     entt::entity actor = entt::null;
     psr::WaitAction dummy_action;
@@ -54,6 +56,13 @@ struct Fixture
     {
         psr::ComponentSchemaRegistrar reg{registry.GetMetaContext()};
         psr::RenderableComponent::Register(reg);
+
+        // TurnCoordinator's Freeze check calls Registry::GetStatusEffectLibrary()
+        // unconditionally on every actor's turn (see TurnCoordinator.cpp) --
+        // needed here since the one test that calls turn_coordinator.Step()
+        // would otherwise trip that call's "was SetStatusEffectLibrary() ever
+        // called?" assert, per CombatRegistrySetup.h's identical rationale.
+        registry.SetStatusEffectLibrary(status_effects);
 
         CursorEntityLoader loader;
         registry.RegisterPrefabs(loader);

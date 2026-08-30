@@ -1,21 +1,21 @@
 #include "Actions/AttackAction.h"
 #include "Actions/MoveAction.h"
 
+#include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/StatsComponent.h"
+#include "Components/StatusEffectComponent.h"
 #include "Components/TweenComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Actions/MoveEvent.h"
-#include "Engine/Combat/StatusEffectApplication.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/StatusEffectComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 #include "Engine/World/Grid.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -246,7 +246,8 @@ TEST_CASE("MoveAction moves to the BeforeMoveEvent handler's redirected offset, 
     REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 2}); // redirected: down, not right
 }
 
-TEST_CASE("MoveAction redirects to a random cardinal direction while the actor is Confused", "[MoveAction][StatusEffect]")
+TEST_CASE("MoveAction redirects to a random cardinal direction while the actor is Confused",
+          "[MoveAction][StatusEffect]")
 {
     psr::StatusEffect confuse;
     confuse.id = 1;
@@ -285,7 +286,7 @@ TEST_CASE("MoveAction redirects to a random cardinal direction while the actor i
         // Always one of the 4 cardinal neighbours -- never the origin tile,
         // never a diagonal.
         REQUIRE(((delta == psr::Vec2{0, -1}) || (delta == psr::Vec2{0, 1}) || (delta == psr::Vec2{-1, 0}) ||
-                (delta == psr::Vec2{1, 0})));
+                 (delta == psr::Vec2{1, 0})));
         if (delta != psr::Vec2{1, 0})
             saw_a_redirect = true;
     }

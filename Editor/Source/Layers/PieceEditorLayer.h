@@ -34,11 +34,12 @@ class RmlEventListener;
 // one or more entity prefabs (see Core/Engine/Dungeon/DungeonPiece.h) --
 // painting *is* what defines the footprint, so pieces come out arbitrary/
 // non-rectangular for free, never a fixed grid. Pick a prefab from a palette
-// of every authored entity and paint it onto cells; a prefab carrying
-// SocketComponent is a socket -- its edge (which border direction it faces)
-// defaults to whichever neighbour is unpainted at paint time but stays
-// editable per-stamp in the cell inspector, per this milestone's "few
-// constraints" brief. Modelled closely on UnnamedRoguelike's
+// of every authored entity and paint it onto cells. Sockets are separate,
+// piece-authored data (DungeonPiece::sockets, not stamped prefabs) added via
+// the cell inspector's own "Add Socket" -- its edge (which border direction
+// it faces) defaults to whichever neighbour is unpainted at add time but
+// stays editable after, per this milestone's "few constraints" brief.
+// Modelled closely on UnnamedRoguelike's
 // FeatureEditorLayer (same List/Edit shell, same palette-paints-a-grid
 // interaction), simplified since a piece has no Z layers or generator
 // pipeline the way a Feature does.
@@ -66,15 +67,13 @@ private:
     };
 
     // One palette entry: an entity prefab resolved to the sprite it should
-    // draw with and whether it carries SocketComponent. Built once from the
-    // Entities directory (see BuildPalette).
+    // draw with. Built once from the Entities directory (see BuildPalette).
     struct PaletteEntry
     {
         std::string id_string;
         std::uint32_t prefab_id = 0;
         RenderableTile renderable;
         bool has_renderable = false;
-        bool is_socket = false;
     };
 
     void ShowScreen(Mode mode);
@@ -93,6 +92,11 @@ private:
     void RefreshPaletteList();
     void RefreshPaletteSelection();
     void RefreshInspector();
+    // One nested tag/connects_to_tags row-list within a socket's row in the
+    // inspector -- container is that socket's ".socket-tag-list"/
+    // ".socket-connects-list" element; connects_to picks which of the
+    // socket's two string-array fields this instance edits.
+    void RefreshSocketTagRows(Rml::Element& container, std::size_t socket_index, bool connects_to);
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();

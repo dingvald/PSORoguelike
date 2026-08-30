@@ -6,31 +6,10 @@
 #include "Engine/Math/Vec2.h"
 
 #include <cstdint>
-#include <functional>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace psr {
-
-// A socket prefab's authorable data (SocketComponent's fields), resolved by
-// whatever mechanism the caller has on hand for querying a prefab's
-// components -- see SocketLookup below. Kept separate from SocketComponent
-// itself so this header (and the pure algorithm in DungeonStitcher.cpp)
-// doesn't need to depend on the ECS/Registry machinery at all.
-struct SocketInfo
-{
-    std::vector<std::string> tags;
-    std::uint32_t fallback_prefab_id = 0;
-};
-
-// Resolves a prefab id to its SocketComponent data, or nullopt if that prefab
-// isn't a socket. The stitcher is pure algorithm with no ECS/Registry
-// dependency of its own -- callers with a live Registry supply a lookup that
-// instantiates/inspects each candidate prefab as needed (and can cache
-// results); tests supply a plain map-backed lambda with no ECS involved at
-// all.
-using SocketLookup = std::function<std::optional<SocketInfo>(std::uint32_t prefab_id)>;
 
 // One piece placed into the generated layout, at world_offset (added to each
 // of the piece's own PieceCell::offset values to get that cell's world
@@ -69,8 +48,8 @@ struct LockAnnotation
 };
 
 // A socket left unconnected by generation -- a dead end. fallback_prefab_id
-// (from the socket's own SocketInfo, 0 if none) is what a renderer should
-// swap in instead of leaving a dangling doorway.
+// (from the socket's own PieceSocket::fallback_prefab_id, 0 if none) is what
+// a renderer should stamp in instead of leaving a dangling doorway.
 struct DeadEndSocket
 {
     std::size_t piece_index = 0;
@@ -97,11 +76,12 @@ struct DungeonLayout
 // construction, not a separate check), adds loopback connections for
 // multiple paths (Phase 2), resolves unused sockets as dead ends (Phase 3),
 // and places dungeon.locks as solvable lock/key gates on bridge connections
-// of the entrance-to-exit path (Phase 4). Throws DungeonError if no Entrance/
-// Exit piece is available in dungeon.pieces (filtered against library and
-// area_tag), or if the target room count can't be reached with an Exit
-// placed within a bounded attempt budget.
-DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& library, const SocketLookup& socket_lookup,
-                              std::uint64_t seed);
+// of the entrance-to-exit path (Phase 4). Sockets are read directly off each
+// piece's own DungeonPiece::sockets -- no ECS/Registry lookup involved, since
+// a socket is piece-authored data, not a stamped entity. Throws DungeonError
+// if no Entrance/Exit piece is available in dungeon.pieces (filtered against
+// library and area_tag), or if the target room count can't be reached with
+// an Exit placed within a bounded attempt budget.
+DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& library, std::uint64_t seed);
 
 } // namespace psr

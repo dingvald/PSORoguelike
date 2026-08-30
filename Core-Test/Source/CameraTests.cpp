@@ -2,6 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
+
 TEST_CASE("Camera defaults to the given initial position", "[Camera]")
 {
     psr::Camera camera{psr::Vec2{1, 2}};
@@ -98,4 +100,43 @@ TEST_CASE("Camera::SetZoom clamps to [kMinCameraZoom, kMaxCameraZoom]", "[Camera
 
     camera.SetZoom(10.0f);
     REQUIRE(camera.GetZoom() == psr::kMaxCameraZoom);
+}
+
+TEST_CASE("Camera::GetRenderOffset starts at {0,0}", "[Camera]")
+{
+    psr::Camera camera{psr::Vec2{0, 0}};
+
+    REQUIRE(camera.GetRenderOffset() == psr::Vec2f{});
+}
+
+TEST_CASE("A reposition banks a render lag that Update() decays back toward {0,0}", "[Camera]")
+{
+    psr::Camera camera{psr::Vec2{0, 0}};
+
+    camera.SetTarget(psr::Vec2{1, 0});
+
+    // GetPosition() jumps immediately -- only the render lag trails behind.
+    REQUIRE(camera.GetPosition() == psr::Vec2{1, 0});
+    const psr::Vec2f lag_before_update = camera.GetRenderOffset();
+    REQUIRE(lag_before_update.x < 0.0f); // camera moved +1, so it starts behind (negative lag)
+    REQUIRE(lag_before_update.y == 0.0f);
+
+    camera.Update(0.016f);
+
+    const psr::Vec2f lag_after_update = camera.GetRenderOffset();
+    REQUIRE(lag_after_update.x > lag_before_update.x); // eased toward 0
+    REQUIRE(lag_after_update.x < 0.0f);                // but not fully there yet
+}
+
+TEST_CASE("Repeated Update() calls eventually settle the render lag to ~{0,0}", "[Camera]")
+{
+    psr::Camera camera{psr::Vec2{0, 0}};
+    camera.SetTarget(psr::Vec2{5, -3});
+
+    for (int i = 0; i < 500; ++i)
+        camera.Update(0.016f);
+
+    const psr::Vec2f lag = camera.GetRenderOffset();
+    REQUIRE(std::abs(lag.x) < 0.001f);
+    REQUIRE(std::abs(lag.y) < 0.001f);
 }

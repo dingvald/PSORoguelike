@@ -1,8 +1,6 @@
 #include "Engine/ECS/Registry.h"
 
-#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/PrefabIdComponent.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/World/Grid.h"
 
 #include <cassert>
@@ -23,7 +21,8 @@ Registry::~Registry() = default;
 
 Registry::Registry(Registry&& other) noexcept
     : m_meta_ctx(std::move(other.m_meta_ctx)), m_runtime_registry(std::move(other.m_runtime_registry)),
-      m_prefab_registry(std::move(other.m_prefab_registry)), m_prefabs(std::move(other.m_prefabs))
+      m_prefab_registry(std::move(other.m_prefab_registry)),
+      m_prefab_to_entity_map(std::move(other.m_prefab_to_entity_map))
 {
     // The moved-from Registry's self-pointer in ctx() still points at the
     // old object's address -- the underlying entt::registry heap object
@@ -40,7 +39,7 @@ Registry& Registry::operator=(Registry&& other) noexcept
     m_meta_ctx = std::move(other.m_meta_ctx);
     m_runtime_registry = std::move(other.m_runtime_registry);
     m_prefab_registry = std::move(other.m_prefab_registry);
-    m_prefabs = std::move(other.m_prefabs);
+    m_prefab_to_entity_map = std::move(other.m_prefab_to_entity_map);
 
     if (m_runtime_registry)
         m_runtime_registry->ctx().insert_or_assign<Registry*>(this);
@@ -55,12 +54,12 @@ entt::entity Registry::CreateEntity()
     return entity;
 }
 
-bool Registry::HasPrefab(std::uint32_t prefab_id) const { return m_prefabs.contains(prefab_id); }
+bool Registry::HasPrefab(std::uint32_t prefab_id) const { return m_prefab_to_entity_map.contains(prefab_id); }
 
 entt::entity Registry::CreateEntity(std::uint32_t prefab_id)
 {
-    auto prefab_it = m_prefabs.find(prefab_id);
-    assert(prefab_it != m_prefabs.end() &&
+    auto prefab_it = m_prefab_to_entity_map.find(prefab_id);
+    assert(prefab_it != m_prefab_to_entity_map.end() &&
            "Registry::CreateEntity: unknown prefab_id -- was RegisterPrefabs() called?");
     entt::entity prefab = prefab_it->second;
 
@@ -104,8 +103,12 @@ bool Registry::IsValid(entt::entity entity) const { return m_runtime_registry->v
 void Registry::RegisterPrefabs(IEntityLoader& loader)
 {
     m_prefab_registry->clear();
-    m_prefabs.clear();
-    loader.Populate(*m_prefab_registry, m_prefabs);
+    m_prefab_to_entity_map.clear();
+    m_entity_to_prefab_map.clear();
+    loader.Populate(*m_prefab_registry, m_prefab_to_entity_map);
+
+    for (const auto& [prefab_id, prefab_entity] : m_prefab_to_entity_map)
+        m_entity_to_prefab_map[prefab_entity] = prefab_id;
 }
 
 entt::meta_ctx& Registry::GetMetaContext() { return m_meta_ctx; }

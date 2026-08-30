@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Engine/Actions/IAction.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/Math/Vec2.h"
 #include "Engine/World/Grid.h"
+#include "Items/AffixLibrary.h"
 
 #include <random>
 

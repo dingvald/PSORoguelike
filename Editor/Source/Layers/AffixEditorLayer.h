@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Engine/Items/Affix.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/Layer.h"
+#include "Items/Affix.h"
+#include "Items/AffixLibrary.h"
 #include "UI/FieldWidgets.h"
 
 #include <functional>
@@ -21,7 +21,7 @@ class Event;
 class RmlClickListener;
 
 // The Affix Editor: browse/create/delete weapon prefix/suffix definitions
-// (see Core/Engine/Items/Affix.h) -- a flat, bespoke non-ECS content type,
+// (see Core/Items/Affix.h) -- a flat, bespoke non-ECS content type,
 // so this follows PieceEditorLayer/DungeonEditorLayer's List/Edit shell
 // pattern rather than PrefabEditorLayer's entt::meta component-card one.
 // Much smaller than either of those: Affix has no nested arrays and no

@@ -1,0 +1,236 @@
+{
+    "schema_version": 1,
+    "name": "test_hall1",
+    "area_tag": "",
+    "category": "room",
+    "cells": [
+        {
+            "offset": {
+                "x": 12,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 9,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 12,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 9,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 8,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 12,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 9,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 8,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 8,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        }
+    ],
+    "sockets": [
+        {
+            "cell_offset": {
+                "x": 8,
+                "y": 12
+            },
+            "edge": "west",
+            "tags": [
+                "door"
+            ],
+            "connects_to_tags": [
+                "door"
+            ],
+            "fallback_prefab_id": 0
+        },
+        {
+            "cell_offset": {
+                "x": 13,
+                "y": 12
+            },
+            "edge": "east",
+            "tags": [
+                "door"
+            ],
+            "connects_to_tags": [
+                "door"
+            ],
+            "fallback_prefab_id": 0
+        }
+    ]
+}

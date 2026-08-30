@@ -1,21 +1,20 @@
 #pragma once
 
+#include "Combat/PhotonArtLibrary.h"
+#include "Combat/StatusEffectLibrary.h"
+#include "Combat/TechniqueLibrary.h"
+#include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
-#include "Engine/Combat/StatusEffectLibrary.h"
-#include "Engine/Combat/TechniqueLibrary.h"
+#include "Components/StatsComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/HealthComponent.h"
-#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/RarityComponent.h"
-#include "Engine/ECS/SocketComponent.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
+#include "Items/AffixLibrary.h"
 #include "UI/ColorPickerPopup.h"
 #include "UI/FieldPickers.h"
 #include "UI/FieldWidgets.h"
@@ -49,9 +48,8 @@ class RmlEventListener;
 // under App/Assets/Data/Entities/ that PieceEditorLayer's palette stamps into
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
-// (RenderableComponent, SocketComponent, StatsComponent, RaceComponent,
-// HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
-// RarityComponent) -- not a
+// (RenderableComponent, StatsComponent, RaceComponent, HealthComponent,
+// WeaponComponent, ArmorComponent, ModComponent, RarityComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -61,11 +59,11 @@ class RmlEventListener;
 //
 // Unlike PieceEditorLayer/DungeonEditorLayer, a draft is held as a raw
 // rapidjson::Document (not a typed C++ struct) and only its known
-// "components".{renderable,socket,stats,race} members are rewritten on save
-// -- every other member (including a future component this build doesn't
-// know about) round-trips untouched. There is no reusable Core "Entity"
-// struct the way DungeonPiece/Dungeon exist; a prefab is purely entt::meta-
-// driven data.
+// "components".{renderable,stats,race} members are rewritten on save --
+// every other member (including a future component this build doesn't know
+// about) round-trips untouched. There is no reusable Core "Entity" struct
+// the way DungeonPiece/Dungeon exist; a prefab is purely entt::meta-driven
+// data.
 class PrefabEditorLayer : public Layer
 {
 public:
@@ -100,13 +98,12 @@ private:
 
     // -- Draft load/save (JSON <-> typed fields) --
     void LoadDraftFromDocument(rapidjson::Document document);
-    void ApplyDraftToDocument(); // rewrites only components.{renderable,socket,stats,race}
+    void ApplyDraftToDocument(); // rewrites only components.{renderable,stats,race}
     void SaveDraft();
 
     // -- Edit mode: form --
     void RefreshEditForm();
     void RefreshAddComponentOptions();
-    void RefreshTagRows();
     void RefreshRaceBonusRows();
     void RefreshPhotonArtIdRows();
     void RefreshTechniqueIdRows();
@@ -142,12 +139,11 @@ private:
     TexturePickerPopup m_texture_picker;
     FieldPickers m_pickers;
 
-    std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
-    std::unique_ptr<RmlEventListener> m_add_component_listener;      // static "Add Component" select
-    std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable prefab-list rows
+    std::vector<std::unique_ptr<RmlClickListener>> m_listeners;         // static toolbar buttons
+    std::unique_ptr<RmlEventListener> m_add_component_listener;         // static "Add Component" select
+    std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners;    // rebuildable prefab-list rows
     std::vector<std::unique_ptr<RmlEventListener>> m_preview_listeners; // #edit-body pan/zoom listeners
     fieldwidgets::Listeners m_form_listeners;
-    fieldwidgets::Listeners m_tag_row_listeners;
     fieldwidgets::Listeners m_race_bonus_row_listeners;
     fieldwidgets::Listeners m_photon_art_row_listeners;
     fieldwidgets::Listeners m_technique_row_listeners;
@@ -173,8 +169,8 @@ private:
 
     // -- Edit state: known/editable components --
     // Presence AND display order of a prefab's components (a subset of
-    // {"renderable","socket","stats","race","weapon","armor","mod","rarity"})
-    // -- rendered as one Inspector-style card per entry, in this order.
+    // {"renderable","stats","race","weapon","armor","mod","rarity"}) --
+    // rendered as one Inspector-style card per entry, in this order.
     // Populated from components' JSON member order on load (rapidjson
     // preserves insertion order) and rewritten back in this same order on
     // save (see ApplyDraftToDocument), so drag-reorder persists to disk
@@ -184,8 +180,6 @@ private:
 
     RenderableComponent m_renderable;
     std::string m_renderable_texture_name;
-    SocketComponent m_socket;
-    std::string m_socket_fallback_name;
     StatsComponent m_stats;
     RaceComponent m_race;
     std::string m_race_name;

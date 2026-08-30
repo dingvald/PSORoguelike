@@ -1,10 +1,10 @@
 #include "Systems/TurnCoordinator.h"
 
+#include "Combat/StatusEffectQueries.h"
+#include "Combat/StatusEffectType.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Actions/TurnEvent.h"
-#include "Engine/Combat/StatusEffectQueries.h"
-#include "Engine/Combat/StatusEffectType.h"
 #include "Systems/TweenSystem.h"
 
 namespace psr {

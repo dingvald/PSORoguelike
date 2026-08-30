@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Engine/Combat/Technique.h"
-#include "Engine/Combat/TechniqueLibrary.h"
+#include "Combat/Technique.h"
+#include "Combat/TechniqueLibrary.h"
 #include "Engine/Layer.h"
 #include "UI/FieldWidgets.h"
 
@@ -21,7 +21,7 @@ class Event;
 class RmlClickListener;
 
 // The Technique Editor: browse/create/delete Wand/Cane-attached Technique
-// definitions (see Core/Engine/Combat/Technique.h) -- mirrors
+// definitions (see Core/Combat/Technique.h) -- mirrors
 // PhotonArtEditorLayer's shape exactly (a flat, bespoke non-ECS content type
 // following AffixEditorLayer's List/Edit shell pattern; tp_cost is shared
 // with PhotonArt -- both spend the same TPComponent pool), differing only in

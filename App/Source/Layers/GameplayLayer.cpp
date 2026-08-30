@@ -3,27 +3,27 @@
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
 #include "ApplicationFilepaths.h"
+#include "Combat/PhotonArt.h"
+#include "Combat/PhotonArtLibraryFile.h"
+#include "Combat/StatusEffectLibraryFile.h"
+#include "Combat/Technique.h"
+#include "Combat/TechniqueLibraryFile.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
+#include "Components/TPComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
-#include "Engine/Combat/PhotonArt.h"
-#include "Engine/Combat/PhotonArtLibraryFile.h"
-#include "Engine/Combat/StatusEffectLibraryFile.h"
-#include "Engine/Combat/Technique.h"
-#include "Engine/Combat/TechniqueLibraryFile.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
 #include "Engine/Dungeon/DungeonLibrary.h"
 #include "Engine/Dungeon/DungeonLibraryFile.h"
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
+#include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
 #include "Engine/ECS/Position.h"
-#include "Engine/ECS/SocketComponent.h"
-#include "Engine/ECS/TPComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
@@ -41,7 +41,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 
 namespace psr {
 
@@ -62,31 +61,6 @@ namespace {
     // are never authored on it (all three are engine-managed, authorable=false)
     // and are emplaced onto the spawned instance separately below.
     constexpr const char* kPlayerPrefabId = "player";
-
-    // Scans every authored entity once, instantiating (then immediately
-    // destroying) a throwaway runtime instance per prefab to read its
-    // SocketComponent, if any -- mirrors DungeonEditorLayer::BuildPrefabCaches'
-    // socket-lookup construction, but against the layer's own live registry
-    // (already populated via RegisterPrefabs) rather than a separate one, since
-    // this layer has no other use for a second registry.
-    std::unordered_map<std::uint32_t, SocketInfo> BuildSocketLookup(Registry& registry)
-    {
-        std::unordered_map<std::uint32_t, SocketInfo> sockets;
-        for (const JsonDirectoryEntry& entry :
-             LoadJsonDirectory(ApplicationFilepaths::EntitiesPath, kEntitySchemaVersion))
-        {
-            const std::uint32_t prefab_id = entt::hashed_string::value(entry.id.c_str());
-            const entt::entity instance = registry.CreateEntity(prefab_id);
-            if (instance == entt::null)
-                continue;
-
-            if (const SocketComponent* socket = registry.TryGetComponent<SocketComponent>(instance))
-                sockets.emplace(prefab_id, SocketInfo{socket->tags, socket->fallback_prefab_id});
-
-            registry.DestroyEntity(instance);
-        }
-        return sockets;
-    }
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9.
     std::optional<int> KeyCodeToHotbarSlot(int key_code)
@@ -135,13 +109,6 @@ void GameplayLayer::OnAttach()
     loader.Load(ApplicationFilepaths::EntitiesPath);
     m_registry.RegisterPrefabs(loader);
 
-    const std::unordered_map<std::uint32_t, SocketInfo> sockets = BuildSocketLookup(m_registry);
-    const SocketLookup socket_lookup = [&sockets](std::uint32_t id) -> std::optional<SocketInfo>
-    {
-        auto it = sockets.find(id);
-        return it == sockets.end() ? std::nullopt : std::make_optional(it->second);
-    };
-
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
@@ -151,7 +118,7 @@ void GameplayLayer::OnAttach()
     if (!dungeon)
         throw std::runtime_error(std::string("GameplayLayer: no '") + kDungeonId + "' dungeon definition found");
 
-    const DungeonLayout layout = GenerateDungeon(*dungeon, m_pieces, socket_lookup, m_rng());
+    const DungeonLayout layout = GenerateDungeon(*dungeon, m_pieces, m_rng());
 
     const Rect bounds = ComputeDungeonBounds(layout, m_pieces);
     if (bounds.Empty())
@@ -176,6 +143,7 @@ void GameplayLayer::OnAttach()
     m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
+    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{100, 100});
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
@@ -242,6 +210,7 @@ void GameplayLayer::OnUpdate(float delta_time)
 
     if (m_registry.IsValid(m_player))
         m_camera.SetTarget(m_registry.GetComponent<Position>(m_player).tile);
+    m_camera.Update(delta_time);
 }
 
 void GameplayLayer::EnsureRenderResources(SDL_Renderer& renderer)
@@ -268,13 +237,12 @@ void GameplayLayer::OnRender(SDL_Renderer* renderer)
     int width = 0;
     int height = 0;
     SDL_GetCurrentRenderOutputSize(renderer, &width, &height);
-    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height);
+    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, /*zoom=*/1.0f, m_camera.GetRenderOffset());
 }
 
 bool GameplayLayer::TryActivateSlot(int slot_index)
 {
-    if (!m_registry.IsValid(m_player) || slot_index < 0 ||
-        slot_index >= static_cast<int>(HotbarComponent::kSlotCount))
+    if (!m_registry.IsValid(m_player) || slot_index < 0 || slot_index >= static_cast<int>(HotbarComponent::kSlotCount))
         return false;
 
     const HotbarComponent* hotbar = m_registry.TryGetComponent<HotbarComponent>(m_player);

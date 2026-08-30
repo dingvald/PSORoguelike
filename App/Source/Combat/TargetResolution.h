@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Components/WeaponComponent.h" // WeaponRangeShape
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/WeaponComponent.h" // WeaponRangeShape
 #include "Engine/Math/Vec2.h"
 #include "Engine/World/Grid.h"
 

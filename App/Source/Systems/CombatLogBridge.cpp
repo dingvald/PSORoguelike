@@ -4,23 +4,23 @@
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
 
+#include "Combat/PhotonArt.h"
+#include "Combat/PhotonArtCastEvent.h"
+#include "Combat/PhotonArtLibrary.h"
+#include "Combat/StatusEffect.h"
+#include "Combat/StatusEffectEvent.h"
+#include "Combat/StatusEffectLibrary.h"
+#include "Combat/Technique.h"
+#include "Combat/TechniqueCastEvent.h"
+#include "Combat/TechniqueLibrary.h"
+#include "Components/StatusEffectComponent.h"
+#include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
-#include "Engine/Combat/PhotonArt.h"
-#include "Engine/Combat/PhotonArtCastEvent.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
-#include "Engine/Combat/StatusEffect.h"
-#include "Engine/Combat/StatusEffectEvent.h"
-#include "Engine/Combat/StatusEffectLibrary.h"
-#include "Engine/Combat/Technique.h"
-#include "Engine/Combat/TechniqueCastEvent.h"
-#include "Engine/Combat/TechniqueLibrary.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatusEffectComponent.h"
-#include "Engine/ECS/TPComponent.h"
 #include "Engine/Items/ItemPickupEvent.h"
 #include "Engine/Messages/MessageBus.h"
 
@@ -38,15 +38,15 @@ CombatLogBridge::CombatLogBridge(Registry& registry, MessageBus& message_bus, co
 
 void CombatLogBridge::Subscribe(Entity actor)
 {
-    EventHandlerComponent& events = actor.Get<EventHandlerComponent>();
+    EventHandlerComponent& events = actor.GetOrEmplace<EventHandlerComponent>();
     events.Subscribe<AfterDamageEvent, CombatLogBridge>([this](Entity entity, AfterDamageEvent& event)
-                                                         { OnDamage(entity, event); });
-    events.Subscribe<AfterTechniqueCastEvent, CombatLogBridge>(
-        [this](Entity entity, AfterTechniqueCastEvent& event) { OnTechniqueCast(entity, event); });
-    events.Subscribe<AfterPhotonArtCastEvent, CombatLogBridge>(
-        [this](Entity entity, AfterPhotonArtCastEvent& event) { OnPhotonArtCast(entity, event); });
+                                                        { OnDamage(entity, event); });
+    events.Subscribe<AfterTechniqueCastEvent, CombatLogBridge>([this](Entity entity, AfterTechniqueCastEvent& event)
+                                                               { OnTechniqueCast(entity, event); });
+    events.Subscribe<AfterPhotonArtCastEvent, CombatLogBridge>([this](Entity entity, AfterPhotonArtCastEvent& event)
+                                                               { OnPhotonArtCast(entity, event); });
     events.Subscribe<AfterItemPickupEvent, CombatLogBridge>([this](Entity entity, AfterItemPickupEvent& event)
-                                                             { OnItemPickup(entity, event); });
+                                                            { OnItemPickup(entity, event); });
     events.Subscribe<AfterStatusEffectsChangedEvent, CombatLogBridge>(
         [this](Entity entity, AfterStatusEffectsChangedEvent& event) { OnStatusEffectsChanged(entity, event); });
 }

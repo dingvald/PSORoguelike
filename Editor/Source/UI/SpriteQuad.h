@@ -41,10 +41,27 @@ inline void AppendSpriteQuad(std::vector<TileVertex>& out, const SDL_FRect& dst,
 
 // Centers a sprite_size-sized box within box, at its native (unscaled) pixel
 // size -- so a small icon doesn't stretch to fill an oversized cell/slot.
+// For fixed-size RmlUi chrome (palette icons, preview headers) that sits
+// outside a PreviewCanvas's zoomable content -- see ZoomedSizeRect for
+// sprites drawn inside one.
 inline SDL_FRect NativeSizeRect(const SDL_FRect& box, Vec2 sprite_size)
 {
     const float w = static_cast<float>(sprite_size.x);
     const float h = static_cast<float>(sprite_size.y);
+    return SDL_FRect{box.x + (box.w - w) * 0.5f, box.y + (box.h - h) * 0.5f, w, h};
+}
+
+// Same centering as NativeSizeRect, but the sprite's native size is scaled
+// by zoom first -- so a cell's stamped sprite grows/shrinks with a
+// PreviewCanvas's current zoom instead of staying pinned to its native pixel
+// size (box itself already reflects zoom via WorldToScreen; this scales the
+// sprite drawn inside it the same way). Still centered rather than
+// stretched to box's own size, same non-distortion rationale as
+// NativeSizeRect.
+inline SDL_FRect ZoomedSizeRect(const SDL_FRect& box, Vec2 sprite_size, float zoom)
+{
+    const float w = static_cast<float>(sprite_size.x) * zoom;
+    const float h = static_cast<float>(sprite_size.y) * zoom;
     return SDL_FRect{box.x + (box.w - w) * 0.5f, box.y + (box.h - h) * 0.5f, w, h};
 }
 

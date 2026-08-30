@@ -1,21 +1,21 @@
 #include "Actions/TechniqueAction.h"
 
+#include "Combat/CombatMath.h"
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
+#include "Combat/StatusEffectApplication.h"
 #include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
+#include "Combat/Technique.h"
+#include "Combat/TechniqueCastEvent.h"
+#include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
-#include "Engine/Combat/CombatMath.h"
+#include "Components/StatsComponent.h"
+#include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
-#include "Engine/Combat/StatusEffectApplication.h"
-#include "Engine/Combat/Technique.h"
-#include "Engine/Combat/TechniqueCastEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
-#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/TPComponent.h"
 
 #include <cmath>
 #include <vector>

@@ -72,10 +72,9 @@ private:
     void ShowScreen(Mode mode);
     void InitializeRenderer(SDL_Renderer& renderer);
 
-    // Resolves every authored entity prefab once into a renderable cache
-    // (for drawing placed pieces' stamped prefabs) and a socket-info cache
-    // (the SocketLookup DungeonStitcher::GenerateDungeon needs) -- shared by
-    // both concerns since both are keyed by prefab id, mirroring
+    // Resolves every authored entity prefab once into a renderable cache, for
+    // drawing placed pieces' stamped prefabs (and a dead-end socket's
+    // fallback prefab, see RenderPreview) -- mirrors
     // PieceEditorLayer::BuildPalette's single enumeration pass.
     void BuildPrefabCaches();
 
@@ -135,7 +134,6 @@ private:
         bool has_renderable = false;
     };
     std::unordered_map<std::uint32_t, PrefabVisual> m_renderables;
-    std::unordered_map<std::uint32_t, SocketInfo> m_sockets;
 
     // -- List state --
     PieceLibrary m_pieces;

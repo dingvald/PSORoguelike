@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Components/WeaponComponent.h" // WeaponRangeShape
 #include "Engine/Combat/TargetingMode.h"
-#include "Engine/ECS/WeaponComponent.h" // WeaponRangeShape
 
 namespace psr {
 

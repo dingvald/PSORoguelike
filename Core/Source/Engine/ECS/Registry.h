@@ -52,6 +52,9 @@ public:
     // assert (a no-op in release builds).
     bool HasPrefab(std::uint32_t prefab_id) const;
 
+    std::uint32_t GetPrefabId(entt::entity prefab_entity) const { return m_entity_to_prefab_map.at(prefab_entity); }
+    entt::entity GetPrefabEntity(std::uint32_t prefab_id) const { return m_prefab_to_entity_map.at(prefab_id); }
+
     void DestroyEntity(entt::entity entity);
     bool IsValid(entt::entity entity) const;
 
@@ -127,6 +130,16 @@ public:
     template <typename TComponent, typename TFilter, typename TFunc> void Each(TFunc&& func)
     {
         m_runtime_registry->view<TComponent, TFilter>().each(std::forward<TFunc>(func));
+    }
+
+    template <typename TComponent, typename TFunc> void EachPrefab(TFunc&& func)
+    {
+        m_prefab_registry->view<TComponent>().each(std::forward<TFunc>(func));
+    }
+
+    template <typename TComponent, typename TFilter, typename TFunc> void EachPrefab(TFunc&& func)
+    {
+        m_prefab_registry->view<TComponent, TFilter>().each(std::forward<TFunc>(func));
     }
 
     // True iff at least one live entity currently has TComponent.
@@ -290,7 +303,8 @@ private:
     entt::meta_ctx m_meta_ctx;
     std::unique_ptr<entt::registry> m_runtime_registry;
     std::unique_ptr<entt::registry> m_prefab_registry;
-    std::unordered_map<std::uint32_t, entt::entity> m_prefabs;
+    std::unordered_map<std::uint32_t, entt::entity> m_prefab_to_entity_map;
+    std::unordered_map<entt::entity, std::uint32_t> m_entity_to_prefab_map;
 };
 
 } // namespace psr

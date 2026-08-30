@@ -39,6 +39,9 @@ project "Editor"
       -- link time (Editor doesn't link against App, which is a ConsoleApp).
       "../App/Source/Combat/**.h",
       "../App/Source/Combat/**.cpp",
+      -- AffixEditorLayer/PrefabEditorLayer read/write Affix content directly.
+      "../App/Source/Items/**.h",
+      "../App/Source/Items/**.cpp",
       -- RegistryRenderableLookup resolves a live entity's RenderableComponent
       -- into the RenderableTile content editors draw for palette icons/canvas
       -- previews -- reused as-is rather than duplicating it Editor-side.

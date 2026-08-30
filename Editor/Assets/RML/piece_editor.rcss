@@ -1,6 +1,10 @@
 /* Piece Editor's own styles, beyond the shared List/Edit shell in
    content_editor.rcss (linked before this file) -- the palette, per-cell
-   inspector, and stamped-prefab row list. */
+   inspector, stamped-prefab row list, and per-cell socket row list. */
+
+h3 .btn {
+    margin-left: 8px;
+}
 
 .side-top {
     flex: 0 0 auto;
@@ -85,4 +89,8 @@
 .prefab-edge {
     flex: 0 0 auto;
     width: auto;
+}
+
+.socket-edge, .socket-fallback {
+    width: 100%;
 }

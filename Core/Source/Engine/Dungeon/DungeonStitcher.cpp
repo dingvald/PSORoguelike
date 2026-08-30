@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
+#include <optional>
 #include <queue>
 #include <random>
 #include <unordered_map>
@@ -14,23 +15,16 @@ namespace psr {
 
 namespace {
 
-    // A piece's socket resolved to its piece-local position -- computed once
-    // per referenced piece and cached (see socket_cache below), since a piece
-    // may be considered as a growth candidate many times.
-    struct ResolvedSocket
-    {
-        Vec2 local_cell;
-        EdgeDirection edge;
-        SocketInfo info;
-    };
-
-    // A socket on an already-placed piece, not yet connected to anything.
+    // A socket on an already-placed piece, not yet connected to anything --
+    // a PieceSocket translated into world space plus the piece it came from.
     struct OpenSocket
     {
         std::size_t piece_index;
         Vec2 world_cell;
         EdgeDirection edge;
-        SocketInfo info;
+        std::vector<std::string> tags;
+        std::vector<std::string> connects_to_tags;
+        std::uint32_t fallback_prefab_id = 0;
     };
 
     std::int64_t PackCell(Vec2 v)
@@ -47,18 +41,18 @@ namespace {
         return false;
     }
 
-    std::vector<ResolvedSocket> ResolveSockets(const DungeonPiece& piece, const SocketLookup& lookup)
+    // A connects to B iff either one's connects_to_tags accepts the other's
+    // tags -- a one-way filter checked in both directions, not a symmetric
+    // tags-to-tags match. tags describes what a socket *is*; connects_to_tags
+    // what it *accepts*.
+    bool SocketsConnect(const std::vector<std::string>& a_connects_to_tags, const std::vector<std::string>& a_tags,
+                       const std::vector<std::string>& b_connects_to_tags, const std::vector<std::string>& b_tags)
     {
-        std::vector<ResolvedSocket> sockets;
-        for (const PieceCell& cell : piece.cells)
-            for (const PieceCellPrefab& prefab : cell.prefabs)
-                if (std::optional<SocketInfo> info = lookup(prefab.prefab_id))
-                    sockets.push_back(ResolvedSocket{cell.offset, prefab.edge, std::move(*info)});
-        return sockets;
+        return SharesTag(a_connects_to_tags, b_tags) || SharesTag(b_connects_to_tags, a_tags);
     }
 
     // One growth candidate: a dungeon-pool piece ref plus which of its own
-    // resolved sockets would connect to the open socket being grown from.
+    // sockets would connect to the open socket being grown from.
     struct Candidate
     {
         const DungeonPieceRef* ref;
@@ -67,7 +61,6 @@ namespace {
     };
 
     std::vector<Candidate> BuildCandidates(const Dungeon& dungeon, const PieceLibrary& library,
-                                           const std::unordered_map<std::uint32_t, std::vector<ResolvedSocket>>& socket_cache,
                                            const std::unordered_map<std::uint32_t, int>& occurrence_count,
                                            const OpenSocket& open, bool exit_already_placed)
     {
@@ -90,13 +83,12 @@ namespace {
                     continue;
             }
 
-            auto cached = socket_cache.find(ref.piece_id);
-            if (cached == socket_cache.end())
-                continue;
-            for (std::size_t i = 0; i < cached->second.size(); ++i)
+            for (std::size_t i = 0; i < piece->sockets.size(); ++i)
             {
-                const ResolvedSocket& candidate_socket = cached->second[i];
-                if (candidate_socket.edge == needed_edge && SharesTag(open.info.tags, candidate_socket.info.tags))
+                const PieceSocket& candidate_socket = piece->sockets[i];
+                if (candidate_socket.edge == needed_edge &&
+                    SocketsConnect(open.connects_to_tags, open.tags, candidate_socket.connects_to_tags,
+                                   candidate_socket.tags))
                     candidates.push_back(Candidate{&ref, piece, i});
             }
         }
@@ -139,19 +131,9 @@ namespace {
 
 } // namespace
 
-DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& library, const SocketLookup& socket_lookup,
-                              std::uint64_t seed)
+DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& library, std::uint64_t seed)
 {
     std::mt19937_64 rng{seed};
-
-    // Cache every referenced piece's resolved sockets once -- BuildCandidates
-    // is called once per growth attempt and would otherwise re-scan the same
-    // piece's cells repeatedly.
-    std::unordered_map<std::uint32_t, std::vector<ResolvedSocket>> socket_cache;
-    for (const DungeonPieceRef& ref : dungeon.pieces)
-        if (const DungeonPiece* piece = library.Find(ref.piece_id))
-            if (piece->area_tag == dungeon.area_tag)
-                socket_cache.try_emplace(ref.piece_id, ResolveSockets(*piece, socket_lookup));
 
     const DungeonPieceRef* entrance_ref = nullptr;
     const DungeonPiece* entrance_piece = nullptr;
@@ -188,8 +170,9 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
 
     std::vector<OpenSocket> frontier;
     std::vector<OpenSocket> unconnected;
-    for (const ResolvedSocket& socket : socket_cache[entrance_piece->id])
-        frontier.push_back(OpenSocket{0, socket.local_cell, socket.edge, socket.info});
+    for (const PieceSocket& socket : entrance_piece->sockets)
+        frontier.push_back(OpenSocket{0, socket.cell_offset, socket.edge, socket.tags, socket.connects_to_tags,
+                                       socket.fallback_prefab_id});
 
     bool exit_placed = false;
     std::size_t exit_index = 0;
@@ -206,8 +189,7 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
         const OpenSocket open = frontier[frontier_index];
         frontier.erase(frontier.begin() + static_cast<std::ptrdiff_t>(frontier_index));
 
-        std::vector<Candidate> candidates =
-            BuildCandidates(dungeon, library, socket_cache, occurrence_count, open, exit_placed);
+        std::vector<Candidate> candidates = BuildCandidates(dungeon, library, occurrence_count, open, exit_placed);
 
         bool placed = false;
         while (!candidates.empty() && !placed)
@@ -234,9 +216,9 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
             }
 
             const Candidate candidate = candidates[chosen];
-            const ResolvedSocket& matching_socket = socket_cache[candidate.piece->id][candidate.socket_index];
+            const PieceSocket& matching_socket = candidate.piece->sockets[candidate.socket_index];
             const Vec2 world_offset =
-                open.world_cell + EdgeDirectionOffset(open.edge) - matching_socket.local_cell;
+                open.world_cell + EdgeDirectionOffset(open.edge) - matching_socket.cell_offset;
 
             bool overlaps = false;
             for (const PieceCell& cell : candidate.piece->cells)
@@ -263,14 +245,14 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
                 exit_index = new_index;
             }
 
-            const std::vector<ResolvedSocket>& all_sockets = socket_cache[candidate.piece->id];
+            const std::vector<PieceSocket>& all_sockets = candidate.piece->sockets;
             for (std::size_t i = 0; i < all_sockets.size(); ++i)
             {
                 if (i == candidate.socket_index)
                     continue;
-                const ResolvedSocket& socket = all_sockets[i];
-                frontier.push_back(
-                    OpenSocket{new_index, world_offset + socket.local_cell, socket.edge, socket.info});
+                const PieceSocket& socket = all_sockets[i];
+                frontier.push_back(OpenSocket{new_index, world_offset + socket.cell_offset, socket.edge, socket.tags,
+                                              socket.connects_to_tags, socket.fallback_prefab_id});
             }
 
             placed = true;
@@ -308,7 +290,7 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
                 continue;
             if (a.world_cell + EdgeDirectionOffset(a.edge) != b.world_cell)
                 continue;
-            if (!SharesTag(a.info.tags, b.info.tags))
+            if (!SocketsConnect(a.connects_to_tags, a.tags, b.connects_to_tags, b.tags))
                 continue;
 
             layout.connections.push_back(SocketConnection{a.piece_index, b.piece_index, a.world_cell, b.world_cell});
@@ -324,7 +306,7 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
     for (std::size_t i = 0; i < unconnected.size(); ++i)
         if (!consumed[i])
             layout.dead_ends.push_back(DeadEndSocket{unconnected[i].piece_index, unconnected[i].world_cell,
-                                                      unconnected[i].edge, unconnected[i].info.fallback_prefab_id});
+                                                      unconnected[i].edge, unconnected[i].fallback_prefab_id});
 
     // Phase 4: lock & key. Candidate lock edges are tree edges only -- a
     // loopback edge is never a bridge (both endpoints were already connected

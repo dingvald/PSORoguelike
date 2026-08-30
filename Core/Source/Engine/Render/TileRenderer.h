@@ -31,9 +31,11 @@ public:
 
     // zoom scales both the tile grid step and each sprite's drawn size
     // around camera_position; 1.0 is the unscaled tile_width/tile_height
-    // passed to the constructor.
-    void Draw(SDL_Renderer& renderer, Vec2 camera_position, int window_width, int window_height,
-              float zoom = 1.0f) const;
+    // passed to the constructor. camera_offset is Camera::GetRenderOffset()'s
+    // sub-tile follow lag, forwarded to TileToPixel -- see its own doc
+    // comment; defaults to {} for callers with no smoothed camera.
+    void Draw(SDL_Renderer& renderer, Vec2 camera_position, int window_width, int window_height, float zoom = 1.0f,
+              Vec2f camera_offset = {}) const;
 
 private:
     Grid* m_grid;

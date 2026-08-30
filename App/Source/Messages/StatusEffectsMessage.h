@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Combat/StatusEffectType.h"
+#include "Combat/StatusEffectType.h"
 
 #include <vector>
 

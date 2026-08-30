@@ -16,6 +16,7 @@ project "App-Test"
       "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",
+      "../App/Source/Items/**.h", "../App/Source/Items/**.cpp",
       "../App/Source/Systems/**.h", "../App/Source/Systems/**.cpp",
       -- States/ is SDL/RmlUi-free (TargetSelectionState.cpp's own SDL3/
       -- SDL_keycode.h include is just key-code constants, no windowing/

@@ -1,15 +1,15 @@
 #pragma once
 
+#include "Combat/StatusEffectLibrary.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/StatusEffectComponent.h"
+#include "Components/TPComponent.h"
 #include "Engine/Combat/DeathSystem.h"
 #include "Engine/Combat/HealthSystem.h"
-#include "Engine/Combat/StatusEffectLibrary.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatusEffectComponent.h"
-#include "Engine/ECS/TPComponent.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/World/Grid.h"
+#include "Items/AffixLibrary.h"
 
 namespace psr {
 

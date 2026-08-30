@@ -36,14 +36,18 @@ struct PixelPosition
 // (no integer tile-count rounding), so nothing shifts on screen as zoom changes, only
 // the step size does (see TileRenderer::Draw, the original site of this formula, for
 // why that matters). zoomed_tile_width/height are already tile_size * zoom -- callers
-// compute that once, not per placement.
+// compute that once, not per placement. camera_offset is Camera::GetRenderOffset()'s
+// sub-tile follow lag -- same units and sign convention as offset, but subtracted
+// instead of added, since it shifts where the *camera* is looking rather than where
+// the tile itself sits; defaults to {} for callers (tests, editor tooling) with no
+// smoothing to apply.
 inline PixelPosition TileToPixel(Vec2 position, Vec2f offset, Vec2 camera_position, int window_width, int window_height,
-                                 float zoomed_tile_width, float zoomed_tile_height)
+                                 float zoomed_tile_width, float zoomed_tile_height, Vec2f camera_offset = {})
 {
     float x = static_cast<float>(window_width) / 2.0f +
-              (static_cast<float>(position.x - camera_position.x) + offset.x) * zoomed_tile_width;
+              (static_cast<float>(position.x - camera_position.x) + offset.x - camera_offset.x) * zoomed_tile_width;
     float y = static_cast<float>(window_height) / 2.0f +
-              (static_cast<float>(position.y - camera_position.y) + offset.y) * zoomed_tile_height;
+              (static_cast<float>(position.y - camera_position.y) + offset.y - camera_offset.y) * zoomed_tile_height;
     return PixelPosition{x, y};
 }
 

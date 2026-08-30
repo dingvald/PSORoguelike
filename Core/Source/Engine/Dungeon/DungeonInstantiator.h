@@ -34,15 +34,17 @@ struct DungeonInstantiation
 // (skipped if that id isn't a registered prefab, or is 0) and added to grid
 // at world_offset + offset + cell.offset -- offset is normally
 // -ComputeDungeonBounds(...).origin, translating the layout's own coordinate
-// space into grid's zero-based one -- with a Position stamped to match. A
-// socket cell layout.dead_ends marks as unconnected has its own prefab_id
-// swapped for that dead end's fallback_prefab_id instead (the cell is left
-// unstamped if fallback_prefab_id is 0), the same substitution the Dungeon
-// Editor's preview already renders for dead ends. grid must already be
-// sized to fit (see ComputeDungeonBounds) -- this function does not resize
-// it. A piece_id from layout.pieces that library can't resolve is skipped
-// (defensive: GenerateDungeon only ever placed pieces it resolved from this
-// same library, so this only matters if a stale/mismatched library is passed).
+// space into grid's zero-based one -- with a Position stamped to match.
+// Separately, each placed piece's own PieceSocket list is walked: a socket
+// layout.dead_ends marks as unconnected has its fallback_prefab_id stamped
+// into its cell the same way (skipped if fallback_prefab_id is 0) -- a
+// connected socket stamps nothing of its own, since it carries no visual,
+// only the two pieces' ordinary cell prefabs meeting at the border. grid
+// must already be sized to fit (see ComputeDungeonBounds) -- this function
+// does not resize it. A piece_id from layout.pieces that library can't
+// resolve is skipped (defensive: GenerateDungeon only ever placed pieces it
+// resolved from this same library, so this only matters if a stale/
+// mismatched library is passed).
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                          Registry& registry, Grid& grid);
 

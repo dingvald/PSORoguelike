@@ -47,7 +47,7 @@ public:
     // own EventHandlerComponent, which every live entity always has.
     template <typename TEvent> void Dispatch(TEvent& event) const
     {
-        Get<EventHandlerComponent>().Dispatch(*this, event);
+        GetOrEmplace<EventHandlerComponent>().Dispatch(*this, event);
     }
 
     Registry& GetRegistry() const { return *m_registry; }

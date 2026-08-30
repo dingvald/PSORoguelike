@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Combat/PhotonArtLibrary.h"
 #include "Engine/Actions/IAction.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
-#include "Engine/Items/AffixLibrary.h"
 #include "Engine/World/Grid.h"
+#include "Items/AffixLibrary.h"
 
 #include <cstdint>
 #include <random>

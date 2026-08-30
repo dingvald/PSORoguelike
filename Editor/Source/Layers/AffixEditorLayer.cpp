@@ -2,7 +2,7 @@
 
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
-#include "Engine/Items/AffixLibraryFile.h"
+#include "Items/AffixLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
@@ -328,9 +328,8 @@ void AffixEditorLayer::RefreshEditForm()
                                                 m_draft_id = std::move(v);
                                                 MarkDirty();
                                                 if (Rml::Element* title = m_editor->GetElementById("edit-title"))
-                                                    title->SetInnerRML(
-                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new affix)"}
-                                                                                     : m_draft_id));
+                                                    title->SetInnerRML(EscapeRml(
+                                                        m_draft_id.empty() ? std::string{"(new affix)"} : m_draft_id));
                                             }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-name"))

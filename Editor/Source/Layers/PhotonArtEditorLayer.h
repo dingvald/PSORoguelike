@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Engine/Combat/PhotonArt.h"
-#include "Engine/Combat/PhotonArtLibrary.h"
+#include "Combat/PhotonArt.h"
+#include "Combat/PhotonArtLibrary.h"
 #include "Engine/Layer.h"
 #include "UI/FieldWidgets.h"
 
@@ -21,7 +21,7 @@ class Event;
 class RmlClickListener;
 
 // The Photon Art Editor: browse/create/delete weapon-attached Photon Art
-// definitions (see Core/Engine/Combat/PhotonArt.h) -- a flat, bespoke
+// definitions (see Core/Combat/PhotonArt.h) -- a flat, bespoke
 // non-ECS content type, so this follows AffixEditorLayer/PieceEditorLayer's
 // List/Edit shell pattern rather than PrefabEditorLayer's entt::meta
 // component-card one. Heavier than AffixEditorLayer (more scalar fields plus

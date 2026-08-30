@@ -91,27 +91,23 @@ inline EdgeDirection OppositeEdge(EdgeDirection edge)
     return EdgeDirection::North;
 }
 
-// One entity prefab stamped into a PieceCell -- the floor/decoration/socket
-// visual for that cell, mirroring UnnamedRoguelike's FeatureCell::prefabs
-// idiom exactly: a cell's appearance comes entirely from its stamped
-// prefabs' own RenderableComponent, never from data embedded here. edge is
-// only meaningful when prefab_id resolves to a prefab carrying
-// SocketComponent -- it's a per-placement override (defaulted by the editor
-// to whichever border edge was clicked), not a property of the prefab
-// itself, since the same socket prefab can face any direction depending on
-// where it's stamped. No retained "name string" field: this project resolves
-// a hashed NameId back to its authored label via the global NameIdRegistry
-// (see Engine/ECS/NameIdRegistry.h) instead of a per-struct _string field --
-// PieceLibraryFile.cpp's ReadNameId/WriteCellPrefab register/look it up.
+// One entity prefab stamped into a PieceCell -- the floor/decoration visual
+// for that cell, mirroring UnnamedRoguelike's FeatureCell::prefabs idiom
+// exactly: a cell's appearance comes entirely from its stamped prefabs' own
+// RenderableComponent, never from data embedded here. Sockets are no longer
+// stamped prefabs (see PieceSocket below), so this struct carries no
+// per-placement override fields anymore. No retained "name string" field:
+// this project resolves a hashed NameId back to its authored label via the
+// global NameIdRegistry (see Engine/ECS/NameIdRegistry.h) instead of a
+// per-struct _string field -- PieceLibraryFile.cpp's ReadNameId/
+// WriteCellPrefab register/look it up.
 struct PieceCellPrefab
 {
     std::uint32_t prefab_id = 0;
-    EdgeDirection edge = EdgeDirection::North;
 
     template <typename V> static void Describe(V& v)
     {
         v.template Field<&PieceCellPrefab::prefab_id>("prefab_id");
-        v.template Field<&PieceCellPrefab::edge>("edge");
     }
 };
 
@@ -131,6 +127,34 @@ struct PieceCell
     }
 };
 
+// A connection point on a piece's border, authored directly on the piece --
+// not a stamped entity prefab (a socket has no visual of its own; the two
+// pieces' ordinary cell prefabs meeting at the border provide the visual
+// continuity). cell_offset+edge place it the same way PieceCellPrefab::edge
+// used to; tags describes what this socket *is*, connects_to_tags what it
+// *accepts* -- DungeonStitcher connects socket A to B when either's
+// connects_to_tags intersects the other's tags (a one-way filter checked
+// both directions, not a symmetric tags-to-tags match). fallback_prefab_id
+// is stamped in by DungeonInstantiator when generation leaves this socket a
+// dead end (0 means leave the cell as-is instead).
+struct PieceSocket
+{
+    Vec2 cell_offset;
+    EdgeDirection edge = EdgeDirection::North;
+    std::vector<std::string> tags;
+    std::vector<std::string> connects_to_tags;
+    std::uint32_t fallback_prefab_id = 0;
+
+    template <typename V> static void Describe(V& v)
+    {
+        v.template Field<&PieceSocket::cell_offset>("cell_offset");
+        v.template Field<&PieceSocket::edge>("edge");
+        v.template Field<&PieceSocket::tags>("tags");
+        v.template Field<&PieceSocket::connects_to_tags>("connects_to_tags");
+        v.template Field<&PieceSocket::fallback_prefab_id>("fallback_prefab_id");
+    }
+};
+
 // One authored dungeon piece: a room/corridor/vault/etc. footprint built from
 // stamped entity prefabs, socket-tagged at its borders so DungeonStitcher can
 // connect it to compatible neighbours. area_tag is a plain filter string for
@@ -144,6 +168,7 @@ struct DungeonPiece
     std::string area_tag;
     PieceCategory category = PieceCategory::Room;
     std::vector<PieceCell> cells;
+    std::vector<PieceSocket> sockets;
 };
 
 } // namespace psr

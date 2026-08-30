@@ -1,13 +1,13 @@
 #include "Systems/StatusEffectWorldMarkers.h"
 
+#include "Combat/StatusEffect.h"
+#include "Combat/StatusEffectEvent.h"
+#include "Combat/StatusEffectLibrary.h"
 #include "Components/RenderableComponent.h"
-#include "Engine/Combat/StatusEffect.h"
-#include "Engine/Combat/StatusEffectEvent.h"
-#include "Engine/Combat/StatusEffectLibrary.h"
+#include "Components/StatusEffectComponent.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
-#include "Engine/ECS/StatusEffectComponent.h"
 #include "Engine/World/Grid.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -52,7 +52,7 @@ StatusEffectWorldMarkers::~StatusEffectWorldMarkers() { ClearMarkers(); }
 void StatusEffectWorldMarkers::Subscribe(Entity tracked)
 {
     m_tracked = tracked.Handle();
-    EventHandlerComponent& events = tracked.Get<EventHandlerComponent>();
+    EventHandlerComponent& events = tracked.GetOrEmplace<EventHandlerComponent>();
     events.Subscribe<AfterStatusEffectsChangedEvent, StatusEffectWorldMarkers>(
         [this](Entity actor, AfterStatusEffectsChangedEvent& event) { OnStatusEffectsChanged(actor, event); });
 }

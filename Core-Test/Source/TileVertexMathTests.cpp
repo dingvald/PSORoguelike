@@ -62,3 +62,25 @@ TEST_CASE("TileToPixel scales tile distance by the caller's already-zoomed tile 
     REQUIRE(pixel.x == 400.0f + 32.0f);
     REQUIRE(pixel.y == 300.0f);
 }
+
+TEST_CASE("TileToPixel defaults camera_offset to {0,0} (no smoothing applied)", "[TileVertexMath]")
+{
+    psr::PixelPosition with_default =
+        psr::TileToPixel(psr::Vec2{5, 5}, psr::Vec2f{}, psr::Vec2{5, 5}, 800, 600, 16.0f, 24.0f);
+    psr::PixelPosition with_explicit_zero =
+        psr::TileToPixel(psr::Vec2{5, 5}, psr::Vec2f{}, psr::Vec2{5, 5}, 800, 600, 16.0f, 24.0f, psr::Vec2f{});
+    REQUIRE(with_default.x == with_explicit_zero.x);
+    REQUIRE(with_default.y == with_explicit_zero.y);
+}
+
+TEST_CASE("TileToPixel subtracts camera_offset scaled by the zoomed tile size", "[TileVertexMath]")
+{
+    // A camera_offset opposite in sign to a per-entity offset (same tile,
+    // same magnitude) should land at the same pixel position as neither
+    // being set -- the camera lagging behind by X is visually equivalent to
+    // every tile shifting forward by X.
+    psr::PixelPosition pixel = psr::TileToPixel(psr::Vec2{5, 5}, psr::Vec2f{}, psr::Vec2{5, 5}, 800, 600, 16.0f, 24.0f,
+                                                psr::Vec2f{0.5f, -0.25f});
+    REQUIRE(pixel.x == 400.0f - 0.5f * 16.0f);
+    REQUIRE(pixel.y == 300.0f + 0.25f * 24.0f);
+}

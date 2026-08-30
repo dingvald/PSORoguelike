@@ -5,7 +5,12 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
+#include "Components/StatsComponent.h"
+#include "Components/StatusEffectComponent.h"
+#include "Components/TPComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/Combat/DeathSystem.h"
 #include "Engine/Combat/HealthSystem.h"
 #include "Engine/ECS/ArmorComponent.h"
@@ -14,13 +19,7 @@
 #include "Engine/ECS/ModComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
-#include "Engine/ECS/RaceComponent.h"
 #include "Engine/ECS/RarityComponent.h"
-#include "Engine/ECS/SocketComponent.h"
-#include "Engine/ECS/StatsComponent.h"
-#include "Engine/ECS/StatusEffectComponent.h"
-#include "Engine/ECS/TPComponent.h"
-#include "Engine/ECS/WeaponComponent.h"
 
 namespace psr {
 
@@ -40,7 +39,6 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     RaceComponent::Register(reg);
     RarityComponent::Register(reg);
     RenderableComponent::Register(reg);
-    SocketComponent::Register(reg);
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
     WeaponComponent::Register(reg);
