@@ -1,9 +1,12 @@
 #include "Engine/Dungeon/DungeonInstantiator.h"
 
 #include "Engine/ECS/Position.h"
+#include "Engine/ECS/SpawnWaveComponent.h"
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
+#include <utility>
 
 namespace psr {
 
@@ -60,14 +63,17 @@ namespace {
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                          Registry& registry, Grid& grid)
 {
-    const auto stamp = [&](Vec2 grid_cell, std::uint32_t prefab_id)
+    const auto stamp = [&](Vec2 grid_cell, std::uint32_t prefab_id) -> entt::entity
     {
         if (prefab_id == 0 || !registry.HasPrefab(prefab_id))
-            return;
+            return entt::null;
         const entt::entity entity = registry.CreateEntity(prefab_id);
         registry.Emplace<Position>(entity, Position{grid_cell});
         grid.AddEntity(grid_cell, entity);
+        return entity;
     };
+
+    DungeonInstantiation result;
 
     for (std::size_t piece_index = 0; piece_index < layout.pieces.size(); ++piece_index)
     {
@@ -89,9 +95,43 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
             if (const DeadEndSocket* dead_end = FindDeadEnd(layout, piece_index, world_cell, socket.edge))
                 stamp(world_cell + offset, dead_end->fallback_prefab_id);
         }
+
+        if (piece->spawns.empty())
+            continue;
+
+        std::map<int, std::vector<PendingSpawnEntry>> waves_by_number;
+        for (const PieceSpawn& spawn : piece->spawns)
+        {
+            const Vec2 world_cell = placed.world_offset + spawn.cell_offset + offset;
+            waves_by_number[spawn.wave].push_back(PendingSpawnEntry{world_cell, spawn.prefab_id});
+        }
+
+        const std::uint32_t group_id = static_cast<std::uint32_t>(piece_index);
+        bool is_first_wave = true;
+        for (auto& [wave_number, entries] : waves_by_number)
+        {
+            if (is_first_wave)
+            {
+                int spawned_count = 0;
+                for (const PendingSpawnEntry& entry : entries)
+                {
+                    const entt::entity entity = stamp(entry.world_cell, entry.prefab_id);
+                    if (entity == entt::null)
+                        continue;
+                    registry.Emplace<SpawnWaveComponent>(entity, SpawnWaveComponent{group_id, wave_number});
+                    ++spawned_count;
+                }
+                if (spawned_count > 0)
+                    result.initial_wave_counts[group_id] = spawned_count;
+                is_first_wave = false;
+            }
+            else
+            {
+                result.pending_spawn_waves.push_back(PendingSpawnWave{group_id, wave_number, std::move(entries)});
+            }
+        }
     }
 
-    DungeonInstantiation result;
     result.entrance_tile = offset;
     if (!layout.pieces.empty())
     {

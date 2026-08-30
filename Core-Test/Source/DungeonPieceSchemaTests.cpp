@@ -108,6 +108,26 @@ TEST_CASE("BuildPieceSchemaModel reflects the piece's top-level and cell/prefab 
     REQUIRE(has_tags);
     REQUIRE(has_connects_to_tags);
     REQUIRE(has_fallback_prefab_id);
+
+    const psr::FieldSchema* spawns = find("spawns");
+    REQUIRE(spawns != nullptr);
+    REQUIRE(spawns->kind == psr::FieldKind::Array);
+    const psr::FieldSchema& spawn_item = spawns->ElementSchema();
+    REQUIRE(spawn_item.kind == psr::FieldKind::Object);
+
+    bool has_spawn_cell_offset = false, has_prefab_id = false, has_wave = false;
+    for (const psr::FieldSchema& field : spawn_item.children)
+    {
+        if (field.name == "cell_offset")
+            has_spawn_cell_offset = true;
+        if (field.name == "prefab_id")
+            has_prefab_id = true;
+        if (field.name == "wave")
+            has_wave = true;
+    }
+    REQUIRE(has_spawn_cell_offset);
+    REQUIRE(has_prefab_id);
+    REQUIRE(has_wave);
 }
 
 TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangular footprint",
@@ -146,6 +166,12 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     socket.fallback_prefab_id = 333;
     piece.sockets.push_back(socket);
 
+    psr::PieceSpawn spawn;
+    spawn.cell_offset = psr::Vec2{0, 0};
+    spawn.prefab_id = 444;
+    spawn.wave = 1;
+    piece.spawns.push_back(spawn);
+
     TempDirectory temp;
     const std::filesystem::path path = temp.path / "forest_l_corridor.json";
     psr::SavePiece(path, piece);
@@ -182,6 +208,12 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     REQUIRE(loaded_socket.tags == std::vector<std::string>{"door"});
     REQUIRE(loaded_socket.connects_to_tags == std::vector<std::string>{"door", "corridor"});
     REQUIRE(loaded_socket.fallback_prefab_id == 333);
+
+    REQUIRE(loaded.spawns.size() == 1);
+    const psr::PieceSpawn& loaded_spawn = loaded.spawns.front();
+    REQUIRE(loaded_spawn.cell_offset == psr::Vec2{0, 0});
+    REQUIRE(loaded_spawn.prefab_id == 444);
+    REQUIRE(loaded_spawn.wave == 1);
 }
 
 TEST_CASE("LoadPieceLibrary throws DungeonError for an unknown category name", "[DungeonPieceSchema]")

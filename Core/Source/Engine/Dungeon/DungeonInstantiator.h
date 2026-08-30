@@ -1,11 +1,15 @@
 #pragma once
 
 #include "Engine/Dungeon/DungeonStitcher.h"
+#include "Engine/Dungeon/PendingSpawnWave.h"
 #include "Engine/Dungeon/PieceLibrary.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Math/Rect.h"
 #include "Engine/Math/Vec2.h"
 #include "Engine/World/Grid.h"
+
+#include <cstdint>
+#include <unordered_map>
 
 namespace psr {
 
@@ -27,6 +31,16 @@ Rect ComputeDungeonBounds(const DungeonLayout& layout, const PieceLibrary& libra
 struct DungeonInstantiation
 {
     Vec2 entrance_tile;
+
+    // group_id (a placed piece's index into layout.pieces) -> how many
+    // entities were stamped for that group's first (lowest-numbered) wave,
+    // immediately during instantiation. Only present for groups that
+    // authored at least one PieceSpawn.
+    std::unordered_map<std::uint32_t, int> initial_wave_counts;
+
+    // Every wave after each group's first, in ascending (group, wave) order,
+    // not yet spawned -- SpawnWaveSystem consumes these as earlier waves die.
+    std::vector<PendingSpawnWave> pending_spawn_waves;
 };
 
 // Stamps every placed piece's cells into grid as live entities: each cell's
@@ -45,6 +59,12 @@ struct DungeonInstantiation
 // resolve is skipped (defensive: GenerateDungeon only ever placed pieces it
 // resolved from this same library, so this only matters if a stale/
 // mismatched library is passed).
+//
+// Each placed piece's own PieceSpawn list is grouped by wave number: the
+// lowest-numbered wave stamps immediately (tagged with SpawnWaveComponent so
+// SpawnWaveSystem can track it), and every later wave is returned via
+// DungeonInstantiation::pending_spawn_waves for SpawnWaveSystem to spawn once
+// the previous wave's entities all die.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                          Registry& registry, Grid& grid);
 

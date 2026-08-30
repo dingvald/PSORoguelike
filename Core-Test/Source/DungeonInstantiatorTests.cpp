@@ -2,8 +2,12 @@
 
 #include "Engine/ECS/ComponentMeta.h"
 #include "Engine/ECS/Position.h"
+#include "Engine/ECS/SpawnWaveComponent.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -38,9 +42,19 @@ struct FallbackMarker
     }
 };
 
+struct EnemyMarker
+{
+    static void Register(entt::meta_ctx& ctx)
+    {
+        using namespace entt::literals;
+        entt::meta_factory<EnemyMarker>(ctx).func<&psr::CloneComponent<EnemyMarker>>("clone"_hs);
+    }
+};
+
 constexpr std::uint32_t kFloorPrefab = 1;
 constexpr std::uint32_t kDoorPrefab = 2;
 constexpr std::uint32_t kFallbackPrefab = 3;
+constexpr std::uint32_t kEnemyPrefab = 4;
 
 class TestEntityLoader : public IEntityLoader
 {
@@ -60,6 +74,10 @@ public:
         entt::entity fallback = prefab_registry.create();
         prefab_registry.emplace<FallbackMarker>(fallback);
         out_prefab_ids.emplace(kFallbackPrefab, fallback);
+
+        entt::entity enemy = prefab_registry.create();
+        prefab_registry.emplace<EnemyMarker>(enemy);
+        out_prefab_ids.emplace(kEnemyPrefab, enemy);
     }
 };
 
@@ -113,6 +131,24 @@ DungeonPiece MakePieceWithSocket(std::uint32_t id)
     socket.edge = EdgeDirection::East;
     piece.sockets.push_back(socket);
 
+    return piece;
+}
+
+// One floor-only cell at local (0,0), with the given spawns attached --
+// for exercising InstantiateDungeon's wave stamping/deferral, which reads
+// DungeonPiece::spawns directly, independent of cell.prefabs.
+DungeonPiece MakePieceWithSpawns(std::uint32_t id, std::vector<PieceSpawn> spawns)
+{
+    DungeonPiece piece;
+    piece.id = id;
+    piece.category = PieceCategory::Room;
+
+    PieceCell floor_only;
+    floor_only.offset = Vec2{0, 0};
+    floor_only.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+    piece.cells.push_back(floor_only);
+
+    piece.spawns = std::move(spawns);
     return piece;
 }
 
@@ -232,4 +268,100 @@ TEST_CASE("InstantiateDungeon leaves a dead end unstamped when fallback_prefab_i
     // Only the floor prefab stamps -- the dead end's socket has no fallback.
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 1);
     CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{1, 0})[0]));
+}
+
+TEST_CASE("InstantiateDungeon stamps a piece's only (wave 0) spawn immediately", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    FallbackMarker::Register(registry.GetMetaContext());
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceSpawn spawn;
+    spawn.cell_offset = Vec2{0, 0};
+    spawn.prefab_id = kEnemyPrefab;
+    spawn.wave = 0;
+
+    PieceLibrary library{{MakePieceWithSpawns(10, {spawn})}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
+
+    Grid grid(1, 1);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    // Floor prefab + the wave-0 enemy both land on the same cell.
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
+    const entt::entity enemy = grid.GetEntities(Vec2{0, 0})[1];
+    CHECK(registry.HasComponent<EnemyMarker>(enemy));
+    REQUIRE(registry.HasComponent<SpawnWaveComponent>(enemy));
+    CHECK(registry.GetComponent<SpawnWaveComponent>(enemy).group_id == 0);
+    CHECK(registry.GetComponent<SpawnWaveComponent>(enemy).wave == 0);
+
+    REQUIRE(result.initial_wave_counts.count(0) == 1);
+    CHECK(result.initial_wave_counts.at(0) == 1);
+    CHECK(result.pending_spawn_waves.empty());
+}
+
+TEST_CASE("InstantiateDungeon stamps only wave 0 and defers wave 1", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    FallbackMarker::Register(registry.GetMetaContext());
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceSpawn wave0;
+    wave0.cell_offset = Vec2{0, 0};
+    wave0.prefab_id = kEnemyPrefab;
+    wave0.wave = 0;
+
+    PieceSpawn wave1;
+    wave1.cell_offset = Vec2{0, 0};
+    wave1.prefab_id = kEnemyPrefab;
+    wave1.wave = 1;
+
+    PieceLibrary library{{MakePieceWithSpawns(10, {wave0, wave1})}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
+
+    Grid grid(1, 1);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    // Only the floor prefab + wave-0 enemy stamp now -- wave 1 stays pending.
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
+    REQUIRE(result.initial_wave_counts.count(0) == 1);
+    CHECK(result.initial_wave_counts.at(0) == 1);
+
+    REQUIRE(result.pending_spawn_waves.size() == 1);
+    const PendingSpawnWave& pending = result.pending_spawn_waves.front();
+    CHECK(pending.group_id == 0);
+    CHECK(pending.wave == 1);
+    REQUIRE(pending.entries.size() == 1);
+    CHECK(pending.entries.front().prefab_id == kEnemyPrefab);
+    CHECK(pending.entries.front().world_cell == Vec2{0, 0});
+}
+
+TEST_CASE("InstantiateDungeon leaves both spawn maps untouched for a piece with no spawns", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    FallbackMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
+
+    Grid grid(2, 1);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    CHECK(result.initial_wave_counts.empty());
+    CHECK(result.pending_spawn_waves.empty());
 }

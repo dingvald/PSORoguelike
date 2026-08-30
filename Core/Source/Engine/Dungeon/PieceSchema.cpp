@@ -44,6 +44,12 @@ PieceSchemaModel BuildPieceSchemaModel()
     sockets.children.push_back(std::move(socket_item));
     model.fields.push_back(std::move(sockets));
 
+    FieldSchema spawns{"spawns", FieldKind::Array};
+    FieldSchema spawn_item{"item", FieldKind::Object};
+    spawn_item.children = ReflectFields<PieceSpawn>(ctx);
+    spawns.children.push_back(std::move(spawn_item));
+    model.fields.push_back(std::move(spawns));
+
     return model;
 }
 

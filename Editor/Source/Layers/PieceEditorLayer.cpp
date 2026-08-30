@@ -535,7 +535,8 @@ void PieceEditorLayer::RefreshInspector()
     panel->SetInnerRML(
         "<div class=\"cell-head\">Cell (" + std::to_string(offset.x) + ", " + std::to_string(offset.y) +
         ")</div><div id=\"cell-prefabs\"></div>"
-        "<h3>Sockets<span id=\"add-socket\" class=\"btn\">Add Socket</span></h3><div id=\"cell-sockets\"></div>");
+        "<h3>Sockets<span id=\"add-socket\" class=\"btn\">Add Socket</span></h3><div id=\"cell-sockets\"></div>"
+        "<h3>Spawns<span id=\"add-spawn\" class=\"btn\">Add Spawn</span></h3><div id=\"cell-spawns\"></div>");
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
     {
@@ -705,6 +706,88 @@ void PieceEditorLayer::RefreshInspector()
                 RefreshInspector();
             });
         listener->Attach(*add_socket);
+        m_inspector_listeners.push_back(std::move(listener));
+    }
+
+    // -- Spawns on this cell -- piece-authored data mirroring sockets above,
+    // matched the same way by DungeonPiece::spawns' own cell_offset.
+    Rml::Element* spawns_container = m_editor->GetElementById("cell-spawns");
+    if (spawns_container)
+    {
+        std::vector<std::size_t> spawn_indices;
+        for (std::size_t i = 0; i < m_draft.spawns.size(); ++i)
+            if (m_draft.spawns[i].cell_offset == offset)
+                spawn_indices.push_back(i);
+
+        const std::vector<std::string> spawn_content(
+            spawn_indices.size(), "<div class=\"spawn-prefab field-row\"></div>"
+                                  "<div class=\"spawn-wave field-row\"></div>");
+
+        fieldwidgets::RowList spawn_result = fieldwidgets::BuildRowList(
+            *spawns_container, spawn_content, "<div class=\"list-empty\">No spawns on this cell.</div>",
+            [this, offset](std::size_t row_index)
+            {
+                std::vector<std::size_t> indices;
+                for (std::size_t i = 0; i < m_draft.spawns.size(); ++i)
+                    if (m_draft.spawns[i].cell_offset == offset)
+                        indices.push_back(i);
+                if (row_index < indices.size())
+                    m_draft.spawns.erase(m_draft.spawns.begin() + static_cast<std::ptrdiff_t>(indices[row_index]));
+                MarkDirty();
+                RefreshInspector();
+            },
+            [](std::size_t, std::size_t) {}); // order among a cell's spawns carries no meaning
+
+        for (std::size_t row = 0; row < spawn_result.rows.size() && row < spawn_indices.size(); ++row)
+        {
+            const std::size_t spawn_index = spawn_indices[row];
+            Rml::Element& row_element = *spawn_result.rows[row];
+
+            if (Rml::Element* prefab_row = row_element.QuerySelector(".spawn-prefab"))
+            {
+                const PieceSpawn& spawn = m_draft.spawns[spawn_index];
+                const PaletteEntry* prefab_entry = PaletteFor(spawn.prefab_id);
+                const std::string prefab_name =
+                    prefab_entry ? prefab_entry->id_string : NameIdRegistry::Find(spawn.prefab_id).value_or("");
+                keep(fieldwidgets::BuildNameIdField(
+                    *prefab_row, "prefab_id", spawn.prefab_id, prefab_name,
+                    [this, spawn_index](std::uint32_t id, std::string name)
+                    {
+                        if (spawn_index >= m_draft.spawns.size())
+                            return;
+                        m_draft.spawns[spawn_index].prefab_id = id;
+                        if (!name.empty())
+                            NameIdRegistry::Register(id, name);
+                        MarkDirty();
+                    }));
+            }
+
+            if (Rml::Element* wave_row = row_element.QuerySelector(".spawn-wave"))
+                keep(fieldwidgets::BuildIntField(
+                    *wave_row, "wave", m_draft.spawns[spawn_index].wave,
+                    [this, spawn_index](int v)
+                    {
+                        if (spawn_index < m_draft.spawns.size())
+                            m_draft.spawns[spawn_index].wave = v;
+                        MarkDirty();
+                    }));
+        }
+        for (auto& listener : spawn_result.listeners)
+            m_inspector_listeners.push_back(std::move(listener));
+    }
+
+    if (Rml::Element* add_spawn = m_editor->GetElementById("add-spawn"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, offset]
+            {
+                PieceSpawn spawn;
+                spawn.cell_offset = offset;
+                m_draft.spawns.push_back(std::move(spawn));
+                MarkDirty();
+                RefreshInspector();
+            });
+        listener->Attach(*add_spawn);
         m_inspector_listeners.push_back(std::move(listener));
     }
 }

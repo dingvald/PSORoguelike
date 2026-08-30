@@ -38,7 +38,10 @@ class RmlEventListener;
 // piece-authored data (DungeonPiece::sockets, not stamped prefabs) added via
 // the cell inspector's own "Add Socket" -- its edge (which border direction
 // it faces) defaults to whichever neighbour is unpainted at add time but
-// stays editable after, per this milestone's "few constraints" brief.
+// stays editable after, per this milestone's "few constraints" brief. Spawns
+// (DungeonPiece::spawns) are a third, independent cell-inspector list added
+// via "Add Spawn" -- an enemy prefab plus a wave number (see
+// Engine/Dungeon/SpawnWaveSystem.h for how wave gating works at runtime).
 // Modelled closely on UnnamedRoguelike's
 // FeatureEditorLayer (same List/Edit shell, same palette-paints-a-grid
 // interaction), simplified since a piece has no Z layers or generator

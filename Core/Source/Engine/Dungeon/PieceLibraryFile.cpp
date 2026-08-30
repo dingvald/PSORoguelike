@@ -51,6 +51,16 @@ namespace {
         throw DungeonError(std::string("piece file: '") + key + "' must be a name string or id");
     }
 
+    int ReadInt(const rapidjson::Value& object, const char* key, int fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd())
+            return fallback;
+        if (!it->value.IsInt())
+            throw DungeonError(std::string("piece file: '") + key + "' must be an integer");
+        return it->value.GetInt();
+    }
+
     Vec2 ReadVec2(const rapidjson::Value& object, const char* key)
     {
         Vec2 out;
@@ -131,6 +141,30 @@ namespace {
         for (const auto& entry : it->value.GetArray())
             sockets.push_back(ReadSocket(entry));
         return sockets;
+    }
+
+    PieceSpawn ReadSpawn(const rapidjson::Value& entry)
+    {
+        if (!entry.IsObject())
+            throw DungeonError("piece file: each spawn must be an object");
+        PieceSpawn spawn;
+        spawn.cell_offset = ReadVec2(entry, "cell_offset");
+        spawn.prefab_id = ReadNameId(entry, "prefab_id", 0);
+        spawn.wave = ReadInt(entry, "wave", 0);
+        return spawn;
+    }
+
+    std::vector<PieceSpawn> ReadSpawns(const rapidjson::Value& piece_def)
+    {
+        std::vector<PieceSpawn> spawns;
+        auto it = piece_def.FindMember("spawns");
+        if (it == piece_def.MemberEnd())
+            return spawns;
+        if (!it->value.IsArray())
+            throw DungeonError("piece file: 'spawns' must be an array");
+        for (const auto& entry : it->value.GetArray())
+            spawns.push_back(ReadSpawn(entry));
+        return spawns;
     }
 
     PieceCell ReadCell(const rapidjson::Value& entry)
@@ -235,6 +269,23 @@ namespace {
         return array;
     }
 
+    rapidjson::Value WriteSpawn(const PieceSpawn& spawn, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("cell_offset", WriteVec2(spawn.cell_offset, allocator), allocator);
+        AddNameIdMember(object, "prefab_id", spawn.prefab_id, allocator);
+        object.AddMember("wave", spawn.wave, allocator);
+        return object;
+    }
+
+    rapidjson::Value WriteSpawns(const std::vector<PieceSpawn>& spawns, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const PieceSpawn& spawn : spawns)
+            array.PushBack(WriteSpawn(spawn, allocator), allocator);
+        return array;
+    }
+
     rapidjson::Value WriteCell(const PieceCell& cell, rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value object(rapidjson::kObjectType);
@@ -264,6 +315,7 @@ DungeonPiece ReadPieceBody(const rapidjson::Value& piece_def)
     piece.category = ReadEnum<PieceCategory>(piece_def, "category", PieceCategory::Room, "category");
     piece.cells = ReadCells(piece_def);
     piece.sockets = ReadSockets(piece_def);
+    piece.spawns = ReadSpawns(piece_def);
     return piece;
 }
 
@@ -275,6 +327,7 @@ rapidjson::Value WritePieceBody(const DungeonPiece& piece, rapidjson::Document::
     object.AddMember("category", StringValue(std::string{EnumName(piece.category)}, allocator), allocator);
     object.AddMember("cells", WriteCells(piece.cells, allocator), allocator);
     object.AddMember("sockets", WriteSockets(piece.sockets, allocator), allocator);
+    object.AddMember("spawns", WriteSpawns(piece.spawns, allocator), allocator);
     return object;
 }
 

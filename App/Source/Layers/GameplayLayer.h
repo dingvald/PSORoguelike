@@ -4,6 +4,7 @@
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
+#include "Engine/Dungeon/SpawnWaveSystem.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/Camera.h"
@@ -105,6 +106,13 @@ private:
     // is driven by that construction order, see TurnCoordinator.cpp).
     // Declared after m_registry so it's destroyed first.
     std::optional<TurnCoordinator> m_turn_coordinator;
+
+    // Gates piece-authored spawn waves past their first: holds pointers into
+    // m_registry/m_grid only (declaration order relative to them doesn't
+    // matter for construction safety), but binds a component-lifecycle
+    // listener to its own address like TurnCoordinator above, so it's still
+    // non-movable and must be constructed in place.
+    std::optional<SpawnWaveSystem> m_spawn_wave_system;
 
     // Bridges the player's per-entity combat events onto the Layer
     // MessageBus for HudLayer to consume -- see CombatLogBridge.h. Holds

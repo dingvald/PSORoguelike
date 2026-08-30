@@ -155,6 +155,28 @@ struct PieceSocket
     }
 };
 
+// One enemy spawn point, piece-authored like PieceSocket -- cell_offset
+// places it the same way. wave groups spawns into ordered waves: the lowest
+// wave number present on a piece spawns immediately at dungeon generation;
+// each higher wave spawns only once every entity from the previous wave (for
+// that piece's placement) has died (see SpawnWaveSystem). Wave numbers need
+// not be contiguous -- pieces are grouped and sorted by whatever values are
+// authored. Each entry is a single specific prefab, not a weighted pool --
+// author multiple entries at the same cell/wave for variety.
+struct PieceSpawn
+{
+    Vec2 cell_offset;
+    std::uint32_t prefab_id = 0;
+    int wave = 0;
+
+    template <typename V> static void Describe(V& v)
+    {
+        v.template Field<&PieceSpawn::cell_offset>("cell_offset");
+        v.template Field<&PieceSpawn::prefab_id>("prefab_id");
+        v.template Field<&PieceSpawn::wave>("wave");
+    }
+};
+
 // One authored dungeon piece: a room/corridor/vault/etc. footprint built from
 // stamped entity prefabs, socket-tagged at its borders so DungeonStitcher can
 // connect it to compatible neighbours. area_tag is a plain filter string for
@@ -169,6 +191,7 @@ struct DungeonPiece
     PieceCategory category = PieceCategory::Room;
     std::vector<PieceCell> cells;
     std::vector<PieceSocket> sockets;
+    std::vector<PieceSpawn> spawns;
 };
 
 } // namespace psr

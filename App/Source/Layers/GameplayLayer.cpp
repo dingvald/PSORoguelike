@@ -134,6 +134,9 @@ void GameplayLayer::OnAttach()
     const DungeonInstantiation instantiation =
         InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid);
 
+    m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
+                                 instantiation.pending_spawn_waves);
+
     // Must be constructed before the player's EnergyComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
     // OnConstruct<EnergyComponent> listener, wired in its constructor.

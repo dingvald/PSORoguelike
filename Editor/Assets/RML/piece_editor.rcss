@@ -94,3 +94,7 @@ h3 .btn {
 .socket-edge, .socket-fallback {
     width: 100%;
 }
+
+.spawn-prefab, .spawn-wave {
+    width: 100%;
+}
