@@ -1,6 +1,7 @@
 {
     "schema_version": 1,
     "components": {
+        "item": {},
         "weapon": {
             "range_shape": "single_target",
             "range": 1,

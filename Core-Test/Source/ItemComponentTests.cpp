@@ -1,5 +1,6 @@
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
 #include "Engine/ECS/ModComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
@@ -48,16 +49,17 @@ std::uint32_t PrefabId(const std::string& id) { return entt::hashed_string::valu
 
 } // namespace
 
-TEST_CASE("Armor/Mod/Rarity components register as authorable with the expected field kinds", "[EntitySchema]")
+TEST_CASE("Armor/Item/Mod/Rarity components register as authorable with the expected field kinds", "[EntitySchema]")
 {
     entt::meta_ctx ctx;
     psr::ComponentSchemaRegistrar reg{ctx};
     psr::ArmorComponent::Register(reg);
+    psr::ItemComponent::Register(reg);
     psr::ModComponent::Register(reg);
     psr::RarityComponent::Register(reg);
     const psr::EntitySchemaModel model = reg.Model();
 
-    REQUIRE(model.components.size() == 3);
+    REQUIRE(model.components.size() == 4);
 
     const psr::ComponentSchema& armor = model.components[0];
     CHECK(armor.id == "armor");
@@ -69,13 +71,19 @@ TEST_CASE("Armor/Mod/Rarity components register as authorable with the expected 
     CHECK(armor.fields[1].name == "mod_slot_count");
     CHECK(armor.fields[1].kind == psr::FieldKind::Integer);
 
-    const psr::ComponentSchema& mod = model.components[1];
+    const psr::ComponentSchema& item = model.components[1];
+    CHECK(item.id == "item");
+    CHECK(item.authorable);
+    CHECK(item.is_tag);
+    CHECK(item.fields.empty());
+
+    const psr::ComponentSchema& mod = model.components[2];
     CHECK(mod.id == "mod");
     CHECK(mod.authorable);
     CHECK(mod.is_tag);
     CHECK(mod.fields.empty());
 
-    const psr::ComponentSchema& rarity = model.components[2];
+    const psr::ComponentSchema& rarity = model.components[3];
     CHECK(rarity.id == "rarity");
     CHECK(rarity.authorable);
     REQUIRE(rarity.fields.size() == 1);
@@ -88,6 +96,7 @@ TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")
     entt::meta_ctx ctx;
     psr::ComponentSchemaRegistrar reg{ctx};
     psr::ArmorComponent::Register(reg);
+    psr::ItemComponent::Register(reg);
     psr::RarityComponent::Register(reg);
 
     TempDirectory temp;
@@ -96,6 +105,7 @@ TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")
                   "schema_version": 1,
                   "components": {
                       "armor": { "slot": "torso", "mod_slot_count": 4 },
+                      "item": {},
                       "rarity": { "stars": 1 }
                   }
               })json");
@@ -114,12 +124,14 @@ TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")
     const psr::ArmorComponent& armor = prefab_registry.get<psr::ArmorComponent>(it->second);
     CHECK(armor.slot == psr::ArmorSlot::Torso);
     CHECK(armor.mod_slot_count == 4);
+    CHECK(prefab_registry.all_of<psr::ItemComponent>(it->second));
 }
 
 TEST_CASE("JsonEntityLoader round-trips a mod entity with an empty body", "[JsonEntityLoader]")
 {
     entt::meta_ctx ctx;
     psr::ComponentSchemaRegistrar reg{ctx};
+    psr::ItemComponent::Register(reg);
     psr::ModComponent::Register(reg);
     psr::RarityComponent::Register(reg);
 
@@ -128,6 +140,7 @@ TEST_CASE("JsonEntityLoader round-trips a mod entity with an empty body", "[Json
               R"json({
                   "schema_version": 1,
                   "components": {
+                      "item": {},
                       "mod": {},
                       "rarity": { "stars": 2 }
                   }
@@ -143,4 +156,5 @@ TEST_CASE("JsonEntityLoader round-trips a mod entity with an empty body", "[Json
     auto it = prefab_ids.find(PrefabId("items.mods.power_unit"));
     REQUIRE(it != prefab_ids.end());
     CHECK(prefab_registry.all_of<psr::ModComponent>(it->second));
+    CHECK(prefab_registry.all_of<psr::ItemComponent>(it->second));
 }

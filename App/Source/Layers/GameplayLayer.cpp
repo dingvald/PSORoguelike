@@ -13,6 +13,7 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/InventoryComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/SectionIdComponent.h"
@@ -231,6 +232,7 @@ void GameplayLayer::LoadNewGame()
     // has happened yet to credit any Meseta.
     m_registry.Emplace<SectionIdComponent>(m_player);
     m_registry.Emplace<CurrencyComponent>(m_player);
+    m_registry.Emplace<InventoryComponent>(m_player);
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
