@@ -18,6 +18,7 @@
 #include "Items/DropTableLibrary.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
+#include "States/CharacterScreenState.h"
 #include "States/ExploringState.h"
 #include "States/GameOverState.h"
 #include "States/GameStateMachine.h"
@@ -40,6 +41,8 @@ class IAction;
 struct HotbarSlotActivatedMessage;
 struct HudReadyMessage;
 struct RestartRequestedMessage;
+struct InventoryItemActivatedMessage;
+struct EquipmentSlotActivatedMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -113,6 +116,17 @@ private:
     // (via m_techniques/m_photon_arts) and publishes a HotbarStateMessage.
     void PublishHotbarState();
 
+    // Published by HudLayer when the player clicks a row on the Character
+    // screen (only meaningful while m_character_screen_state is on top --
+    // same stray-click guard OnHotbarSlotActivated already has). Calls
+    // EquipItem/UnequipSlot (Items/Equip.h) directly -- free/instant, no
+    // IAction, see CharacterScreenState's own doc comment for why -- and
+    // republishes the screen's contents on success so the open list reflects
+    // the change immediately.
+    void OnInventoryItemActivated(const InventoryItemActivatedMessage& message);
+    void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
+    void PublishCharacterScreenState();
+
     Registry m_registry;
     PieceLibrary m_pieces;
     AffixLibrary m_affixes; // empty: no affix content authored yet (pending M8.2's drop-table work)
@@ -182,12 +196,18 @@ private:
     // then Step()'s normal resolution) or the player cancels.
     std::unique_ptr<IAction> m_pending_cast_action;
 
-    // GameStateMachine and its three states this round -- declaration order
+    // GameStateMachine and its four states this round -- declaration order
     // matters: m_target_selection_state/m_game_over_state must outlive
-    // m_exploring_state (which holds references to both) and all three must
-    // outlive m_state_machine's use of any of them.
+    // m_exploring_state (which holds references to both) and all four must
+    // outlive m_state_machine's use of any of them. m_character_screen_state
+    // isn't referenced by ExploringState's constructor (unlike the other
+    // two) -- it's pushed directly from GameplayLayer::OnEvent's own
+    // 'C'-key interception instead, not from inside ExploringState::Update
+    // -- but it does need m_affixes (declared well above this block)
+    // constructed first for its own constructor argument.
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
+    CharacterScreenState m_character_screen_state{m_affixes};
     ExploringState m_exploring_state{m_target_selection_state, m_game_over_state};
     GameStateMachine m_state_machine;
 
