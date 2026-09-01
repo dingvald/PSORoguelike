@@ -35,11 +35,13 @@
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
+#include "Engine/Render/TileVertexMath.h"
 #include "Items/CharacterScreenSnapshot.h"
 #include "Items/DropTableLibraryFile.h"
 #include "Items/Equip.h"
 #include "Layers/HudLayer.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
+#include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
@@ -181,6 +183,7 @@ void GameplayLayer::LoadNewGame()
     // whether the player is the attacker or the target.
     m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects, m_player);
     m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
+    m_damage_text_system.Subscribe(Entity(m_registry, m_player));
 
     const DungeonLibrary dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
     const Dungeon* dungeon = dungeons.Find(entt::hashed_string::value(kDungeonId));
@@ -229,6 +232,7 @@ void GameplayLayer::LoadNewGame()
             m_registry.Emplace<EquipmentComponent>(entity, EquipmentComponent{weapon});
         }
         m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
+        m_damage_text_system.Subscribe(Entity(m_registry, entity));
     };
 
     const DungeonInstantiation instantiation =
@@ -348,6 +352,9 @@ void GameplayLayer::OnUpdate(float delta_time)
         m_room_visibility->Update(m_room_map->GetRoom(player_tile));
     }
     m_camera.Update(delta_time);
+
+    m_floating_text.Update(delta_time);
+    PublishFloatingTextState();
 }
 
 void GameplayLayer::EnsureRenderResources(SDL_Renderer& renderer)
@@ -375,6 +382,8 @@ void GameplayLayer::OnRender(SDL_Renderer* renderer)
     int width = 0;
     int height = 0;
     SDL_GetCurrentRenderOutputSize(renderer, &width, &height);
+    m_last_render_width = width;
+    m_last_render_height = height;
     m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, /*zoom=*/1.0f, m_camera.GetRenderOffset());
 }
 
@@ -486,6 +495,23 @@ void GameplayLayer::PublishCharacterScreenState()
         return;
 
     Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes));
+}
+
+void GameplayLayer::PublishFloatingTextState()
+{
+    FloatingTextStateMessage state;
+    state.entries.reserve(m_floating_text.Active().size());
+
+    for (const FloatingTextInstance& instance : m_floating_text.Active())
+    {
+        const PixelPosition pixel =
+            TileToPixel(instance.origin_tile, instance.offset, m_camera.GetPosition(), m_last_render_width,
+                        m_last_render_height, static_cast<float>(kTileWidth), static_cast<float>(kTileHeight),
+                        m_camera.GetRenderOffset());
+        state.entries.push_back(FloatingTextStateMessage::Entry{pixel.x, pixel.y, instance.text, instance.color});
+    }
+
+    Publish(state);
 }
 
 void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)

@@ -25,6 +25,7 @@ struct LootDropMessage;
 struct MesetaChangedMessage;
 struct CharacterScreenMessage;
 struct CharacterScreenClosedMessage;
+struct FloatingTextStateMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -75,6 +76,12 @@ private:
     // rebuilt every call since the inventory's length isn't fixed).
     void OnCharacterScreenState(const CharacterScreenMessage& message);
     void OnCharacterScreenClosed(const CharacterScreenClosedMessage& message);
+
+    // Rebuilds #floating-text-layer every call (published every frame by
+    // GameplayLayer) -- one positioned, non-interactive span per active
+    // FloatingTextSystem instance, left/top/color set inline since they're
+    // per-instance, not shared CSS.
+    void OnFloatingTextState(const FloatingTextStateMessage& message);
 
     void AppendLogLine(const std::string& text);
 

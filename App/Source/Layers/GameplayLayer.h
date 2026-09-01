@@ -10,6 +10,7 @@
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/Camera.h"
+#include "Engine/Render/FloatingTextSystem.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Engine/Render/TileRenderer.h"
@@ -24,6 +25,7 @@
 #include "States/GameStateMachine.h"
 #include "States/TargetSelectionState.h"
 #include "Systems/CombatLogBridge.h"
+#include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
 #include "Systems/LootDropSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
@@ -129,6 +131,14 @@ private:
     void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
     void PublishCharacterScreenState();
 
+    // Converts every currently-active m_floating_text instance to a screen
+    // pixel (via TileToPixel, using m_camera and the window size cached from
+    // the last OnRender call) and publishes a FloatingTextStateMessage for
+    // HudLayer to render. Called from OnUpdate, right after
+    // m_floating_text.Update() -- see that member's own doc comment for why
+    // this can't just live inside TurnCoordinator::Step/ExploringState.
+    void PublishFloatingTextState();
+
     Registry m_registry;
     PieceLibrary m_pieces;
     AffixLibrary m_affixes; // empty: no affix content authored yet (pending M8.2's drop-table work)
@@ -141,6 +151,30 @@ private:
     std::optional<Grid> m_grid;
     entt::entity m_player = entt::null;
     Camera m_camera;
+
+    // Window size fetched by OnRender's own SDL_GetCurrentRenderOutputSize
+    // call, cached here so OnUpdate's PublishFloatingTextState (which has no
+    // renderer/window handle of its own) can still convert world tiles to
+    // screen pixels. Zero until the first OnRender call -- harmless, since
+    // nothing can have spawned floating text before then.
+    int m_last_render_width = 0;
+    int m_last_render_height = 0;
+
+    // Generic short-lived colored-text-drifting-from-a-world-position system
+    // (see FloatingTextSystem.h) -- damage numbers (m_damage_text_system
+    // below) are its first consumer, not its only one. Advanced from
+    // OnUpdate directly, not from inside TurnCoordinator::Step/
+    // ExploringState::Update, so it keeps animating even while a modal
+    // GameState (target selection, the Character screen) is on top and the
+    // turn loop itself is paused.
+    FloatingTextSystem m_floating_text;
+
+    // Bridges AfterDamageEvent onto m_floating_text -- see DamageTextSystem.h.
+    // Holds only a pointer into m_floating_text (declared just above), so
+    // unlike CombatLogBridge/LootDropSystem it's a plain long-lived member,
+    // not an std::optional rebuilt every LoadNewGame(); only its Subscribe()
+    // calls need reissuing after a restart, same as CombatLogBridge's.
+    DamageTextSystem m_damage_text_system{m_floating_text};
 
     // Room-granularity fog of war: which placed piece each tile belongs to,
     // and which pieces are current/visited -- see RoomMap/RoomVisibilityTracker.

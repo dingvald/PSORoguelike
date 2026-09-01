@@ -37,6 +37,8 @@
 
         <div id="event-log"></div>
 
+        <div id="floating-text-layer"></div>
+
         <div id="game-over">
             <div id="game-over-text">YOU DIED</div>
             <div id="game-over-hint">Press any key to restart</div>
