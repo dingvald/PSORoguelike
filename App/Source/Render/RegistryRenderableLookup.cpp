@@ -22,12 +22,13 @@ std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::
 
 Vec2f RegistryRenderableLookup::GetRenderOffset(entt::entity entity) const
 {
-    const TweenComponent* tween = m_registry->TryGetComponent<TweenComponent>(entity);
-    if (!tween)
+    const TweenComponent* tween_component = m_registry->TryGetComponent<TweenComponent>(entity);
+    if (!tween_component || tween_component->queue.empty())
         return {};
 
-    const float progress = tween->duration > 0.0f ? std::clamp(tween->elapsed / tween->duration, 0.0f, 1.0f) : 1.0f;
-    return tween->start_offset * (1.0f - EaseOutQuad(progress));
+    const Tween& active = tween_component->queue.front();
+    const float progress = active.duration > 0.0f ? std::clamp(active.elapsed / active.duration, 0.0f, 1.0f) : 1.0f;
+    return active.start_offset + (active.end_offset - active.start_offset) * EaseOutQuad(progress);
 }
 
 } // namespace psr

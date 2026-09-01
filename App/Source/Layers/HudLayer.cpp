@@ -4,6 +4,7 @@
 #include "Messages/CharacterScreenMessage.h"
 #include "Messages/CombatLogEntryMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
+#include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
@@ -16,6 +17,7 @@
 #include "Messages/StatusEffectsMessage.h"
 
 #include "ApplicationFilepaths.h"
+#include "Engine/Math/Color.h"
 #include "Items/Equip.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
@@ -60,6 +62,14 @@ namespace {
         }
         return {"?", "poison"}; // unreachable for a valid enum value
     }
+
+    // No Color -> CSS-string conversion exists anywhere yet -- every other
+    // HUD color is a fixed hud.rcss rule, never a per-instance runtime value.
+    std::string ColorToRgbaCss(Color color)
+    {
+        return "rgba(" + std::to_string(color.r) + "," + std::to_string(color.g) + "," + std::to_string(color.b) +
+               "," + std::to_string(static_cast<float>(color.a) / 255.0f) + ")";
+    }
 } // namespace
 
 HudLayer::HudLayer() : Layer("HudLayer") {}
@@ -87,6 +97,7 @@ void HudLayer::OnAttach()
     Subscribe<MesetaChangedMessage>(&HudLayer::OnMesetaChanged, this);
     Subscribe<CharacterScreenMessage>(&HudLayer::OnCharacterScreenState, this);
     Subscribe<CharacterScreenClosedMessage>(&HudLayer::OnCharacterScreenClosed, this);
+    Subscribe<FloatingTextStateMessage>(&HudLayer::OnFloatingTextState, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -324,6 +335,25 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
         overlay->SetProperty("display", "none");
 
     m_character_screen_listeners.clear();
+}
+
+void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* layer = m_document->GetElementById("floating-text-layer");
+    if (!layer)
+        return;
+
+    std::string markup;
+    for (const FloatingTextStateMessage::Entry& entry : message.entries)
+    {
+        markup += "<span class=\"floating-text\" style=\"left:" + std::to_string(entry.screen_x) +
+                  "px; top:" + std::to_string(entry.screen_y) + "px; color:" + ColorToRgbaCss(entry.color) +
+                  ";\">" + EscapeRml(entry.text) + "</span>";
+    }
+    layer->SetInnerRML(markup);
 }
 
 } // namespace psr

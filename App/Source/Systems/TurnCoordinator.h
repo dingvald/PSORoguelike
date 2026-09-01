@@ -21,6 +21,7 @@ enum class TurnStep
     Resolved,           // the player's action (or a free no-op it attempted) resolved this call
     TargetingRequested, // a pending IAction* has requested a target -- see ITargetRequestSink
     PlayerDefeated, // the last PlayerControlledComponent-tagged actor was just destroyed -- see Step()'s own comment
+    AnimationsPending, // the just-resolved action queued a TweenComponent -- see ExploringState's AnimationState push
 };
 
 // Drives the turn loop: pulls the next-ready actor from a TurnQueue kept in
@@ -83,9 +84,14 @@ public:
     // valid until Step() next runs.
     void SetPendingAction(IAction* action) { m_pending_action = action; }
 
-    // Advances the turn loop by delta_time: ticks in-flight tweens and the
-    // input buffer, then lets every non-player actor act before yielding
-    // once the player has acted (or the player has no pending input).
+    // Advances the turn loop by delta_time: ticks the input buffer, then lets
+    // every non-player actor act before yielding once the player has acted
+    // (or the player has no pending input). Does NOT tick in-flight tweens
+    // itself any more -- that only happens while AnimationState owns the
+    // stack top (see its own doc comment), and by construction this method
+    // is never re-entered while any TweenComponent still exists (Step()
+    // yields AnimationsPending the instant one appears, below), so there's
+    // never one here to advance.
     //
     // Requires at least one live PlayerControlledComponent-tagged actor with
     // an EnergyComponent to be queued before this is called: TurnQueue's

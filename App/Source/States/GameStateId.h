@@ -14,6 +14,7 @@ enum class GameStateId
     TargetSelection,
     GameOver,
     CharacterScreen,
+    Animation,
 };
 
 } // namespace psr

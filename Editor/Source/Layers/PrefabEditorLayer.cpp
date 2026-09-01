@@ -476,6 +476,23 @@ namespace {
         return object;
     }
 
+    ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
+    {
+        ConsumableComponent consumable;
+        consumable.effect = ReadEnum<ConsumableEffect>(body, "effect", consumable.effect);
+        consumable.amount = ReadInt(body, "amount", consumable.amount);
+        return consumable;
+    }
+
+    rapidjson::Value WriteConsumableBody(const ConsumableComponent& consumable,
+                                         rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("effect", StringValue(std::string{EnumName(consumable.effect)}, allocator), allocator);
+        object.AddMember("amount", consumable.amount, allocator);
+        return object;
+    }
+
     // Per-kind chrome for an Inspector-style component card: the accent dot
     // colour (reusing existing theme.rcss/palette accents, not a new
     // palette), the card's title, and its body markup -- the same fixed-id
@@ -491,7 +508,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 9> kComponentKinds = {
+    constexpr std::array<ComponentKind, 10> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -531,6 +548,9 @@ namespace {
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
+         {"consumable", "Consumable", "#5de8d3",
+          "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
+          "<div id=\"field-consumable-amount\" class=\"field-row\"></div>"},
          {"drop_table", "Drop Table", "#e89c5d", "<div id=\"field-drop-table\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
@@ -930,7 +950,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
-            key == "armor" || key == "mod" || key == "rarity" || key == "drop_table")
+            key == "armor" || key == "mod" || key == "rarity" || key == "consumable" || key == "drop_table")
             m_component_order.emplace_back(key);
     }
 
@@ -948,6 +968,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
+    m_consumable =
+        components.HasMember("consumable") ? ReadConsumableBody(components["consumable"]) : ConsumableComponent{};
     m_drop_table =
         components.HasMember("drop_table") ? ReadDropTableRefBody(components["drop_table"]) : DropTableComponent{};
 
@@ -1307,6 +1329,21 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_rarity.stars = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-consumable-effect"))
+        keep(fieldwidgets::BuildEnumField(*row, "effect", EnumOptions<ConsumableEffect>(),
+                                          std::string{EnumName(m_consumable.effect)},
+                                          [this](std::string v)
+                                          {
+                                              m_consumable.effect = EnumFromString(v, ConsumableEffect::RestoreHp);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-consumable-amount"))
+        keep(fieldwidgets::BuildIntField(*row, "amount", m_consumable.amount,
+                                         [this](int v)
+                                         {
+                                             m_consumable.amount = v;
+                                             MarkDirty();
+                                         }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-drop-table"))
     {
@@ -1570,7 +1607,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // otherwise only affected by add/remove, never by in-place value
     // updates.
     for (const char* key :
-        {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "drop_table"})
+         {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "consumable", "drop_table"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1593,6 +1630,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteModBody(allocator);
         else if (key == "rarity")
             body = WriteRarityBody(m_rarity, allocator);
+        else if (key == "consumable")
+            body = WriteConsumableBody(m_consumable, allocator);
         else if (key == "drop_table")
             body = WriteDropTableRefBody(m_drop_table, allocator);
         else

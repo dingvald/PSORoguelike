@@ -3,6 +3,7 @@
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/ConsumableComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
@@ -51,7 +52,8 @@ class RmlEventListener;
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
 // (RenderableComponent, StatsComponent, RaceComponent, HealthComponent,
-// WeaponComponent, ArmorComponent, ModComponent, RarityComponent) -- not a
+// WeaponComponent, ArmorComponent, ModComponent, RarityComponent,
+// ConsumableComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -189,6 +191,7 @@ private:
     WeaponComponent m_weapon;
     ArmorComponent m_armor;
     RarityComponent m_rarity;
+    ConsumableComponent m_consumable;
     DropTableComponent m_drop_table;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --

@@ -8,16 +8,30 @@
 #include "Components/RaceComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
+#include "Components/TweenComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
+#include "Systems/TweenSystem.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
+
+// AttackAction no longer applies damage inline -- it queues a lunge-and-
+// return Tween pair with the hit-resolution loop captured as the lunge's
+// on_completion (see AttackAction.cpp's own doc comment). A single huge
+// delta_time cascades UpdateTweens through both queued Tweens (and fires the
+// damage callback) in a bounded loop, standing in for AnimationState's real
+// per-frame drive.
+void DrainAttackTween(psr::Registry& registry)
+{
+    while (registry.Any<psr::TweenComponent>())
+        psr::UpdateTweens(registry, 999.0f);
+}
 
 // Tag type identifying this test file's subscriptions to EventHandlerComponent
 // -- never instantiated, only used as Subscribe/Unsubscribe's TOwner key.
@@ -155,6 +169,7 @@ TEST_CASE("AttackAction eventually destroys a hostile SingleTarget occupant", "[
     {
         psr::ActionResult result = action.Perform(actor);
         REQUIRE(result.cost == psr::AttackAction::kAttackCost); // a hostile target was always found in range
+        DrainAttackTween(registry);
         if (!registry.IsValid(enemy_handle))
             destroyed = true;
     }
@@ -182,6 +197,7 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
 
     psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
     psr::ActionResult result = action.Perform(actor);
+    DrainAttackTween(registry);
 
     REQUIRE(result.cost == psr::AttackAction::kAttackCost);
     // ATP 80 vs DFP 0 lands well above 1 damage per hit; five overwhelmingly-
@@ -215,6 +231,7 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
 
         psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
         action.Perform(actor);
+        DrainAttackTween(registry);
         return 10000 - enemy.Get<psr::HealthComponent>().current_hp;
     };
 
@@ -252,7 +269,10 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
 
     psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
     for (int attempt = 0; attempt < 50 && registry.IsValid(enemy_handle); ++attempt)
+    {
         action.Perform(actor);
+        DrainAttackTween(registry);
+    }
 
     REQUIRE_FALSE(registry.IsValid(enemy_handle));
     REQUIRE(damage_events > 0);
@@ -359,6 +379,7 @@ TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-ch
 
     psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
     action.Perform(actor);
+    DrainAttackTween(registry);
 
     const psr::StatusEffectComponent* status = enemy.TryGet<psr::StatusEffectComponent>();
     REQUIRE(status != nullptr);

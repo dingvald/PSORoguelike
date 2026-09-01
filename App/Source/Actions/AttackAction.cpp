@@ -8,11 +8,16 @@
 #include "Combat/TargetResolution.h"
 #include "Components/RaceComponent.h"
 #include "Components/StatsComponent.h"
+#include "Components/TweenComponent.h"
+#include "Components/WeaponComponent.h" // RaceBonusEntry
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/Math/Vec2f.h"
 
+#include <random>
+#include <utility>
 #include <vector>
 
 namespace psr {
@@ -39,41 +44,68 @@ ActionResult AttackAction::Perform(Entity actor)
     const std::vector<Vec2> target_tiles =
         ResolveTargetTiles(*m_grid, registry, origin, m_direction, before_attack.range_shape, before_attack.range);
 
-    const StatsComponent& attacker_stats = before_attack.attacker_stats;
-    std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
-    std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
-
-    bool found_target = false;
+    std::vector<entt::entity> targets;
     for (Vec2 tile : target_tiles)
     {
-        // Snapshot the occupant list before hitting anything -- a lethal hit
-        // mutates the Grid's own occupant vector via RemoveEntity, which
-        // would otherwise invalidate iteration.
-        const std::vector<entt::entity> occupants = m_grid->GetEntities(tile);
-        for (entt::entity occupant : occupants)
+        for (entt::entity occupant : m_grid->GetEntities(tile))
         {
             if (occupant == actor.Handle() || !registry.HasComponent<HealthComponent>(occupant))
                 continue;
-            Entity target(registry, occupant);
-            if (!IsHostile(actor, target))
+            if (!IsHostile(actor, Entity(registry, occupant)))
+                continue;
+            targets.push_back(occupant);
+        }
+    }
+
+    if (targets.empty())
+        return ActionResult(0);
+
+    // Captured by the on_completion callback below rather than resolved now:
+    // hit rolls/damage/status only run once the lunge Tween actually reaches
+    // the target (see this class's own doc comment). registry/m_affixes/m_rng
+    // are long-lived (GameplayLayer-owned), same lifetime assumption
+    // MoveAction/AttackAction's own constructor pointers already rely on;
+    // actor_handle/targets/the weapon-derived combat parameters are captured
+    // by value since they describe this swing as committed at declare time.
+    Registry* registry_ptr = &registry;
+    const AffixLibrary* affixes = m_affixes;
+    std::mt19937* rng = m_rng;
+    const entt::entity actor_handle = actor.Handle();
+    const int hits_per_turn = before_attack.hits_per_turn;
+    std::vector<RaceBonusEntry> race_bonuses = before_attack.race_bonuses;
+    const std::uint32_t status_effect_id = before_attack.status_effect_id;
+    const int status_chance_percent = before_attack.status_chance_percent;
+    const StatsComponent attacker_stats = before_attack.attacker_stats;
+
+    auto apply_damage = [registry_ptr, affixes, rng, actor_handle, targets, hits_per_turn, race_bonuses,
+                         status_effect_id, status_chance_percent, attacker_stats]()
+    {
+        Registry& registry = *registry_ptr;
+        Entity actor(registry, actor_handle);
+        std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
+        std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
+
+        for (entt::entity target_handle : targets)
+        {
+            Entity target(registry, target_handle);
+            if (!target.IsValid())
                 continue;
 
-            found_target = true;
-            const StatsComponent defender_stats = ComputeEffectiveStats(target, *m_affixes);
+            const StatsComponent defender_stats = ComputeEffectiveStats(target, *affixes);
             const RaceComponent* defender_race = target.TryGet<RaceComponent>();
             const std::uint32_t defender_race_id = defender_race ? defender_race->race_id : 0;
 
-            for (int hit = 0; hit < before_attack.hits_per_turn; ++hit)
+            for (int hit = 0; hit < hits_per_turn; ++hit)
             {
                 if (!target.IsValid())
                     break;
 
                 const float hit_chance = ComputeHitChance(attacker_stats.ata, defender_stats.evp);
-                if (unit_roll(*m_rng) > hit_chance)
+                if (unit_roll(*rng) > hit_chance)
                     continue; // miss
 
-                int damage = ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng));
-                damage = ApplyRaceBonus(damage, before_attack.race_bonuses, defender_race_id);
+                int damage = ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*rng));
+                damage = ApplyRaceBonus(damage, race_bonuses, defender_race_id);
 
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);
@@ -87,16 +119,22 @@ ActionResult AttackAction::Perform(Entity actor)
 
                 // The weapon's own elemental flavor (if any) gets a chance
                 // to inflict its ailment on a landed, non-lethal hit.
-                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), before_attack.status_effect_id,
-                                          before_attack.status_chance_percent, *m_rng);
+                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), status_effect_id,
+                                          status_chance_percent, *rng);
             }
         }
-    }
+    };
 
-    AfterAttackEvent after_attack{found_target};
+    const Vec2f peak_offset =
+        Vec2f{static_cast<float>(m_direction.x), static_cast<float>(m_direction.y)} * kLungeDistance;
+    TweenComponent& tween_component = actor.GetOrEmplace<TweenComponent>();
+    tween_component.queue.push_back(Tween{Vec2f{}, peak_offset, kLungeOutDuration, 0.0f, std::move(apply_damage)});
+    tween_component.queue.push_back(Tween{peak_offset, Vec2f{}, kLungeBackDuration, 0.0f, nullptr});
+
+    AfterAttackEvent after_attack{true};
     actor.Dispatch(after_attack);
 
-    return found_target ? ActionResult(kAttackCost) : ActionResult(0);
+    return ActionResult(kAttackCost);
 }
 
 } // namespace psr
