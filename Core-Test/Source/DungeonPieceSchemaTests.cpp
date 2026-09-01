@@ -65,6 +65,14 @@ TEST_CASE("BuildPieceSchemaModel reflects the piece's top-level and cell/prefab 
     REQUIRE(category->kind == psr::FieldKind::Enum);
     REQUIRE(!category->enum_values.empty());
 
+    const psr::FieldSchema* can_rotate = find("can_rotate");
+    REQUIRE(can_rotate != nullptr);
+    REQUIRE(can_rotate->kind == psr::FieldKind::Boolean);
+
+    const psr::FieldSchema* can_mirror = find("can_mirror");
+    REQUIRE(can_mirror != nullptr);
+    REQUIRE(can_mirror->kind == psr::FieldKind::Boolean);
+
     const psr::FieldSchema* cells = find("cells");
     REQUIRE(cells != nullptr);
     REQUIRE(cells->kind == psr::FieldKind::Array);
@@ -137,6 +145,8 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     piece.name = "L Corridor";
     piece.area_tag = "Forest";
     piece.category = psr::PieceCategory::Corridor;
+    piece.can_rotate = true;
+    piece.can_mirror = true;
 
     // A sparse, non-rectangular L-shape: (0,0),(1,0),(1,1) -- deliberately
     // not a full rectangle, to prove membership (not a fixed grid) defines
@@ -184,6 +194,8 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     REQUIRE(loaded.name == "L Corridor");
     REQUIRE(loaded.area_tag == "Forest");
     REQUIRE(loaded.category == psr::PieceCategory::Corridor);
+    REQUIRE(loaded.can_rotate == true);
+    REQUIRE(loaded.can_mirror == true);
     REQUIRE(loaded.cells.size() == 3);
 
     // The (1,1) cell has no (0,1) neighbour -- proving the shape stayed
@@ -230,4 +242,63 @@ TEST_CASE("LoadPieceLibrary throws JsonFileError for a schema_version mismatch",
     WriteText(temp.path / "bad.json", R"json({ "schema_version": 999, "name": "x" })json");
 
     REQUIRE_THROWS_AS(psr::LoadPieceLibrary(temp.path), psr::JsonFileError);
+}
+
+TEST_CASE("ApplyPieceTransform rotates a cell offset 90 degrees clockwise per step", "[PieceTransform]")
+{
+    const psr::Vec2 east{1, 0};
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{0, false}) == psr::Vec2{1, 0});
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{1, false}) == psr::Vec2{0, 1});
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{2, false}) == psr::Vec2{-1, 0});
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{3, false}) == psr::Vec2{0, -1});
+}
+
+TEST_CASE("ApplyPieceTransform mirrors a cell offset horizontally before rotating", "[PieceTransform]")
+{
+    const psr::Vec2 east{1, 0};
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{0, true}) == psr::Vec2{-1, 0});
+    // Mirror then rotate 90 CW: (1,0) -> (-1,0) -> (0,-1).
+    REQUIRE(psr::ApplyPieceTransform(east, psr::PieceTransform{1, true}) == psr::Vec2{0, -1});
+}
+
+TEST_CASE("ApplyPieceTransform on EdgeDirection matches the equivalent Vec2 rotation", "[PieceTransform]")
+{
+    REQUIRE(psr::ApplyPieceTransform(psr::EdgeDirection::North, psr::PieceTransform{1, false}) ==
+            psr::EdgeDirection::East);
+    REQUIRE(psr::ApplyPieceTransform(psr::EdgeDirection::North, psr::PieceTransform{2, false}) ==
+            psr::EdgeDirection::South);
+    REQUIRE(psr::ApplyPieceTransform(psr::EdgeDirection::North, psr::PieceTransform{3, false}) ==
+            psr::EdgeDirection::West);
+    // Horizontal mirror swaps East/West, leaves North/South alone.
+    REQUIRE(psr::ApplyPieceTransform(psr::EdgeDirection::East, psr::PieceTransform{0, true}) ==
+            psr::EdgeDirection::West);
+    REQUIRE(psr::ApplyPieceTransform(psr::EdgeDirection::North, psr::PieceTransform{0, true}) ==
+            psr::EdgeDirection::North);
+}
+
+TEST_CASE("Applying a PieceTransform four times (or twice, if mirrored) round-trips to identity", "[PieceTransform]")
+{
+    const psr::Vec2 start{2, 1};
+    psr::Vec2 v = start;
+    for (int i = 0; i < 4; ++i)
+        v = psr::ApplyPieceTransform(v, psr::PieceTransform{1, false});
+    REQUIRE(v == start);
+
+    v = start;
+    for (int i = 0; i < 2; ++i)
+        v = psr::ApplyPieceTransform(v, psr::PieceTransform{0, true});
+    REQUIRE(v == start);
+}
+
+TEST_CASE("EnumeratePieceTransforms returns the cross product of allowed rotation/mirror flags",
+          "[PieceTransform]")
+{
+    REQUIRE(psr::EnumeratePieceTransforms(false, false).size() == 1);
+    REQUIRE(psr::EnumeratePieceTransforms(true, false).size() == 4);
+    REQUIRE(psr::EnumeratePieceTransforms(false, true).size() == 2);
+    REQUIRE(psr::EnumeratePieceTransforms(true, true).size() == 8);
+
+    const std::vector<psr::PieceTransform> none = psr::EnumeratePieceTransforms(false, false);
+    REQUIRE(none.front().rotation_steps == 0);
+    REQUIRE(none.front().mirrored == false);
 }

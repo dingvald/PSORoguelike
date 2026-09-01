@@ -9,6 +9,7 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Engine/Actions/TurnEvent.h"
+#include "Engine/Combat/DamageEvent.h"
 #include "Engine/Combat/DeathSystem.h"
 #include "Engine/Combat/HealthSystem.h"
 #include "Engine/ECS/EventHandlerComponent.h"
@@ -34,6 +35,29 @@ public:
     }
 
     int count = 0;
+};
+
+// An NPC action that kills target outright via the same
+// IncomingDamageEvent -> HealthSystem -> DeathEvent -> DeathSystem path a
+// real AttackAction uses, without needing a weapon/AffixLibrary/Grid to
+// build one -- just enough to drive TurnCoordinator's PlayerDefeated path
+// from a non-player actor's turn.
+class LethalAction : public psr::IAction
+{
+public:
+    LethalAction(psr::Registry& registry, entt::entity target) : m_registry(&registry), m_target(target) {}
+
+    psr::ActionResult Perform(psr::Entity actor) override
+    {
+        psr::Entity target(*m_registry, m_target);
+        psr::IncomingDamageEvent damage{actor, 999};
+        target.Dispatch(damage);
+        return psr::ActionResult(psr::WaitAction::kWaitCost);
+    }
+
+private:
+    psr::Registry* m_registry;
+    entt::entity m_target;
 };
 
 } // namespace
@@ -321,9 +345,47 @@ TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting e
     coordinator.PressKey(1);
 
     // Must not crash even though this Wait's own AfterTurnEvent tick kills
-    // player via the Poison stack applied above.
+    // player via the Poison stack applied above -- and since this player was
+    // the last one standing, that's a PlayerDefeated, not a Resolved (see
+    // the "PlayerDefeated instead of hanging" case below for the mid-loop
+    // NPC-turn equivalent).
     psr::TurnStep step = coordinator.Step(0.016f);
 
-    REQUIRE(step == psr::TurnStep::Resolved);
+    REQUIRE(step == psr::TurnStep::PlayerDefeated);
+    REQUIRE_FALSE(registry.IsValid(player));
+}
+
+TEST_CASE("TurnCoordinator returns PlayerDefeated instead of hanging when an NPC's attack kills the last player",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::HealthSystem>();
+    registry.BindSystemEvents<psr::HealthComponent, psr::DeathSystem>();
+    psr::TurnCoordinator coordinator(registry);
+
+    // Inserted before the player, so it wins the initial energy tie and acts
+    // first -- same ordering as "lets a non-player actor act before applying
+    // the player's pending key" above, but here that first NPC turn is what
+    // kills the player.
+    entt::entity npc = registry.CreateEntity();
+    registry.Emplace<psr::EnergyComponent>(npc);
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::HealthComponent>(player, psr::HealthComponent{1, 1});
+
+    LethalAction npc_action(registry, player);
+    coordinator.SetNpcDecision([&npc_action](psr::Entity) -> psr::IAction* { return &npc_action; });
+
+    // Before the fix, the queue -- now holding only the NPC -- never yielded
+    // once its only player-controlled actor was gone: this call would spin
+    // forever instead of returning.
+    psr::TurnStep step = coordinator.Step(0.016f);
+
+    REQUIRE(step == psr::TurnStep::PlayerDefeated);
     REQUIRE_FALSE(registry.IsValid(player));
 }

@@ -10,6 +10,7 @@ namespace psr {
 
 class Event;
 class TurnCoordinator;
+class MessageBus;
 
 // The set of references every GameState might need -- individual states use
 // whichever subset is relevant and ignore the rest, same convention as
@@ -23,6 +24,7 @@ struct GameplayContext
     Grid& grid;
     TurnCoordinator& turn_coordinator;
     entt::entity player;
+    MessageBus& message_bus;
 };
 
 enum class StateTransitionKind

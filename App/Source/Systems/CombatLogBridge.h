@@ -31,8 +31,8 @@ class CombatLogBridge
 {
 public:
     CombatLogBridge(Registry& registry, MessageBus& message_bus, const TechniqueLibrary& techniques,
-                     const PhotonArtLibrary& photon_arts, const StatusEffectLibrary& status_effects,
-                     entt::entity player);
+                    const PhotonArtLibrary& photon_arts, const StatusEffectLibrary& status_effects,
+                    entt::entity player);
 
     // Subscribed handlers capture this instance's address (see Subscribe) --
     // neither copying nor moving would keep them valid, same rationale as
@@ -43,12 +43,11 @@ public:
     CombatLogBridge& operator=(CombatLogBridge&&) = delete;
 
     // Wires one entity's EventHandlerComponent to this bridge. Call once per
-    // actor as it's created. Only the player is wired today (no enemies
-    // spawn yet); a future AI/enemy-spawn feature should call this for each
-    // new actor too -- an entt on_construct<EnergyComponent> auto-hook
-    // (mirroring TurnCoordinator's own OnEnergyConstructed) is the natural
-    // follow-up once that's needed, deliberately not built now for a
-    // mechanism with exactly one caller.
+    // actor as it's created -- GameplayLayer calls this for the player and
+    // (via its on_enemy_spawned hook) for every enemy, since AfterDamageEvent
+    // is dispatched at the *source* of a hit (see DamageEvent.h): an enemy
+    // attacking the player only reaches OnDamage()/PublishPlayerStatus()
+    // through the enemy's own subscription, not the player's.
     void Subscribe(Entity actor);
 
     // Reads the player's current HealthComponent/TPComponent and publishes a

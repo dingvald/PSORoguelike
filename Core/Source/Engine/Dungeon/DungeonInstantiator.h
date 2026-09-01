@@ -3,13 +3,16 @@
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PendingSpawnWave.h"
 #include "Engine/Dungeon/PieceLibrary.h"
+#include "Engine/Dungeon/RoomMap.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Math/Rect.h"
 #include "Engine/Math/Vec2.h"
 #include "Engine/World/Grid.h"
 
 #include <cstdint>
+#include <functional>
 #include <unordered_map>
+#include <vector>
 
 namespace psr {
 
@@ -31,6 +34,20 @@ Rect ComputeDungeonBounds(const DungeonLayout& layout, const PieceLibrary& libra
 struct DungeonInstantiation
 {
     Vec2 entrance_tile;
+
+    // Tags every stamped tile with the placed-piece index (into
+    // layout.pieces) it came from -- the same index SpawnWaveComponent::
+    // group_id below uses -- so App-level systems (see
+    // RoomVisibilityTracker/FogOfWarRenderableLookup) can tell which room a
+    // tile belongs to after generation's own DungeonLayout is gone.
+    RoomMap room_map;
+
+    // room_adjacency[i] lists every room index sharing a SocketConnection
+    // (layout.connections) with room i, both directions -- keyed the same
+    // way room_map is (placed-piece index). Lets App-level fog of war (see
+    // RoomVisibilityTracker) extend visibility from the player's current
+    // room to the rooms beyond its doorways.
+    std::vector<std::vector<std::uint32_t>> room_adjacency;
 
     // group_id (a placed piece's index into layout.pieces) -> how many
     // entities were stamped for that group's first (lowest-numbered) wave,
@@ -65,7 +82,17 @@ struct DungeonInstantiation
 // SpawnWaveSystem can track it), and every later wave is returned via
 // DungeonInstantiation::pending_spawn_waves for SpawnWaveSystem to spawn once
 // the previous wave's entities all die.
+//
+// on_spawned, if set, is invoked once for each PieceSpawn-sourced entity
+// stamped here (first-wave only -- later waves go through SpawnWaveSystem's
+// own on_spawned instead), right after its SpawnWaveComponent is emplaced.
+// Not called for plain cell/dead-end-socket prefabs (static dungeon
+// furniture, not creatures). This is Core's only hook for App-level, per-
+// creature setup (e.g. joining the turn queue) that Core itself can't
+// perform, since the components involved (EnergyComponent, EquipmentComponent)
+// are App-level -- see GameplayLayer::OnAttach.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
-                                         Registry& registry, Grid& grid);
+                                        Registry& registry, Grid& grid,
+                                        std::function<void(entt::entity)> on_spawned = {});
 
 } // namespace psr

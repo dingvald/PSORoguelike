@@ -51,6 +51,16 @@ namespace {
         throw DungeonError(std::string("piece file: '") + key + "' must be a name string or id");
     }
 
+    bool ReadBool(const rapidjson::Value& object, const char* key, bool fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd())
+            return fallback;
+        if (!it->value.IsBool())
+            throw DungeonError(std::string("piece file: '") + key + "' must be a boolean");
+        return it->value.GetBool();
+    }
+
     int ReadInt(const rapidjson::Value& object, const char* key, int fallback)
     {
         auto it = object.FindMember(key);
@@ -261,7 +271,8 @@ namespace {
         return object;
     }
 
-    rapidjson::Value WriteSockets(const std::vector<PieceSocket>& sockets, rapidjson::Document::AllocatorType& allocator)
+    rapidjson::Value WriteSockets(const std::vector<PieceSocket>& sockets,
+                                  rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value array(rapidjson::kArrayType);
         for (const PieceSocket& socket : sockets)
@@ -313,6 +324,9 @@ DungeonPiece ReadPieceBody(const rapidjson::Value& piece_def)
     piece.name = ReadString(piece_def, "name", piece.name);
     piece.area_tag = ReadString(piece_def, "area_tag", piece.area_tag);
     piece.category = ReadEnum<PieceCategory>(piece_def, "category", PieceCategory::Room, "category");
+    piece.can_rotate = ReadBool(piece_def, "can_rotate", piece.can_rotate);
+    piece.can_mirror = ReadBool(piece_def, "can_mirror", piece.can_mirror);
+    piece.tags = ReadStringArray(piece_def, "tags");
     piece.cells = ReadCells(piece_def);
     piece.sockets = ReadSockets(piece_def);
     piece.spawns = ReadSpawns(piece_def);
@@ -325,6 +339,9 @@ rapidjson::Value WritePieceBody(const DungeonPiece& piece, rapidjson::Document::
     object.AddMember("name", StringValue(piece.name, allocator), allocator);
     object.AddMember("area_tag", StringValue(piece.area_tag, allocator), allocator);
     object.AddMember("category", StringValue(std::string{EnumName(piece.category)}, allocator), allocator);
+    object.AddMember("can_rotate", piece.can_rotate, allocator);
+    object.AddMember("can_mirror", piece.can_mirror, allocator);
+    object.AddMember("tags", WriteStringArray(piece.tags, allocator), allocator);
     object.AddMember("cells", WriteCells(piece.cells, allocator), allocator);
     object.AddMember("sockets", WriteSockets(piece.sockets, allocator), allocator);
     object.AddMember("spawns", WriteSpawns(piece.spawns, allocator), allocator);

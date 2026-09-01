@@ -108,6 +108,30 @@ TEST_CASE("SpawnWaveSystem stays quiet once a group has no more pending waves", 
     CHECK(grid.GetEntities(Vec2{0, 0}).size() == 1);
 }
 
+TEST_CASE("SpawnWaveSystem invokes on_spawned for a later-wave spawn", "[SpawnWaveSystem]")
+{
+    Registry registry;
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    Grid grid(2, 1);
+    const entt::entity only = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
+
+    std::unordered_map<std::uint32_t, int> initial_counts{{0, 1}};
+    std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 1, {PendingSpawnEntry{Vec2{1, 0}, kEnemyPrefab}}});
+
+    std::vector<entt::entity> spawned;
+    SpawnWaveSystem system(registry, grid, initial_counts, pending,
+                           [&](entt::entity entity) { spawned.push_back(entity); });
+
+    registry.DestroyEntity(only);
+
+    REQUIRE(spawned.size() == 1);
+    CHECK(spawned.front() == grid.GetEntities(Vec2{1, 0})[0]);
+}
+
 TEST_CASE("SpawnWaveSystem skips an invalid prefab id in a pending wave", "[SpawnWaveSystem]")
 {
     Registry registry;

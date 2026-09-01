@@ -4,10 +4,9 @@ Enforcement of the [coding standard](../CLAUDE.md). clang 20 ships with Visual S
 
 ## Run-Tests.ps1
 
-Builds and runs the `Core-Test` Catch2 suite (`App-Test` doesn't exist yet -- see the script's own
-header comment). `-Suite Core|All` (default `All`) picks which suite(s) to build+run;
-`-Configuration` picks Debug/Release/Dist (default `Debug`). Remaining arguments are forwarded to
-the Catch2 executable (tag filters, `-s`, etc).
+Builds and runs the `Core-Test`/`App-Test` Catch2 suites. `-Suite Core|App|All` (default `All`)
+picks which suite(s) to build+run; `-Configuration` picks Debug/Release/Dist (default `Debug`).
+Remaining arguments are forwarded to the Catch2 executable (tag filters, `-s`, etc).
 
 ## Compile-Shaders.ps1
 

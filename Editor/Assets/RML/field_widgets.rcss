@@ -187,9 +187,16 @@ selectbox option:checked {
    sockets, ...) renders through this one row shape instead of each screen
    inventing its own, so add/remove/drag-reorder look and behave identically
    everywhere. */
+/* align-items: flex-start (not center) -- most rows are a single line, where
+   this makes no visible difference, but a row whose content spans multiple
+   lines (e.g. a socket's stacked edge/fallback/tag-list fields, see
+   piece_editor.rcss's .socket-body) needs its drag-handle/remove-button
+   pinned to the top rather than floating to the vertical middle of the
+   whole card, where they'd land on top of whatever inner content happens to
+   sit at that height instead of the row's own edge. */
 .row-card {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     width: 100%;
     box-sizing: border-box;

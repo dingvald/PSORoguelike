@@ -114,6 +114,24 @@ namespace {
                 return value;
         return PieceCategory::Room;
     }
+
+    // Human-readable, unique-per-orientation label -- doubles as the
+    // BuildEnumField option key (see its "select->Add(option, option)"), so
+    // no separate id<->transform table is needed.
+    std::string TransformLabel(PieceTransform transform)
+    {
+        std::vector<std::string> parts;
+        if (transform.mirrored)
+            parts.emplace_back("Mirrored");
+        if (transform.rotation_steps != 0)
+            parts.push_back("Rotated " + std::to_string(transform.rotation_steps * 90) + " deg");
+        if (parts.empty())
+            return "Normal";
+        std::string label = parts.front();
+        for (std::size_t i = 1; i < parts.size(); ++i)
+            label += " + " + parts[i];
+        return label;
+    }
 } // namespace
 
 PieceEditorLayer::PieceEditorLayer() : Layer("PieceEditorLayer") {}
@@ -139,6 +157,7 @@ void PieceEditorLayer::OnDetach()
 {
     m_inspector_listeners.clear();
     m_form_listeners.clear();
+    m_tag_listeners.clear();
     m_preview_chrome_listeners.clear();
     m_grid_listeners.clear();
     m_palette_listeners.clear();
@@ -410,9 +429,8 @@ void PieceEditorLayer::RefreshEditForm()
                                                 m_draft_id = std::move(v);
                                                 MarkDirty();
                                                 if (Rml::Element* title = m_editor->GetElementById("edit-title"))
-                                                    title->SetInnerRML(
-                                                        EscapeRml(m_draft_id.empty() ? std::string{"(new piece)"}
-                                                                                     : m_draft_id));
+                                                    title->SetInnerRML(EscapeRml(
+                                                        m_draft_id.empty() ? std::string{"(new piece)"} : m_draft_id));
                                             }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-name"))
@@ -439,6 +457,55 @@ void PieceEditorLayer::RefreshEditForm()
                                               MarkDirty();
                                           }));
 
+    // Rebuilding the form (to refresh the preview dropdown's option set)
+    // can't happen synchronously from within the very listener callback
+    // that's triggering it -- see m_pending_action's doc comment on
+    // WireDragReorder for why; it's drained one frame later on OnRender.
+    if (Rml::Element* row = m_editor->GetElementById("field-can-rotate"))
+        keep(fieldwidgets::BuildBoolField(*row, "can_rotate", m_draft.can_rotate,
+                                          [this](bool v)
+                                          {
+                                              m_draft.can_rotate = v;
+                                              MarkDirty();
+                                              m_pending_action = [this] { RefreshEditForm(); };
+                                          }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-can-mirror"))
+        keep(fieldwidgets::BuildBoolField(*row, "can_mirror", m_draft.can_mirror,
+                                          [this](bool v)
+                                          {
+                                              m_draft.can_mirror = v;
+                                              MarkDirty();
+                                              m_pending_action = [this] { RefreshEditForm(); };
+                                          }));
+
+    // Preview control: cycles through the orientations the flags above
+    // currently allow. Transient/UI-only -- reset if the flag change above
+    // dropped the previously selected orientation from the allowed set.
+    const std::vector<PieceTransform> allowed_transforms =
+        EnumeratePieceTransforms(m_draft.can_rotate, m_draft.can_mirror);
+    if (std::find(allowed_transforms.begin(), allowed_transforms.end(), m_preview_transform) ==
+        allowed_transforms.end())
+        m_preview_transform = PieceTransform{};
+
+    if (Rml::Element* row = m_editor->GetElementById("field-preview"))
+    {
+        std::vector<std::string> options;
+        for (const PieceTransform& transform : allowed_transforms)
+            options.push_back(TransformLabel(transform));
+        keep(fieldwidgets::BuildEnumField(*row, "preview", options, TransformLabel(m_preview_transform),
+                                          [this, allowed_transforms](std::string v)
+                                          {
+                                              for (const PieceTransform& transform : allowed_transforms)
+                                                  if (TransformLabel(transform) == v)
+                                                  {
+                                                      m_preview_transform = transform;
+                                                      break;
+                                                  }
+                                          }));
+    }
+
+    RefreshTagList();
     RefreshPaletteList();
     RefreshInspector();
     RefreshDirtyDisplay();
@@ -600,12 +667,14 @@ void PieceEditorLayer::RefreshInspector()
                 socket_indices.push_back(i);
 
         const std::vector<std::string> socket_content(
-            socket_indices.size(), "<div class=\"socket-edge field-row\"></div>"
+            socket_indices.size(), "<div class=\"socket-body\">"
+                                   "<div class=\"socket-edge field-row\"></div>"
                                    "<div class=\"socket-fallback field-row\"></div>"
-                                   "<h3>Tags<span class=\"btn add-socket-tag\">Add Tag</span></h3>"
+                                   "<h3>Tags<span class=\"btn add-socket-tag\">+</span></h3>"
                                    "<div class=\"socket-tag-list ref-scroll\"></div>"
-                                   "<h3>Connects To Tags<span class=\"btn add-socket-connects\">Add Tag</span></h3>"
-                                   "<div class=\"socket-connects-list ref-scroll\"></div>");
+                                   "<h3>Connects To Tags<span class=\"btn add-socket-connects\">+</span></h3>"
+                                   "<div class=\"socket-connects-list ref-scroll\"></div>"
+                                   "</div>");
 
         fieldwidgets::RowList socket_result = fieldwidgets::BuildRowList(
             *sockets_container, socket_content, "<div class=\"list-empty\">No sockets on this cell.</div>",
@@ -628,33 +697,28 @@ void PieceEditorLayer::RefreshInspector()
             Rml::Element& row_element = *socket_result.rows[row];
 
             if (Rml::Element* edge_row = row_element.QuerySelector(".socket-edge"))
-                keep(fieldwidgets::BuildEnumField(
-                    *edge_row, "edge", EdgeOptions(), EdgeToString(m_draft.sockets[socket_index].edge),
-                    [this, socket_index](std::string v)
-                    {
-                        if (socket_index < m_draft.sockets.size())
-                            m_draft.sockets[socket_index].edge = EdgeFromString(v);
-                        MarkDirty();
-                    }));
+                keep(fieldwidgets::BuildEnumField(*edge_row, "edge", EdgeOptions(),
+                                                  EdgeToString(m_draft.sockets[socket_index].edge),
+                                                  [this, socket_index](std::string v)
+                                                  {
+                                                      if (socket_index < m_draft.sockets.size())
+                                                          m_draft.sockets[socket_index].edge = EdgeFromString(v);
+                                                      MarkDirty();
+                                                  }));
 
             if (Rml::Element* fallback_row = row_element.QuerySelector(".socket-fallback"))
             {
-                const PieceSocket& socket = m_draft.sockets[socket_index];
-                const PaletteEntry* fallback_entry = PaletteFor(socket.fallback_prefab_id);
-                const std::string fallback_name = fallback_entry
-                                                       ? fallback_entry->id_string
-                                                       : NameIdRegistry::Find(socket.fallback_prefab_id).value_or("");
-                keep(fieldwidgets::BuildNameIdField(
-                    *fallback_row, "fallback_prefab_id", socket.fallback_prefab_id, fallback_name,
-                    [this, socket_index](std::uint32_t id, std::string name)
-                    {
-                        if (socket_index >= m_draft.sockets.size())
-                            return;
-                        m_draft.sockets[socket_index].fallback_prefab_id = id;
-                        if (!name.empty())
-                            NameIdRegistry::Register(id, name);
-                        MarkDirty();
-                    }));
+                std::vector<std::pair<std::uint32_t, std::string>> fallback_options = {{0, "-- None --"}};
+                for (const PaletteEntry& entry : m_palette)
+                    fallback_options.emplace_back(entry.prefab_id, entry.id_string);
+                keep(fieldwidgets::BuildIdEnumField(*fallback_row, "fallback_prefab_id", fallback_options,
+                                                    m_draft.sockets[socket_index].fallback_prefab_id,
+                                                    [this, socket_index](std::uint32_t id)
+                                                    {
+                                                        if (socket_index < m_draft.sockets.size())
+                                                            m_draft.sockets[socket_index].fallback_prefab_id = id;
+                                                        MarkDirty();
+                                                    }));
             }
 
             if (Rml::Element* tags_list = row_element.QuerySelector(".socket-tag-list"))
@@ -719,9 +783,9 @@ void PieceEditorLayer::RefreshInspector()
             if (m_draft.spawns[i].cell_offset == offset)
                 spawn_indices.push_back(i);
 
-        const std::vector<std::string> spawn_content(
-            spawn_indices.size(), "<div class=\"spawn-prefab field-row\"></div>"
-                                  "<div class=\"spawn-wave field-row\"></div>");
+        const std::vector<std::string> spawn_content(spawn_indices.size(),
+                                                     "<div class=\"spawn-prefab field-row\"></div>"
+                                                     "<div class=\"spawn-wave field-row\"></div>");
 
         fieldwidgets::RowList spawn_result = fieldwidgets::BuildRowList(
             *spawns_container, spawn_content, "<div class=\"list-empty\">No spawns on this cell.</div>",
@@ -749,28 +813,26 @@ void PieceEditorLayer::RefreshInspector()
                 const PaletteEntry* prefab_entry = PaletteFor(spawn.prefab_id);
                 const std::string prefab_name =
                     prefab_entry ? prefab_entry->id_string : NameIdRegistry::Find(spawn.prefab_id).value_or("");
-                keep(fieldwidgets::BuildNameIdField(
-                    *prefab_row, "prefab_id", spawn.prefab_id, prefab_name,
-                    [this, spawn_index](std::uint32_t id, std::string name)
-                    {
-                        if (spawn_index >= m_draft.spawns.size())
-                            return;
-                        m_draft.spawns[spawn_index].prefab_id = id;
-                        if (!name.empty())
-                            NameIdRegistry::Register(id, name);
-                        MarkDirty();
-                    }));
+                keep(fieldwidgets::BuildNameIdField(*prefab_row, "prefab_id", spawn.prefab_id, prefab_name,
+                                                    [this, spawn_index](std::uint32_t id, std::string name)
+                                                    {
+                                                        if (spawn_index >= m_draft.spawns.size())
+                                                            return;
+                                                        m_draft.spawns[spawn_index].prefab_id = id;
+                                                        if (!name.empty())
+                                                            NameIdRegistry::Register(id, name);
+                                                        MarkDirty();
+                                                    }));
             }
 
             if (Rml::Element* wave_row = row_element.QuerySelector(".spawn-wave"))
-                keep(fieldwidgets::BuildIntField(
-                    *wave_row, "wave", m_draft.spawns[spawn_index].wave,
-                    [this, spawn_index](int v)
-                    {
-                        if (spawn_index < m_draft.spawns.size())
-                            m_draft.spawns[spawn_index].wave = v;
-                        MarkDirty();
-                    }));
+                keep(fieldwidgets::BuildIntField(*wave_row, "wave", m_draft.spawns[spawn_index].wave,
+                                                 [this, spawn_index](int v)
+                                                 {
+                                                     if (spawn_index < m_draft.spawns.size())
+                                                         m_draft.spawns[spawn_index].wave = v;
+                                                     MarkDirty();
+                                                 }));
         }
         for (auto& listener : spawn_result.listeners)
             m_inspector_listeners.push_back(std::move(listener));
@@ -789,6 +851,67 @@ void PieceEditorLayer::RefreshInspector()
             });
         listener->Attach(*add_spawn);
         m_inspector_listeners.push_back(std::move(listener));
+    }
+}
+
+void PieceEditorLayer::RefreshTagList()
+{
+    if (!m_editor)
+        return;
+    m_tag_listeners.clear();
+
+    Rml::Element* container = m_editor->GetElementById("field-tags");
+    if (!container)
+        return;
+
+    const std::vector<std::string> content(m_draft.tags.size(), "<div class=\"tag-id field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *container, content, "<div class=\"list-empty\">No tags.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_draft.tags.size())
+                m_draft.tags.erase(m_draft.tags.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshTagList();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_draft.tags, from, to);
+                MarkDirty();
+                RefreshTagList();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.tags.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".tag-id"))
+            for (auto& listener : fieldwidgets::BuildStringField(*row, "tag", m_draft.tags[i],
+                                                                 [this, index](std::string v)
+                                                                 {
+                                                                     if (index < m_draft.tags.size())
+                                                                         m_draft.tags[index] = std::move(v);
+                                                                     MarkDirty();
+                                                                 }))
+                m_tag_listeners.push_back(std::move(listener));
+    }
+    for (auto& listener : result.listeners)
+        m_tag_listeners.push_back(std::move(listener));
+
+    if (Rml::Element* add_tag = m_editor->GetElementById("add-tag"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this]
+            {
+                m_draft.tags.emplace_back();
+                MarkDirty();
+                RefreshTagList();
+            });
+        listener->Attach(*add_tag);
+        m_tag_listeners.push_back(std::move(listener));
     }
 }
 
@@ -832,18 +955,19 @@ void PieceEditorLayer::RefreshSocketTagRows(Rml::Element& container, std::size_t
     {
         const std::size_t index = i;
         if (Rml::Element* row = result.rows[i]->QuerySelector(".tag-id"))
-            for (auto& listener : fieldwidgets::BuildStringField(
-                     *row, "tag", tags[i],
-                     [this, socket_index, connects_to, index](std::string v)
-                     {
-                         if (socket_index >= m_draft.sockets.size())
-                             return;
-                         std::vector<std::string>& t = connects_to ? m_draft.sockets[socket_index].connects_to_tags
+            for (auto& listener :
+                 fieldwidgets::BuildStringField(*row, "tag", tags[i],
+                                                [this, socket_index, connects_to, index](std::string v)
+                                                {
+                                                    if (socket_index >= m_draft.sockets.size())
+                                                        return;
+                                                    std::vector<std::string>& t =
+                                                        connects_to ? m_draft.sockets[socket_index].connects_to_tags
                                                                     : m_draft.sockets[socket_index].tags;
-                         if (index < t.size())
-                             t[index] = std::move(v);
-                         MarkDirty();
-                     }))
+                                                    if (index < t.size())
+                                                        t[index] = std::move(v);
+                                                    MarkDirty();
+                                                }))
                 m_inspector_listeners.push_back(std::move(listener));
     }
     for (auto& listener : result.listeners)
@@ -993,17 +1117,43 @@ bool PieceEditorLayer::UpdatePreviewCanvas()
         return false;
 
     const SDL_FRect panel_rect{offset.x, offset.y, size.x, size.y};
-    const SDL_FRect content_bounds{0.0f, 0.0f, static_cast<float>(kEditCols) * kBaseCellPx,
-                                    static_cast<float>(kEditRows) * kBaseCellPx};
+    SDL_FRect content_bounds{0.0f, 0.0f, static_cast<float>(kEditCols) * kBaseCellPx,
+                             static_cast<float>(kEditRows) * kBaseCellPx};
+
+    // Previewing a transform re-fits the view to the transformed piece's own
+    // bounding box instead of the fixed edit grid -- PreviewCanvas::Update
+    // auto-refits whenever content_bounds differs from its previous call, so
+    // this alone centers/zooms to the rotated/mirrored shape with no extra
+    // camera code. The piece isn't authored around a fixed origin, so a
+    // rotate/mirror (both pivot on world (0,0), see ApplyPieceTransform) can
+    // walk cells into negative world coordinates -- expected here, unlike
+    // CellUnder's paint hit-test which rejects negative cells because the
+    // editable canvas itself is anchored at (0,0).
+    if (m_preview_transform != PieceTransform{} && !m_draft.cells.empty())
+    {
+        Vec2 min = ApplyPieceTransform(m_draft.cells.front().offset, m_preview_transform);
+        Vec2 max = min;
+        for (const PieceCell& cell : m_draft.cells)
+        {
+            const Vec2 transformed = ApplyPieceTransform(cell.offset, m_preview_transform);
+            min.x = std::min(min.x, transformed.x);
+            min.y = std::min(min.y, transformed.y);
+            max.x = std::max(max.x, transformed.x);
+            max.y = std::max(max.y, transformed.y);
+        }
+        content_bounds = SDL_FRect{static_cast<float>(min.x) * kBaseCellPx, static_cast<float>(min.y) * kBaseCellPx,
+                                   static_cast<float>(max.x - min.x + 1) * kBaseCellPx,
+                                   static_cast<float>(max.y - min.y + 1) * kBaseCellPx};
+    }
+
     m_preview_canvas.Update(panel_rect, content_bounds);
     return true;
 }
 
 SDL_FRect PieceEditorLayer::CellBox(Vec2 cell) const
 {
-    return m_preview_canvas.WorldToScreen(SDL_FRect{static_cast<float>(cell.x) * kBaseCellPx,
-                                                     static_cast<float>(cell.y) * kBaseCellPx, kBaseCellPx,
-                                                     kBaseCellPx});
+    return m_preview_canvas.WorldToScreen(SDL_FRect{
+        static_cast<float>(cell.x) * kBaseCellPx, static_cast<float>(cell.y) * kBaseCellPx, kBaseCellPx, kBaseCellPx});
 }
 
 std::optional<Vec2> PieceEditorLayer::CellUnder(float screen_x, float screen_y) const
@@ -1028,6 +1178,7 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
 
     const bool gpu_ready = m_tile_atlas && m_tile_atlas->IsLoaded() && m_gpu_pipeline && m_gpu_pipeline->IsLoaded();
     const Vec2 atlas_size = gpu_ready ? m_tile_atlas->GetSize() : Vec2{0, 0};
+    const bool previewing = m_preview_transform != PieceTransform{};
 
     // Kept as two separate vertex batches (rather than one combined draw)
     // because only grid_vertices lives inside "#grid-panel" -- palette icons
@@ -1041,10 +1192,18 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
         if (have_grid)
             for (const PieceCell& cell : m_draft.cells)
             {
-                if (cell.offset.x < 0 || cell.offset.y < 0 || cell.offset.x >= kEditCols ||
-                    cell.offset.y >= kEditRows)
+                // Outside preview, cells stay confined to the fixed editable
+                // grid by construction (painting can't place one beyond it),
+                // so this bound only ever excludes stale/out-of-range data.
+                // While previewing, a transform can legitimately walk cells
+                // negative or past kEditCols/kEditRows (see
+                // UpdatePreviewCanvas), so the bound doesn't apply.
+                if (!previewing && (cell.offset.x < 0 || cell.offset.y < 0 || cell.offset.x >= kEditCols ||
+                                    cell.offset.y >= kEditRows))
                     continue;
-                const SDL_FRect box = CellBox(cell.offset);
+                const Vec2 draw_offset =
+                    previewing ? ApplyPieceTransform(cell.offset, m_preview_transform) : cell.offset;
+                const SDL_FRect box = CellBox(draw_offset);
                 for (const PieceCellPrefab& prefab : cell.prefabs)
                 {
                     const PaletteEntry* entry = PaletteFor(prefab.prefab_id);
@@ -1053,9 +1212,8 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                     const RenderableTile& r = entry->renderable;
                     if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x,
                                                                                    r.texture_size.y, r.uv.x, r.uv.y))
-                        AppendSpriteQuad(grid_vertices,
-                                         ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()), *src,
-                                         atlas_size, r.color_1, r.color_2, output_w, output_h);
+                        AppendSpriteQuad(grid_vertices, ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()),
+                                         *src, atlas_size, r.color_1, r.color_2, output_w, output_h);
                 }
             }
 
@@ -1079,8 +1237,8 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                         m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x, r.texture_size.y, r.uv.x, r.uv.y))
                 {
                     const SDL_FRect box{pos.x, pos.y, size.x, size.y};
-                    AppendSpriteQuad(palette_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size,
-                                     r.color_1, r.color_2, output_w, output_h);
+                    AppendSpriteQuad(palette_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size, r.color_1,
+                                     r.color_2, output_w, output_h);
                 }
             }
         }
@@ -1097,18 +1255,34 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
         if (!grid_vertices.empty())
             m_gpu_pipeline->Draw(renderer, *m_tile_atlas->GetGpuTexture(), grid_vertices, output_w, output_h);
 
-        SDL_SetRenderDrawColor(&renderer, 70, 70, 84, 255);
-        for (int y = 0; y < kEditRows; ++y)
-            for (int x = 0; x < kEditCols; ++x)
+        if (previewing)
+        {
+            // Read-only preview: outline just the piece's own (transformed)
+            // footprint instead of the fixed editable grid/selection, which
+            // don't apply here (painting/selection are disabled -- see
+            // HandleGridMouseDown).
+            SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 255);
+            for (const PieceCell& cell : m_draft.cells)
             {
-                const SDL_FRect box = CellBox(Vec2{x, y});
+                const SDL_FRect box = CellBox(ApplyPieceTransform(cell.offset, m_preview_transform));
                 SDL_RenderRect(&renderer, &box);
             }
-        if (m_selected_cell)
+        }
+        else
         {
-            const SDL_FRect box = CellBox(*m_selected_cell);
-            SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 255);
-            SDL_RenderRect(&renderer, &box);
+            SDL_SetRenderDrawColor(&renderer, 70, 70, 84, 255);
+            for (int y = 0; y < kEditRows; ++y)
+                for (int x = 0; x < kEditCols; ++x)
+                {
+                    const SDL_FRect box = CellBox(Vec2{x, y});
+                    SDL_RenderRect(&renderer, &box);
+                }
+            if (m_selected_cell)
+            {
+                const SDL_FRect box = CellBox(*m_selected_cell);
+                SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 255);
+                SDL_RenderRect(&renderer, &box);
+            }
         }
     }
 
@@ -1167,8 +1341,8 @@ void PieceEditorLayer::WireGridInteraction()
     up->Attach(*target);
     m_grid_listeners.push_back(std::move(up));
 
-    auto scroll = std::make_unique<RmlEventListener>(
-        "mousescroll", [this](Rml::Event& event) { HandleGridMouseScroll(event); });
+    auto scroll =
+        std::make_unique<RmlEventListener>("mousescroll", [this](Rml::Event& event) { HandleGridMouseScroll(event); });
     scroll->Attach(*target);
     m_grid_listeners.push_back(std::move(scroll));
 }
@@ -1182,6 +1356,9 @@ void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
     // Middle-button drag pans the preview -- handled independently of the
     // cell hit-test below, which is only about left/right-click painting.
     m_preview_canvas.OnMouseDown(mouse_x, mouse_y, button);
+
+    if (m_preview_transform != PieceTransform{})
+        return; // previewing a transform: read-only, painting/selection disabled
 
     const std::optional<Vec2> cell = CellUnder(mouse_x, mouse_y);
     if (!cell)

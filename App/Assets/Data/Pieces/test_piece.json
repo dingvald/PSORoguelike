@@ -1455,9 +1455,9 @@
                 "door"
             ],
             "connects_to_tags": [
-                "door"
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
         },
         {
             "cell_offset": {
@@ -1469,9 +1469,9 @@
                 "door"
             ],
             "connects_to_tags": [
-                "door"
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
         },
         {
             "cell_offset": {
@@ -1483,9 +1483,9 @@
                 "door"
             ],
             "connects_to_tags": [
-                "door"
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
         },
         {
             "cell_offset": {
@@ -1497,9 +1497,19 @@
                 "door"
             ],
             "connects_to_tags": [
-                "door"
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
+        }
+    ],
+    "spawns": [
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 11
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 0
         }
     ]
 }

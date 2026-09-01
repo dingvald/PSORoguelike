@@ -2,8 +2,73 @@
    content_editor.rcss (linked before this file) -- the palette, per-cell
    inspector, stamped-prefab row list, and per-cell socket row list. */
 
+/* content_editor.rcss's .grid-column is a single-child block box (just
+   #preview-window at 100%/100%), shared with Dungeon/Prefab. Piece adds an
+   orientation-preview control above the preview window (see #field-preview
+   in piece_editor.rml), so this document-scoped override (RCSS rules are
+   per-document, not global -- Dungeon/Prefab load their own separate .rml
+   with no equivalent link) turns it into a flex column instead, with the new
+   row fixed-height and the preview window filling the rest. */
+.grid-column {
+    display: flex;
+    flex-direction: column;
+}
+
+#field-preview {
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+}
+
+.preview-window {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+
 h3 .btn {
     margin-left: 8px;
+}
+
+/* Compact "+" add buttons for a socket's Tags/Connects To Tags lists --
+   overrides theme.rcss's .btn { display: block; } (same specificity, later
+   in the cascade) so they sit inline next to their h3 instead of forcing a
+   full-width row. */
+.add-socket-tag, .add-socket-connects {
+    display: inline-block;
+    width: 20px;
+    padding: 0.3em 0;
+    text-align: center;
+}
+
+/* One block-level wrapper around a socket row's fields/lists (see
+   RefreshInspector) -- without it, those elements sit directly as children
+   of .row-card-content (display: flex in field_widgets.rcss), where ones
+   without an explicit full width (the h3 headers, the ref-scroll lists) size
+   to their content and can land on the same flex line, overlapping instead
+   of stacking. */
+.socket-body {
+    display: block;
+    width: 100%;
+}
+
+.ref-scroll {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px #33363f;
+    margin-bottom: 6px;
+}
+
+/* The generic field-label ("tag") is redundant here -- the socket's own
+   "Tags"/"Connects To Tags" heading already says what the row holds.
+   Hiding it (display: none, not just empty text) also drops it from
+   .row-card-content's layout entirely, so the input becomes the row's only
+   line and the drag-handle/remove-button (top-aligned via .row-card) land
+   flush with it instead of the label line above. */
+.tag-id .field-label {
+    display: none;
 }
 
 .side-top {

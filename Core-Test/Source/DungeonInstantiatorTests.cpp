@@ -61,7 +61,8 @@ class TestEntityLoader : public IEntityLoader
 public:
     bool Load(std::filesystem::path /*path*/) override { return true; }
 
-    void Populate(entt::registry& prefab_registry, std::unordered_map<std::uint32_t, entt::entity>& out_prefab_ids) override
+    void Populate(entt::registry& prefab_registry,
+                  std::unordered_map<std::uint32_t, entt::entity>& out_prefab_ids) override
     {
         entt::entity floor = prefab_registry.create();
         prefab_registry.emplace<FloorMarker>(floor);
@@ -181,6 +182,19 @@ TEST_CASE("ComputeDungeonBounds spans negative world_offset placements", "[Dunge
     CHECK(bounds.size == Vec2{5, 3});
 }
 
+TEST_CASE("ComputeDungeonBounds accounts for a placed piece's transform", "[DungeonInstantiator]")
+{
+    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}, PieceTransform{1, false}});
+
+    const Rect bounds = ComputeDungeonBounds(layout, library);
+
+    // Authored cells (0,0)/(1,0) rotate 90 degrees clockwise to (0,0)/(0,1).
+    CHECK(bounds.origin == Vec2{0, 0});
+    CHECK(bounds.size == Vec2{1, 2});
+}
+
 TEST_CASE("ComputeDungeonBounds ignores a placed piece the library can't resolve", "[DungeonInstantiator]")
 {
     PieceLibrary library{{MakeTwoCellPiece(10)}};
@@ -224,6 +238,33 @@ TEST_CASE("InstantiateDungeon stamps every cell's prefabs into the grid at trans
 
     // Entrance tile is the first placed piece's first cell, same translation.
     CHECK(result.entrance_tile == Vec2{0, 0});
+}
+
+TEST_CASE("InstantiateDungeon applies a placed piece's transform before translating cells", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}, PieceTransform{1, false}});
+
+    Grid grid(2, 2);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    // Authored cells (0,0) and (1,0) rotate 90 degrees clockwise to (0,0)
+    // and (0,1) instead of the untransformed piece's (0,0)/(1,0).
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{0, 0})[0]));
+
+    REQUIRE(grid.GetEntities(Vec2{0, 1}).size() == 2);
+    CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{0, 1})[0]));
+    CHECK(registry.HasComponent<DoorMarker>(grid.GetEntities(Vec2{0, 1})[1]));
+
+    CHECK(result.room_map.GetRoom(Vec2{0, 1}) == 0u);
 }
 
 TEST_CASE("InstantiateDungeon additionally stamps a dead end socket's fallback prefab", "[DungeonInstantiator]")
@@ -344,6 +385,86 @@ TEST_CASE("InstantiateDungeon stamps only wave 0 and defers wave 1", "[DungeonIn
     REQUIRE(pending.entries.size() == 1);
     CHECK(pending.entries.front().prefab_id == kEnemyPrefab);
     CHECK(pending.entries.front().world_cell == Vec2{0, 0});
+}
+
+TEST_CASE("InstantiateDungeon invokes on_spawned for a first-wave spawn, not for cell prefabs", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    FallbackMarker::Register(registry.GetMetaContext());
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceSpawn spawn;
+    spawn.cell_offset = Vec2{0, 0};
+    spawn.prefab_id = kEnemyPrefab;
+    spawn.wave = 0;
+
+    PieceLibrary library{{MakePieceWithSpawns(10, {spawn})}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
+
+    Grid grid(1, 1);
+    std::vector<entt::entity> spawned;
+    InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid,
+                       [&](entt::entity entity) { spawned.push_back(entity); });
+
+    // Only the wave-0 enemy triggers on_spawned -- the cell's own floor
+    // prefab is static dungeon furniture, not a creature.
+    REQUIRE(spawned.size() == 1);
+    CHECK(registry.HasComponent<EnemyMarker>(spawned.front()));
+}
+
+TEST_CASE("InstantiateDungeon tags every cell with its placed piece's index in room_map", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});  // piece_index 0, grid cells (0,0)/(1,0)
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 1}});  // piece_index 1, grid cells (0,1)/(1,1)
+
+    Grid grid(2, 2);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    REQUIRE(result.room_map.GetRoom(Vec2{0, 0}) == 0u);
+    REQUIRE(result.room_map.GetRoom(Vec2{1, 0}) == 0u);
+    REQUIRE(result.room_map.GetRoom(Vec2{0, 1}) == 1u);
+    REQUIRE(result.room_map.GetRoom(Vec2{1, 1}) == 1u);
+
+    // Untagged tiles (outside every placed piece's footprint) stay unmapped.
+    CHECK_FALSE(result.room_map.GetRoom(Vec2{5, 5}).has_value());
+}
+
+TEST_CASE("InstantiateDungeon builds room_adjacency from layout.connections in both directions",
+          "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    DoorMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceLibrary library{{MakeTwoCellPiece(10)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});  // piece_index 0
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 1}});  // piece_index 1
+    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 2}});  // piece_index 2, unconnected
+    layout.connections.push_back(SocketConnection{0, 1, Vec2{0, 0}, Vec2{0, 1}});
+
+    Grid grid(2, 3);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    REQUIRE(result.room_adjacency.size() == 3);
+    CHECK(result.room_adjacency[0] == std::vector<std::uint32_t>{1});
+    CHECK(result.room_adjacency[1] == std::vector<std::uint32_t>{0});
+    CHECK(result.room_adjacency[2].empty());
 }
 
 TEST_CASE("InstantiateDungeon leaves both spawn maps untouched for a piece with no spawns", "[DungeonInstantiator]")

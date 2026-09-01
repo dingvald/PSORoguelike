@@ -2,10 +2,10 @@
     "schema_version": 1,
     "name": "Test Dungeon",
     "area_tag": "",
-    "room_count_min": 5,
-    "room_count_max": 20,
-    "loopback_count_min": 0,
-    "loopback_count_max": 2,
+    "room_count_min": 20,
+    "room_count_max": 30,
+    "loopback_count_min": 5,
+    "loopback_count_max": 10,
     "pieces": [
         {
             "piece_id": 2421513152,
@@ -24,6 +24,21 @@
         },
         {
             "piece_id": 1232894280,
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": 3084619018,
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": 1538620031,
+            "weight": 1.0,
+            "max_occurrences": 3
+        },
+        {
+            "piece_id": 1266449518,
             "weight": 1.0,
             "max_occurrences": 0
         }

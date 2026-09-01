@@ -15,9 +15,15 @@ TurnCoordinator::TurnCoordinator(Registry& registry, int action_threshold)
 {
     registry.OnConstruct<EnergyComponent, &TurnCoordinator::OnEnergyConstructed>(*this);
     registry.OnDestroy<EnergyComponent, &TurnCoordinator::OnEnergyDestroyed>(*this);
+    registry.OnConstruct<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledConstructed>(*this);
+    registry.OnDestroy<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledDestroyed>(*this);
 }
 
-TurnCoordinator::~TurnCoordinator() { m_registry->DisconnectComponentLifecycle<EnergyComponent>(*this); }
+TurnCoordinator::~TurnCoordinator()
+{
+    m_registry->DisconnectComponentLifecycle<EnergyComponent>(*this);
+    m_registry->DisconnectComponentLifecycle<PlayerControlledComponent>(*this);
+}
 
 void TurnCoordinator::OnEnergyConstructed(entt::registry& registry, entt::entity entity)
 {
@@ -27,6 +33,16 @@ void TurnCoordinator::OnEnergyConstructed(entt::registry& registry, entt::entity
 void TurnCoordinator::OnEnergyDestroyed(entt::registry& /*registry*/, entt::entity entity)
 {
     m_turn_queue.Remove(entity);
+}
+
+void TurnCoordinator::OnPlayerControlledConstructed(entt::registry& /*registry*/, entt::entity /*entity*/)
+{
+    ++m_live_player_count;
+}
+
+void TurnCoordinator::OnPlayerControlledDestroyed(entt::registry& /*registry*/, entt::entity /*entity*/)
+{
+    --m_live_player_count;
 }
 
 void TurnCoordinator::PressKey(int key_code) { m_input_buffer.Press(key_code); }
@@ -44,7 +60,7 @@ TurnStep TurnCoordinator::Step(float delta_time)
     if (!m_pending_key)
         m_pending_key = m_input_buffer.Pop();
 
-    while (!m_turn_queue.IsEmpty())
+    while (!m_turn_queue.IsEmpty() && m_live_player_count > 0)
     {
         entt::entity actor_handle = m_turn_queue.NextActor();
         Entity actor(*m_registry, actor_handle);
@@ -104,7 +120,7 @@ TurnStep TurnCoordinator::Step(float delta_time)
         if (!actor.IsValid())
         {
             if (is_player)
-                return TurnStep::Resolved;
+                return m_live_player_count > 0 ? TurnStep::Resolved : TurnStep::PlayerDefeated;
             continue;
         }
 
@@ -116,7 +132,7 @@ TurnStep TurnCoordinator::Step(float delta_time)
             return TurnStep::Resolved;
     }
 
-    return TurnStep::AwaitingInput;
+    return m_live_player_count > 0 ? TurnStep::AwaitingInput : TurnStep::PlayerDefeated;
 }
 
 } // namespace psr

@@ -18,6 +18,7 @@ struct PlacedPiece
 {
     std::uint32_t piece_id = 0;
     Vec2 world_offset;
+    PieceTransform transform;
 };
 
 // One connection between two placed pieces' sockets -- either a phase-1
@@ -73,13 +74,19 @@ struct DungeonLayout
 //
 // Generates a dungeon layout: grows a connected tree of pieces from a single
 // Entrance to a single Exit (Phase 1 -- connectivity is guaranteed by
-// construction, not a separate check), adds loopback connections for
-// multiple paths (Phase 2), resolves unused sockets as dead ends (Phase 3),
-// and places dungeon.locks as solvable lock/key gates on bridge connections
-// of the entrance-to-exit path (Phase 4). Sockets are read directly off each
-// piece's own DungeonPiece::sockets -- no ECS/Registry lookup involved, since
-// a socket is piece-authored data, not a stamped entity. Throws DungeonError
-// if no Entrance/Exit piece is available in dungeon.pieces (filtered against
+// construction, not a separate check), caps any dead-end Corridor socket
+// with a terminal Room or Vault so a hallway isn't a dead end in name only
+// (Phase 1.5, best-effort) -- preferring a piece tagged "dead_end"
+// (DungeonPiece::tags) and falling back to any Room/Vault if none of the
+// tagged ones fit, with the capped piece's own remaining sockets collapsed
+// straight to fallback-stamped dead ends rather than fed back into Phase
+// 2/3 -- adds loopback connections for multiple paths (Phase 2), resolves
+// remaining unused sockets as dead ends (Phase 3), and places dungeon.locks
+// as solvable lock/key gates on bridge connections of the entrance-to-exit
+// path (Phase 4). Sockets are read directly off each piece's own
+// DungeonPiece::sockets -- no ECS/Registry lookup involved, since a socket
+// is piece-authored data, not a stamped entity. Throws DungeonError if no
+// Entrance/Exit piece is available in dungeon.pieces (filtered against
 // library and area_tag), or if the target room count can't be reached with
 // an Exit placed within a bounded attempt budget.
 DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& library, std::uint64_t seed);

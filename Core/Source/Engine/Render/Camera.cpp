@@ -24,7 +24,7 @@ void Camera::Reposition(Vec2 new_position)
     // so Update() eases away the whole accumulated distance, not just the
     // latest step.
     m_render_lag = m_render_lag + Vec2f{static_cast<float>(m_position.x - new_position.x),
-                                       static_cast<float>(m_position.y - new_position.y)};
+                                        static_cast<float>(m_position.y - new_position.y)};
     m_position = new_position;
 }
 

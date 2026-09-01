@@ -11,6 +11,7 @@
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
+#include "Components/InnateWeaponComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/TPComponent.h"
@@ -28,9 +29,11 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Layers/HudLayer.h"
+#include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/RestartRequestedMessage.h"
 #include "States/GameState.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -79,6 +82,30 @@ GameplayLayer::~GameplayLayer() = default;
 
 void GameplayLayer::OnAttach()
 {
+    LoadNewGame();
+
+    Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
+    Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
+    Subscribe<RestartRequestedMessage>(&GameplayLayer::OnRestartRequested, this);
+
+    PushOverlay<HudLayer>();
+
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+    m_state_machine.Push(m_exploring_state, context);
+}
+
+void GameplayLayer::LoadNewGame()
+{
+    // Discards the previous run's whole ECS world in one move -- every other
+    // member that holds a Registry&/Registry* into m_registry
+    // (m_turn_coordinator, m_renderable_lookup, ...) stays valid across this,
+    // since m_registry's own address never changes, only the entt::registry
+    // it wraps. A no-op the first time this runs (OnAttach's default-
+    // constructed m_registry is already empty), so LoadNewGame() doesn't need
+    // to know whether it's an initial load or a restart.
+    m_registry = Registry();
+    m_pending_cast_action.reset();
+
     // Content-load/generation failures below are build-input bugs (a missing
     // or malformed file, a dungeon definition with no valid layout), not a
     // runtime condition a player can hit -- they're allowed to propagate as
@@ -113,6 +140,22 @@ void GameplayLayer::OnAttach()
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
 
+    // Created before dungeon generation below so CombatLogBridge (constructed
+    // right after) can Subscribe() every enemy on_enemy_spawned stamps,
+    // including the ones InstantiateDungeon spawns immediately --
+    // Position/PlayerControlledComponent/HealthComponent/EnergyComponent are
+    // still emplaced later, once instantiation.entrance_tile is known;
+    // nothing this entity carries yet (innate_weapon/blocks_movement/
+    // renderable, from player.json) needs the grid or dungeon to exist first.
+    m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
+
+    // Bridges per-entity combat events onto the Layer MessageBus for HudLayer
+    // to consume -- see CombatLogBridge.h. Subscribed to the player above and
+    // to every enemy via on_enemy_spawned below, so HudLayer's HP bar updates
+    // whether the player is the attacker or the target.
+    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects, m_player);
+    m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
+
     const DungeonLibrary dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
     const Dungeon* dungeon = dungeons.Find(entt::hashed_string::value(kDungeonId));
     if (!dungeon)
@@ -131,19 +174,50 @@ void GameplayLayer::OnAttach()
     // occupancy.
     m_registry.SetGrid(*m_grid);
 
-    const DungeonInstantiation instantiation =
-        InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid);
-
-    m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
-                                 instantiation.pending_spawn_waves);
-
-    // Must be constructed before the player's EnergyComponent is emplaced --
+    // Must be constructed before any entity's EnergyComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
-    // OnConstruct<EnergyComponent> listener, wired in its constructor.
+    // OnConstruct<EnergyComponent> listener, wired in its constructor. That
+    // includes enemies' EnergyComponent below (via on_enemy_spawned, run from
+    // InstantiateDungeon), not just the player's -- constructing this any
+    // later left the dungeon's first enemy wave emplaced before the listener
+    // existed, so they never joined the turn queue and never acted.
     m_turn_coordinator.emplace(m_registry);
     m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng);
 
-    m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
+    // Piece-authored PieceSpawn entries are creatures, not static dungeon
+    // furniture -- DungeonInstantiator/SpawnWaveSystem only stamp them with
+    // Position/grid membership/SpawnWaveComponent (all Core-level), so this
+    // hook does the remaining App-level setup Core can't: joining the turn
+    // queue, equipping an authored innate weapon, and wiring the enemy into
+    // CombatLogBridge the same way the player is above (so an enemy hitting
+    // the player still gets a PlayerStatusMessage published -- AfterDamageEvent
+    // is dispatched at the *source*, see DamageEvent.h, so the player being
+    // hit only reaches CombatLogBridge via the attacking enemy's own
+    // subscription).
+    const auto on_enemy_spawned = [this](entt::entity entity)
+    {
+        m_registry.Emplace<EnergyComponent>(entity);
+        if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(entity))
+        {
+            const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
+            m_registry.Emplace<EquipmentComponent>(entity, EquipmentComponent{weapon});
+        }
+        m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
+    };
+
+    const DungeonInstantiation instantiation =
+        InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid, on_enemy_spawned);
+
+    m_room_map.emplace(instantiation.room_map);
+    m_room_visibility.emplace(layout.pieces.size(), instantiation.room_adjacency);
+    m_room_visibility->Update(m_room_map->GetRoom(instantiation.entrance_tile));
+
+    m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
+                                instantiation.pending_spawn_waves, on_enemy_spawned);
+
+    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_rng);
+    m_turn_coordinator->SetNpcDecision([this](Entity actor) { return m_enemy_ai_system->Decide(actor); });
+
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{100, 100});
@@ -152,14 +226,23 @@ void GameplayLayer::OnAttach()
 
     m_registry.Emplace<EnergyComponent>(m_player); // enqueues the player into the turn queue
 
+    // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
+    // above) -- there's no interactive equip/inventory system yet (M8.1's UI
+    // bullet is deliberately deferred), so the player's starting weapon is
+    // authored the same way an enemy's innate weapon is: a weapon_prefab_id
+    // on InnateWeaponComponent, resolved into a live weapon entity here.
+    if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(m_player))
+    {
+        const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
+        m_registry.Emplace<EquipmentComponent>(m_player, EquipmentComponent{weapon});
+    }
+
     // Default hotbar loadout: first 4 weapon-granted Techniques into slots
     // 0-3, first 4 Photon Arts into slots 4-7 (mirrors the old placeholder
     // cast trigger's fixed key ranges, now captured as data instead of
-    // re-derived by key range on every press). Typically all-empty today --
-    // nothing sets EquipmentComponent::weapon on the player yet (see its own
-    // doc comment). Slots 8-9 are always Item stubs so the HUD always has one
-    // of each slot type to render -- item activation is a deliberate no-op,
-    // there is no inventory system yet.
+    // re-derived by key range on every press). Slots 8-9 are always Item
+    // stubs so the HUD always has one of each slot type to render -- item
+    // activation is a deliberate no-op, there is no inventory system yet.
     HotbarComponent hotbar;
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
         equipment && equipment->weapon != entt::null)
@@ -186,19 +269,29 @@ void GameplayLayer::OnAttach()
     hotbar.slots[9].type = HotbarSlotType::Item;
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
-    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects, m_player);
-    m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
-
     m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
     m_status_effect_markers->Subscribe(Entity(m_registry, m_player));
+}
 
-    Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
-    Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
+void GameplayLayer::OnRestartRequested(const RestartRequestedMessage& /*message*/)
+{
+    LoadNewGame();
 
-    PushOverlay<HudLayer>();
+    // GameOverState never replaced ExploringState -- it was pushed on top
+    // (see ExploringState::Update's PlayerDefeated case), so popping it here
+    // uncovers the same ExploringState instance, now driving the fresh
+    // TurnCoordinator/registry LoadNewGame() just built.
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+    m_state_machine.Pop(context);
 
-    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player};
-    m_state_machine.Push(m_exploring_state, context);
+    // HudLayer cached the previous run's HP/TP/hotbar; every entity/component
+    // that produced them was just discarded by LoadNewGame(), so republish
+    // fresh values the same way OnHudReady() does after HudLayer's own
+    // (re)attach.
+    PublishHotbarState();
+    m_combat_log_bridge->PublishPlayerStatus();
+    m_combat_log_bridge->PublishStatusEffects();
+    Publish(GameRestartedMessage{});
 }
 
 void GameplayLayer::OnUpdate(float delta_time)
@@ -208,11 +301,15 @@ void GameplayLayer::OnUpdate(float delta_time)
     if (!m_turn_coordinator || !m_grid)
         return;
 
-    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player};
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
     m_state_machine.Update(context, delta_time);
 
     if (m_registry.IsValid(m_player))
-        m_camera.SetTarget(m_registry.GetComponent<Position>(m_player).tile);
+    {
+        const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+        m_camera.SetTarget(player_tile);
+        m_room_visibility->Update(m_room_map->GetRoom(player_tile));
+    }
     m_camera.Update(delta_time);
 }
 
@@ -225,7 +322,8 @@ void GameplayLayer::EnsureRenderResources(SDL_Renderer& renderer)
     m_gpu_pipeline.emplace(renderer, ApplicationFilepaths::ShadersPath / "TileSprite.vert.spv",
                            ApplicationFilepaths::ShadersPath / "TileSprite.frag.spv");
     m_renderable_lookup.emplace(m_registry);
-    m_tile_renderer.emplace(*m_grid, *m_atlas, *m_gpu_pipeline, *m_renderable_lookup, kTileWidth, kTileHeight);
+    m_fog_lookup.emplace(m_registry, *m_room_map, *m_room_visibility, *m_renderable_lookup);
+    m_tile_renderer.emplace(*m_grid, *m_atlas, *m_gpu_pipeline, *m_fog_lookup, kTileWidth, kTileHeight);
 }
 
 void GameplayLayer::OnRender(SDL_Renderer* renderer)
@@ -366,7 +464,7 @@ void GameplayLayer::OnEvent(Event& event)
     if (event.handled)
         return;
 
-    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player};
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
     m_state_machine.HandleEvent(event, context);
 }
 

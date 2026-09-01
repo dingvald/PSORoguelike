@@ -163,3 +163,29 @@ body {
     display: block;
     margin-bottom: 0.2em;
 }
+
+#game-over {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(10, 0, 0, 200);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#game-over-text {
+    font-size: 3em;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: #d43f3f;
+}
+
+#game-over-hint {
+    margin-top: 0.8em;
+    font-size: 1.2em;
+    color: #eee;
+}

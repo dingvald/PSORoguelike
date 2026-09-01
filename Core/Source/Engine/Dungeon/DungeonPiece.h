@@ -91,6 +91,71 @@ inline EdgeDirection OppositeEdge(EdgeDirection edge)
     return EdgeDirection::North;
 }
 
+// One of a piece's 8 dihedral-group orientations: mirrored is a horizontal
+// flip (x = -x) applied first, then rotation_steps 90-degree clockwise
+// rotations (0-3). Applies to a piece's cells/sockets/spawns uniformly --
+// see ApplyPieceTransform below -- so DungeonStitcher and DungeonInstantiator
+// never need their own notion of "rotated piece geometry".
+struct PieceTransform
+{
+    int rotation_steps = 0;
+    bool mirrored = false;
+
+    friend bool operator==(const PieceTransform&, const PieceTransform&) = default;
+};
+
+inline Vec2 ApplyPieceTransform(Vec2 v, PieceTransform transform)
+{
+    if (transform.mirrored)
+        v.x = -v.x;
+    for (int i = 0; i < transform.rotation_steps; ++i)
+        v = Vec2{-v.y, v.x};
+    return v;
+}
+
+inline EdgeDirection ApplyPieceTransform(EdgeDirection edge, PieceTransform transform)
+{
+    if (transform.mirrored)
+    {
+        if (edge == EdgeDirection::East)
+            edge = EdgeDirection::West;
+        else if (edge == EdgeDirection::West)
+            edge = EdgeDirection::East;
+    }
+    for (int i = 0; i < transform.rotation_steps; ++i)
+        switch (edge)
+        {
+        case EdgeDirection::North:
+            edge = EdgeDirection::East;
+            break;
+        case EdgeDirection::East:
+            edge = EdgeDirection::South;
+            break;
+        case EdgeDirection::South:
+            edge = EdgeDirection::West;
+            break;
+        case EdgeDirection::West:
+            edge = EdgeDirection::North;
+            break;
+        }
+    return edge;
+}
+
+// The set of orientations a piece with these flags may be placed in --
+// shared by DungeonStitcher (candidate generation) and the Piece Editor's
+// preview control so both agree on what "valid orientation" means. Rotation
+// and mirroring combine freely: both flags set yields all 8 orientations.
+inline std::vector<PieceTransform> EnumeratePieceTransforms(bool can_rotate, bool can_mirror)
+{
+    std::vector<PieceTransform> transforms;
+    const int rotation_count = can_rotate ? 4 : 1;
+    const int mirror_count = can_mirror ? 2 : 1;
+    for (int mirror = 0; mirror < mirror_count; ++mirror)
+        for (int rotation = 0; rotation < rotation_count; ++rotation)
+            transforms.push_back(PieceTransform{rotation, mirror != 0});
+    return transforms;
+}
+
 // One entity prefab stamped into a PieceCell -- the floor/decoration visual
 // for that cell, mirroring UnnamedRoguelike's FeatureCell::prefabs idiom
 // exactly: a cell's appearance comes entirely from its stamped prefabs' own
@@ -105,10 +170,7 @@ struct PieceCellPrefab
 {
     std::uint32_t prefab_id = 0;
 
-    template <typename V> static void Describe(V& v)
-    {
-        v.template Field<&PieceCellPrefab::prefab_id>("prefab_id");
-    }
+    template <typename V> static void Describe(V& v) { v.template Field<&PieceCellPrefab::prefab_id>("prefab_id"); }
 };
 
 // One occupied cell of a piece's footprint, local to the piece's origin.
@@ -182,6 +244,11 @@ struct PieceSpawn
 // connect it to compatible neighbours. area_tag is a plain filter string for
 // now (e.g. "Forest") -- not tied to a real Area/Biome entity, since M3.2
 // doesn't exist yet; see docs/ROADMAP.md's M4 notes for why.
+// tags is piece-level, freeform author-defined labels (e.g. "dead_end") used
+// to steer placement heuristics that need to pick among same-category pieces
+// -- see DungeonStitcher.cpp's dead-end-capping phase -- distinct from
+// PieceSocket::tags/connects_to_tags, which govern socket-to-socket
+// connectivity matching, not whole-piece selection.
 struct DungeonPiece
 {
     std::uint32_t id = 0;
@@ -189,6 +256,9 @@ struct DungeonPiece
     std::string name;
     std::string area_tag;
     PieceCategory category = PieceCategory::Room;
+    bool can_rotate = false;
+    bool can_mirror = false;
+    std::vector<std::string> tags;
     std::vector<PieceCell> cells;
     std::vector<PieceSocket> sockets;
     std::vector<PieceSpawn> spawns;

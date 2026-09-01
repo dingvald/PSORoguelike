@@ -19,6 +19,8 @@ struct PlayerStatusMessage;
 struct HotbarStateMessage;
 struct CombatLogEntryMessage;
 struct StatusEffectsMessage;
+struct PlayerDefeatedMessage;
+struct GameRestartedMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -57,6 +59,8 @@ private:
     void OnHotbarState(const HotbarStateMessage& message);
     void OnLogEntry(const CombatLogEntryMessage& message);
     void OnStatusEffects(const StatusEffectsMessage& message);
+    void OnPlayerDefeated(const PlayerDefeatedMessage& message);
+    void OnGameRestarted(const GameRestartedMessage& message);
 
     Rml::ElementDocument* m_document = nullptr;
     std::vector<std::unique_ptr<RmlClickListener>> m_hotbar_listeners;

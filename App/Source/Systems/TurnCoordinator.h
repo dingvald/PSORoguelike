@@ -20,6 +20,7 @@ enum class TurnStep
     AwaitingInput,      // nothing to resolve this call -- no actor is ready, or the player has no pending input
     Resolved,           // the player's action (or a free no-op it attempted) resolved this call
     TargetingRequested, // a pending IAction* has requested a target -- see ITargetRequestSink
+    PlayerDefeated, // the last PlayerControlledComponent-tagged actor was just destroyed -- see Step()'s own comment
 };
 
 // Drives the turn loop: pulls the next-ready actor from a TurnQueue kept in
@@ -90,17 +91,26 @@ public:
     // an EnergyComponent to be queued before this is called: TurnQueue's
     // "time" is turns, not wall-clock seconds, so NextActor() always
     // fast-forwards to *someone* rather than reporting "no one is ready" --
-    // this loop only terminates by reaching the player (returning
-    // AwaitingInput/Resolved) or finding the queue empty. A queue with only
-    // non-player actors in it never yields.
+    // left unchecked, a queue that's lost its only player mid-loop (the
+    // player died to an NPC's attack, or to a self-lethal cast) would spin
+    // forever requeuing NPCs, since nothing but a player's turn or an empty
+    // queue used to break out. m_live_player_count (tracked via
+    // PlayerControlledComponent's own construct/destroy lifecycle, same
+    // mechanism as m_turn_queue's EnergyComponent tracking below) guards
+    // both the loop condition and the post-loop return, so losing the last
+    // player actor -- whichever actor's turn it happens during -- surfaces
+    // as PlayerDefeated instead of hanging.
     TurnStep Step(float delta_time);
 
 private:
     void OnEnergyConstructed(entt::registry& registry, entt::entity entity);
     void OnEnergyDestroyed(entt::registry& registry, entt::entity entity);
+    void OnPlayerControlledConstructed(entt::registry& registry, entt::entity entity);
+    void OnPlayerControlledDestroyed(entt::registry& registry, entt::entity entity);
 
     Registry* m_registry;
     TurnQueue m_turn_queue;
+    int m_live_player_count = 0;
     ActionMap<int> m_key_bindings;
     InputBuffer<int> m_input_buffer{/*initial_delay_seconds=*/0.3f, /*repeat_interval_seconds=*/0.1f};
     std::optional<int> m_pending_key;

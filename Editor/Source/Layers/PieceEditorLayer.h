@@ -100,6 +100,11 @@ private:
     // ".socket-connects-list" element; connects_to picks which of the
     // socket's two string-array fields this instance edits.
     void RefreshSocketTagRows(Rml::Element& container, std::size_t socket_index, bool connects_to);
+    // The piece-level DungeonPiece::tags row-list ("#field-tags"/"#add-tag")
+    // -- distinct from RefreshSocketTagRows, which edits a single socket's
+    // tags/connects_to_tags instead. Refreshed from RefreshEditForm and
+    // self-refreshed on add/remove/reorder, same pattern as RefreshInspector.
+    void RefreshTagList();
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();
@@ -115,7 +120,7 @@ private:
 
     // -- Grid render + interaction --
     void RenderEditContent(SDL_Renderer& renderer, int output_w, int output_h);
-    bool UpdatePreviewCanvas(); // returns whether #grid-panel is valid this frame
+    bool UpdatePreviewCanvas();         // returns whether #grid-panel is valid this frame
     SDL_FRect CellBox(Vec2 cell) const; // screen-space box for a grid cell, via m_preview_canvas
     std::optional<Vec2> CellUnder(float screen_x, float screen_y) const;
     void WireGridInteraction();
@@ -138,6 +143,7 @@ private:
     std::vector<std::unique_ptr<RmlEventListener>> m_grid_listeners;    // #edit-body mouse listeners
     fieldwidgets::Listeners m_form_listeners;                           // id/name/area_tag/category fields
     fieldwidgets::Listeners m_inspector_listeners;
+    fieldwidgets::Listeners m_tag_listeners;            // #field-tags rows -- self-refreshed, see RefreshTagList
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
     std::vector<Rml::Element*> m_palette_icon_elements; // aligned with m_palette
 
@@ -162,6 +168,11 @@ private:
     bool m_dirty = false;
     std::string m_error;
     std::optional<Vec2> m_selected_cell;
+
+    // -- Orientation preview -- transient, UI-only, never saved to m_draft.
+    // Non-Identity disables cell painting/selection (see HandleGridMouseDown)
+    // so the grid reads as a read-only "how would this look" view.
+    PieceTransform m_preview_transform;
 
     // -- Paint drag --
     bool m_painting = false;

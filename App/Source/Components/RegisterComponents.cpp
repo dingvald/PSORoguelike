@@ -1,9 +1,11 @@
 #include "Components/RegisterComponents.h"
 
+#include "Components/AiComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
+#include "Components/InnateWeaponComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
@@ -27,11 +29,13 @@ EntitySchemaModel RegisterComponents(Registry& registry)
 {
     ComponentSchemaRegistrar reg{registry.GetMetaContext()};
 
+    AiComponent::Register(reg);
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
     EnergyComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
+    InnateWeaponComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);
@@ -51,10 +55,13 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     // component's own AttachHandlers/DetachHandlers doc comment.
     // Registry::BindComponentEvents just connects entt's
     // on_construct/on_destroy<T> signals, independent of meta registration,
-    // so this is safe to call regardless.
+    // so this is safe to call regardless. InnateWeaponComponent is meta-
+    // registered above (it's authorable) but still needs this call for its
+    // own DeathEvent-handler wiring, same mechanism, unrelated reason.
     registry.BindComponentEvents<EquipmentComponent>();
     registry.BindComponentEvents<TPComponent>();
     registry.BindComponentEvents<StatusEffectComponent>();
+    registry.BindComponentEvents<InnateWeaponComponent>();
 
     // HealthSystem/DeathSystem react to HealthComponent's own lifecycle
     // rather than being HealthComponent's own AttachHandlers -- see

@@ -13,6 +13,10 @@ Follow the [C++ Core Guidelines](https://github.com/isocpp/CppCoreGuidelines/blo
 - **File-local constants/helpers:** unnamed `namespace {}`.
 - **`I` prefix** (e.g. `IChunkGenerator`) is reserved for pure abstract interfaces (all-pure-virtual, no default method bodies). A base class with default bodies (e.g. `Layer`) stays unprefixed.
 
+## Comments
+
+Do not write comments. No doc comments, no explanatory comments, no restating what the code does — identifiers should carry that load. The only exception is a single short line for a genuinely non-obvious constraint (e.g. the `new`/`delete` + `Rml::Shutdown()` ordering note below) — never a multi-line block.
+
 ## Ownership
 
 - RAII + smart pointers (`R.1`, `R.20`–`R.23`); pimpl uses `unique_ptr`. Raw `new`/`delete` only for RmlUi interfaces tied to `Rml::Shutdown()` ordering — document each with a comment.

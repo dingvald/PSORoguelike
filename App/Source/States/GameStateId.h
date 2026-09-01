@@ -12,6 +12,7 @@ enum class GameStateId
 {
     Exploring,
     TargetSelection,
+    GameOver,
 };
 
 } // namespace psr

@@ -2,6 +2,7 @@
 
 #include "Engine/ECS/Registry.h"
 #include "Engine/Events/Event.h"
+#include "Engine/Messages/MessageBus.h"
 #include "Engine/World/Grid.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -50,11 +51,12 @@ struct Fixture
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::TurnCoordinator turn_coordinator{registry};
+    psr::MessageBus message_bus;
     entt::entity player = entt::null;
 
     Fixture() { player = registry.CreateEntity(); }
 
-    psr::GameplayContext Context() { return psr::GameplayContext{registry, grid, turn_coordinator, player}; }
+    psr::GameplayContext Context() { return psr::GameplayContext{registry, grid, turn_coordinator, player, message_bus}; }
 };
 
 } // namespace

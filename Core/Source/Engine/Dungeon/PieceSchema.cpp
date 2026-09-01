@@ -32,6 +32,13 @@ PieceSchemaModel BuildPieceSchemaModel()
     category.enum_values = detail::EnsureEnumRegistered<PieceCategory>(ctx);
     model.fields.push_back(std::move(category));
 
+    model.fields.push_back(FieldSchema{"can_rotate", FieldKind::Boolean});
+    model.fields.push_back(FieldSchema{"can_mirror", FieldKind::Boolean});
+
+    FieldSchema tags{"tags", FieldKind::Array};
+    tags.children.push_back(FieldSchema{"item", FieldKind::String});
+    model.fields.push_back(std::move(tags));
+
     FieldSchema cells{"cells", FieldKind::Array};
     FieldSchema cell_item{"item", FieldKind::Object};
     cell_item.children = ReflectFields<PieceCell>(ctx);

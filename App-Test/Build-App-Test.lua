@@ -22,6 +22,9 @@ project "App-Test"
       -- SDL_keycode.h include is just key-code constants, no windowing/
       -- rendering link needed) -- same pure-logic-only bar as the folders above.
       "../App/Source/States/**.h", "../App/Source/States/**.cpp",
+      -- Render/ (RegistryRenderableLookup, FogOfWarRenderableLookup) is also
+      -- SDL/RmlUi-free -- same pure-logic-only bar as the folders above.
+      "../App/Source/Render/**.h", "../App/Source/Render/**.cpp",
    }
 
    includedirs

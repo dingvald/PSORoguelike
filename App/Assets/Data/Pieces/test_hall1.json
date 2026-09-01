@@ -2,7 +2,9 @@
     "schema_version": 1,
     "name": "test_hall1",
     "area_tag": "",
-    "category": "room",
+    "category": "corridor",
+    "can_rotate": true,
+    "can_mirror": false,
     "cells": [
         {
             "offset": {
@@ -211,12 +213,13 @@
             },
             "edge": "west",
             "tags": [
-                "door"
+                "hallway"
             ],
             "connects_to_tags": [
-                "door"
+                "door",
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
         },
         {
             "cell_offset": {
@@ -225,12 +228,14 @@
             },
             "edge": "east",
             "tags": [
-                "door"
+                "hallway"
             ],
             "connects_to_tags": [
-                "door"
+                "door",
+                "hallway"
             ],
-            "fallback_prefab_id": 0
+            "fallback_prefab_id": "wall"
         }
-    ]
+    ],
+    "spawns": []
 }

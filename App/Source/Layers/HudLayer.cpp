@@ -1,9 +1,11 @@
 #include "Layers/HudLayer.h"
 
 #include "Messages/CombatLogEntryMessage.h"
+#include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
 
@@ -70,6 +72,8 @@ void HudLayer::OnAttach()
     Subscribe<HotbarStateMessage>(&HudLayer::OnHotbarState, this);
     Subscribe<CombatLogEntryMessage>(&HudLayer::OnLogEntry, this);
     Subscribe<StatusEffectsMessage>(&HudLayer::OnStatusEffects, this);
+    Subscribe<PlayerDefeatedMessage>(&HudLayer::OnPlayerDefeated, this);
+    Subscribe<GameRestartedMessage>(&HudLayer::OnGameRestarted, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -87,10 +91,7 @@ void HudLayer::OnDetach()
     }
 }
 
-void HudLayer::OnUpdate(float /*delta_time*/)
-{
-    HandleQueuedMessages();
-}
+void HudLayer::OnUpdate(float /*delta_time*/) { HandleQueuedMessages(); }
 
 void HudLayer::LoadDocument()
 {
@@ -208,6 +209,28 @@ void HudLayer::OnStatusEffects(const StatusEffectsMessage& message)
                   std::to_string(entry.stacks) + " (" + std::to_string(entry.remaining_duration) + ")</span>";
     }
     row->SetInnerRML(markup);
+}
+
+void HudLayer::OnPlayerDefeated(const PlayerDefeatedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("game-over"))
+        overlay->SetProperty("display", "flex");
+}
+
+void HudLayer::OnGameRestarted(const GameRestartedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("game-over"))
+        overlay->SetProperty("display", "none");
+
+    m_log_lines.clear();
+    if (Rml::Element* log = m_document->GetElementById("event-log"))
+        log->SetInnerRML("");
 }
 
 } // namespace psr

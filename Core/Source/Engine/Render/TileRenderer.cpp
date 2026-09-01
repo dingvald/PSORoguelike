@@ -32,8 +32,8 @@ TileRenderer::TileRenderer(Grid& grid, TextureAtlas& atlas, TileGpuPipeline& gpu
 {
 }
 
-void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window_width, int window_height,
-                        float zoom, Vec2f camera_offset) const
+void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window_width, int window_height, float zoom,
+                        Vec2f camera_offset) const
 {
     if (!m_atlas->IsLoaded() || !m_gpu_pipeline->IsLoaded())
         return;
@@ -77,9 +77,9 @@ void TileRenderer::Draw(SDL_Renderer& renderer, Vec2 camera_position, int window
                 if (!renderable)
                     continue;
 
-                items.push_back(DrawItem{position, m_renderable_lookup->GetRenderOffset(entity),
-                                         renderable->texture_id, renderable->texture_size, renderable->uv,
-                                         renderable->color_1, renderable->color_2, renderable->render_layer});
+                items.push_back(DrawItem{position, m_renderable_lookup->GetRenderOffset(entity), renderable->texture_id,
+                                         renderable->texture_size, renderable->uv, renderable->color_1,
+                                         renderable->color_2, renderable->render_layer});
             }
         }
     }

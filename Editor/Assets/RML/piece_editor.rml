@@ -27,6 +27,7 @@
             </div>
             <div id="edit-body" class="edit-body">
                 <div class="grid-column">
+                    <div id="field-preview" class="field-row"></div>
                     <div id="preview-window" class="preview-window"></div>
                 </div>
                 <div class="side-column">
@@ -39,6 +40,10 @@
                         <div id="field-area-tag" class="field-row"></div>
                         <h3>Category</h3>
                         <div id="field-category" class="field-row"></div>
+                        <div id="field-can-rotate" class="field-row"></div>
+                        <div id="field-can-mirror" class="field-row"></div>
+                        <h3>Tags<span id="add-tag" class="btn">+</span></h3>
+                        <div id="field-tags" class="ref-scroll"></div>
                         <h3>Selected cell</h3>
                         <div id="cell-inspector" class="fields-panel"></div>
                     </div>

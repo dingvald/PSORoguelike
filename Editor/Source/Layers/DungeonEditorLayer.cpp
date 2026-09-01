@@ -742,7 +742,7 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
             continue;
         for (const PieceCell& cell : piece->cells)
         {
-            const Vec2 world = placed.world_offset + cell.offset;
+            const Vec2 world = placed.world_offset + ApplyPieceTransform(cell.offset, placed.transform);
             if (!any_cell)
             {
                 min_x = max_x = world.x;
@@ -791,7 +791,8 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
                 continue;
             for (const PieceCell& cell_data : piece->cells)
             {
-                const SDL_FRect box = cell_box(placed.world_offset + cell_data.offset);
+                const SDL_FRect box =
+                    cell_box(placed.world_offset + ApplyPieceTransform(cell_data.offset, placed.transform));
                 for (const PieceCellPrefab& prefab : cell_data.prefabs)
                 {
                     auto it = m_renderables.find(prefab.prefab_id);
@@ -835,7 +836,8 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
             continue;
         for (const PieceCell& cell_data : piece->cells)
         {
-            const SDL_FRect box = cell_box(placed.world_offset + cell_data.offset);
+            const SDL_FRect box =
+                cell_box(placed.world_offset + ApplyPieceTransform(cell_data.offset, placed.transform));
             SDL_SetRenderDrawColor(&renderer, 60, 62, 74, 255);
             SDL_RenderRect(&renderer, &box);
         }
@@ -849,8 +851,9 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
             if (piece)
                 for (const PieceCell& cell_data : piece->cells)
                 {
+                    const PlacedPiece& key_placed = m_preview->pieces[lock.key_room_index];
                     const SDL_FRect box =
-                        cell_box(m_preview->pieces[lock.key_room_index].world_offset + cell_data.offset);
+                        cell_box(key_placed.world_offset + ApplyPieceTransform(cell_data.offset, key_placed.transform));
                     SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 60);
                     SDL_RenderFillRect(&renderer, &box);
                 }

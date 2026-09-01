@@ -5,6 +5,7 @@
 #include "Engine/World/Grid.h"
 
 #include <cstdint>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -24,8 +25,14 @@ namespace psr {
 class SpawnWaveSystem
 {
 public:
+    // on_spawned, if set, is invoked once for each entity this system spawns
+    // for a later wave -- same contract as DungeonInstantiator's own
+    // on_spawned parameter (both should normally be given the same callback),
+    // since a later-wave spawn needs the identical App-level, per-creature
+    // setup (joining the turn queue, equipping an innate weapon) a first-wave
+    // spawn gets there.
     SpawnWaveSystem(Registry& registry, Grid& grid, std::unordered_map<std::uint32_t, int> initial_wave_counts,
-                     std::vector<PendingSpawnWave> pending_waves);
+                    std::vector<PendingSpawnWave> pending_waves, std::function<void(entt::entity)> on_spawned = {});
     ~SpawnWaveSystem();
 
     // Bound on_destroy<SpawnWaveComponent> listener captures this instance's
@@ -43,6 +50,7 @@ private:
     Grid* m_grid;
     std::unordered_map<std::uint32_t, int> m_remaining_in_wave;
     std::unordered_map<std::uint32_t, std::vector<PendingSpawnWave>> m_queued_by_group;
+    std::function<void(entt::entity)> m_on_spawned;
 };
 
 } // namespace psr

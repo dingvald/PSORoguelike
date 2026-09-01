@@ -7,10 +7,6 @@
     any target-name escaping questions around the hyphen in the project name),
     then runs the resulting exe. Any remaining arguments are forwarded
     verbatim to the Catch2 executable, e.g. a tag filter or -s.
-
-    App-Test doesn't exist yet (App has no pure-logic surface worth a Catch2
-    harness yet) -- re-add an 'App' entry to $projects and the -Suite
-    ValidateSet below once it does.
 .EXAMPLE
     ./Scripts/Run-Tests.ps1
 .EXAMPLE
@@ -20,7 +16,7 @@
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
-    [ValidateSet('Core', 'All')][string]$Suite = 'All',
+    [ValidateSet('Core', 'App', 'All')][string]$Suite = 'All',
     [ValidateSet('Debug', 'Release', 'Dist')][string]$Configuration = 'Debug',
     [Parameter(ValueFromRemainingArguments)][string[]]$CatchArgs
 )
@@ -49,9 +45,13 @@ $projects = @{
         Proj = Join-Path $root 'Core-Test\Core-Test.vcxproj'
         Exe  = Join-Path $root "Binaries\windows-x86_64\$Configuration\Core-Test\Core-Test.exe"
     }
+    App  = @{
+        Proj = Join-Path $root 'App-Test\App-Test.vcxproj'
+        Exe  = Join-Path $root "Binaries\windows-x86_64\$Configuration\App-Test\App-Test.exe"
+    }
 }
 
-$suitesToRun = if ($Suite -eq 'All') { @('Core') } else { @($Suite) }
+$suitesToRun = if ($Suite -eq 'All') { @('Core', 'App') } else { @($Suite) }
 $msbuild = Find-MSBuild
 
 $failed = 0

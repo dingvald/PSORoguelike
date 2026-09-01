@@ -4,6 +4,8 @@
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
+#include "Engine/Dungeon/RoomMap.h"
+#include "Engine/Dungeon/RoomVisibilityTracker.h"
 #include "Engine/Dungeon/SpawnWaveSystem.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
@@ -13,11 +15,14 @@
 #include "Engine/Render/TileRenderer.h"
 #include "Engine/World/Grid.h"
 #include "Items/AffixLibrary.h"
+#include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
 #include "States/ExploringState.h"
+#include "States/GameOverState.h"
 #include "States/GameStateMachine.h"
 #include "States/TargetSelectionState.h"
 #include "Systems/CombatLogBridge.h"
+#include "Systems/EnemyAiSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -32,6 +37,7 @@ namespace psr {
 class IAction;
 struct HotbarSlotActivatedMessage;
 struct HudReadyMessage;
+struct RestartRequestedMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -69,6 +75,23 @@ private:
     // OnAttach (see Application; there is no other renderer accessor).
     void EnsureRenderResources(SDL_Renderer& renderer);
 
+    // (Re)builds the whole run: a fresh Registry/Grid, a newly generated
+    // dungeon, the player, and every system/bridge that depends on them
+    // (m_turn_coordinator, m_spawn_wave_system, m_enemy_ai_system,
+    // m_combat_log_bridge, m_status_effect_markers). Called once from
+    // OnAttach() and again from OnRestartRequested() -- everything it
+    // touches is a std::optional/plain member re-populated in place, so
+    // calling it twice is safe. Does not touch m_state_machine, the
+    // HotbarSlotActivatedMessage/HudReadyMessage/RestartRequestedMessage
+    // subscriptions, or HudLayer's overlay -- those are one-time-only setup
+    // OnAttach() still owns.
+    void LoadNewGame();
+
+    // Responds to RestartRequestedMessage (published by GameOverState on the
+    // first key press while it's on top of the state stack) by calling
+    // LoadNewGame() and popping GameOverState back off the stack.
+    void OnRestartRequested(const RestartRequestedMessage& message);
+
     // If slot_index names a Technique/PhotonArt hotbar slot (see
     // HotbarComponent) the player can currently afford, constructs the
     // corresponding Action and requests targeting for it. Returns whether the
@@ -90,7 +113,7 @@ private:
 
     Registry m_registry;
     PieceLibrary m_pieces;
-    AffixLibrary m_affixes; // empty: no enemies spawn yet, so MoveAction's attack fallback never triggers
+    AffixLibrary m_affixes; // empty: no affix content authored yet (pending M8.2's drop-table work)
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
@@ -100,12 +123,26 @@ private:
     entt::entity m_player = entt::null;
     Camera m_camera;
 
+    // Room-granularity fog of war: which placed piece each tile belongs to,
+    // and which pieces are current/visited -- see RoomMap/RoomVisibilityTracker.
+    // Hold no pointers into other members, so declaration order relative to
+    // them doesn't matter. Re-populated via .emplace() (not reassigned) in
+    // LoadNewGame, same as m_grid, so FogOfWarRenderableLookup's references
+    // into them stay valid across a restart.
+    std::optional<RoomMap> m_room_map;
+    std::optional<RoomVisibilityTracker> m_room_visibility;
+
     // Non-movable (binds registry component-lifecycle listeners to its own
     // address) -- must be constructed in place, after m_registry exists but
     // before the player's EnergyComponent is spawned (TurnQueue membership
     // is driven by that construction order, see TurnCoordinator.cpp).
     // Declared after m_registry so it's destroyed first.
     std::optional<TurnCoordinator> m_turn_coordinator;
+
+    // Decides non-player actors' turns (installed onto m_turn_coordinator via
+    // SetNpcDecision in OnAttach). Holds only pointers into m_grid/m_registry/
+    // m_affixes/m_rng, so declaration order relative to them doesn't matter.
+    std::optional<EnemyAiSystem> m_enemy_ai_system;
 
     // Gates piece-authored spawn waves past their first: holds pointers into
     // m_registry/m_grid only (declaration order relative to them doesn't
@@ -136,17 +173,19 @@ private:
     // then Step()'s normal resolution) or the player cancels.
     std::unique_ptr<IAction> m_pending_cast_action;
 
-    // GameStateMachine and its two states this round -- declaration order
-    // matters: m_target_selection_state must outlive m_exploring_state (which
-    // holds a reference to it) and both must outlive m_state_machine's use of
-    // either.
+    // GameStateMachine and its three states this round -- declaration order
+    // matters: m_target_selection_state/m_game_over_state must outlive
+    // m_exploring_state (which holds references to both) and all three must
+    // outlive m_state_machine's use of any of them.
     TargetSelectionState m_target_selection_state;
-    ExploringState m_exploring_state{m_target_selection_state};
+    GameOverState m_game_over_state;
+    ExploringState m_exploring_state{m_target_selection_state, m_game_over_state};
     GameStateMachine m_state_machine;
 
     std::optional<TextureAtlas> m_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
     std::optional<RegistryRenderableLookup> m_renderable_lookup;
+    std::optional<FogOfWarRenderableLookup> m_fog_lookup;
     std::optional<TileRenderer> m_tile_renderer;
 };
 

@@ -3,22 +3,35 @@
 #include "Actions/ITargetRequestSink.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
+#include "States/GameOverState.h"
 #include "States/TargetSelectionState.h"
 #include "Systems/TurnCoordinator.h"
 
 namespace psr {
 
-ExploringState::ExploringState(TargetSelectionState& target_selection) : m_target_selection(&target_selection) {}
+ExploringState::ExploringState(TargetSelectionState& target_selection, GameOverState& game_over)
+    : m_target_selection(&target_selection), m_game_over(&game_over)
+{
+}
 
 StateTransition ExploringState::Update(GameplayContext& context, float delta_time)
 {
     const TurnStep step = context.turn_coordinator.Step(delta_time);
-    if (step != TurnStep::TargetingRequested)
+    switch (step)
+    {
+    case TurnStep::TargetingRequested:
+    {
+        TargetRequest request = context.turn_coordinator.TakePendingTargetRequest();
+        m_target_selection->Begin(request, context.player);
+        return StateTransition::Push(*m_target_selection);
+    }
+    case TurnStep::PlayerDefeated:
+        return StateTransition::Push(*m_game_over);
+    case TurnStep::AwaitingInput:
+    case TurnStep::Resolved:
         return StateTransition::None();
-
-    TargetRequest request = context.turn_coordinator.TakePendingTargetRequest();
-    m_target_selection->Begin(request, context.player);
-    return StateTransition::Push(*m_target_selection);
+    }
+    return StateTransition::None();
 }
 
 bool ExploringState::HandleEvent(Event& event, GameplayContext& context)

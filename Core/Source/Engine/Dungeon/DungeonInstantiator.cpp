@@ -24,7 +24,7 @@ Rect ComputeDungeonBounds(const DungeonLayout& layout, const PieceLibrary& libra
 
         for (const PieceCell& cell : piece->cells)
         {
-            const Vec2 world_cell = placed.world_offset + cell.offset;
+            const Vec2 world_cell = placed.world_offset + ApplyPieceTransform(cell.offset, placed.transform);
             if (!any)
             {
                 min = max = world_cell;
@@ -61,7 +61,7 @@ namespace {
 } // namespace
 
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
-                                         Registry& registry, Grid& grid)
+                                        Registry& registry, Grid& grid, std::function<void(entt::entity)> on_spawned)
 {
     const auto stamp = [&](Vec2 grid_cell, std::uint32_t prefab_id) -> entt::entity
     {
@@ -74,6 +74,16 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
     };
 
     DungeonInstantiation result;
+    result.room_map = RoomMap(grid.GetWidth(), grid.GetHeight());
+
+    result.room_adjacency.resize(layout.pieces.size());
+    for (const SocketConnection& connection : layout.connections)
+    {
+        if (connection.piece_a < result.room_adjacency.size())
+            result.room_adjacency[connection.piece_a].push_back(static_cast<std::uint32_t>(connection.piece_b));
+        if (connection.piece_b < result.room_adjacency.size())
+            result.room_adjacency[connection.piece_b].push_back(static_cast<std::uint32_t>(connection.piece_a));
+    }
 
     for (std::size_t piece_index = 0; piece_index < layout.pieces.size(); ++piece_index)
     {
@@ -84,15 +94,17 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
 
         for (const PieceCell& cell : piece->cells)
         {
-            const Vec2 grid_cell = placed.world_offset + cell.offset + offset;
+            const Vec2 grid_cell = placed.world_offset + ApplyPieceTransform(cell.offset, placed.transform) + offset;
+            result.room_map.SetRoom(grid_cell, static_cast<std::uint32_t>(piece_index));
             for (const PieceCellPrefab& prefab : cell.prefabs)
                 stamp(grid_cell, prefab.prefab_id);
         }
 
         for (const PieceSocket& socket : piece->sockets)
         {
-            const Vec2 world_cell = placed.world_offset + socket.cell_offset;
-            if (const DeadEndSocket* dead_end = FindDeadEnd(layout, piece_index, world_cell, socket.edge))
+            const Vec2 world_cell = placed.world_offset + ApplyPieceTransform(socket.cell_offset, placed.transform);
+            const EdgeDirection world_edge = ApplyPieceTransform(socket.edge, placed.transform);
+            if (const DeadEndSocket* dead_end = FindDeadEnd(layout, piece_index, world_cell, world_edge))
                 stamp(world_cell + offset, dead_end->fallback_prefab_id);
         }
 
@@ -102,7 +114,8 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
         std::map<int, std::vector<PendingSpawnEntry>> waves_by_number;
         for (const PieceSpawn& spawn : piece->spawns)
         {
-            const Vec2 world_cell = placed.world_offset + spawn.cell_offset + offset;
+            const Vec2 world_cell =
+                placed.world_offset + ApplyPieceTransform(spawn.cell_offset, placed.transform) + offset;
             waves_by_number[spawn.wave].push_back(PendingSpawnEntry{world_cell, spawn.prefab_id});
         }
 
@@ -119,6 +132,8 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
                     if (entity == entt::null)
                         continue;
                     registry.Emplace<SpawnWaveComponent>(entity, SpawnWaveComponent{group_id, wave_number});
+                    if (on_spawned)
+                        on_spawned(entity);
                     ++spawned_count;
                 }
                 if (spawned_count > 0)
@@ -138,7 +153,8 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
         const PlacedPiece& entrance = layout.pieces[0];
         if (const DungeonPiece* entrance_piece = library.Find(entrance.piece_id);
             entrance_piece && !entrance_piece->cells.empty())
-            result.entrance_tile = entrance.world_offset + entrance_piece->cells[0].offset + offset;
+            result.entrance_tile = entrance.world_offset +
+                                   ApplyPieceTransform(entrance_piece->cells[0].offset, entrance.transform) + offset;
     }
     return result;
 }

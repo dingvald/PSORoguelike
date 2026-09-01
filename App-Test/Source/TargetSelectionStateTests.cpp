@@ -11,6 +11,7 @@
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Events/KeyEvent.h"
+#include "Engine/Messages/MessageBus.h"
 #include "Engine/World/Grid.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -49,6 +50,7 @@ struct Fixture
     psr::Grid grid{7, 7};
     psr::StatusEffectLibrary status_effects;
     psr::TurnCoordinator turn_coordinator{registry};
+    psr::MessageBus message_bus;
     entt::entity actor = entt::null;
     psr::WaitAction dummy_action;
 
@@ -72,7 +74,7 @@ struct Fixture
         grid.AddEntity(psr::Vec2{3, 3}, actor);
     }
 
-    psr::GameplayContext Context() { return psr::GameplayContext{registry, grid, turn_coordinator, actor}; }
+    psr::GameplayContext Context() { return psr::GameplayContext{registry, grid, turn_coordinator, actor, message_bus}; }
 
     bool Send(psr::TargetSelectionState& state, psr::GameplayContext& context, int key_code)
     {
