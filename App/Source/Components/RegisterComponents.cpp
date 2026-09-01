@@ -21,6 +21,7 @@
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/ModComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
@@ -41,6 +42,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
     InnateWeaponComponent::Register(reg);
+    ItemComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);

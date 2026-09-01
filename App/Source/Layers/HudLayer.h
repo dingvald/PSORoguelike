@@ -23,6 +23,8 @@ struct PlayerDefeatedMessage;
 struct GameRestartedMessage;
 struct LootDropMessage;
 struct MesetaChangedMessage;
+struct CharacterScreenMessage;
+struct CharacterScreenClosedMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -66,10 +68,23 @@ private:
     void OnLootDrop(const LootDropMessage& message);
     void OnMesetaChanged(const MesetaChangedMessage& message);
 
+    // Shows the Character screen panel and rebuilds its Equipment/Inventory
+    // row lists (SetInnerRML once per container, then QuerySelectorAll to
+    // recover per-row elements and attach one RmlClickListener each --
+    // same recipe WireHotbarSlots uses for the fixed-count hotbar, just
+    // rebuilt every call since the inventory's length isn't fixed).
+    void OnCharacterScreenState(const CharacterScreenMessage& message);
+    void OnCharacterScreenClosed(const CharacterScreenClosedMessage& message);
+
     void AppendLogLine(const std::string& text);
 
     Rml::ElementDocument* m_document = nullptr;
     std::vector<std::unique_ptr<RmlClickListener>> m_hotbar_listeners;
+
+    // Rebuilt on every OnCharacterScreenState call (unlike m_hotbar_listeners'
+    // fixed 10 slots) -- the inventory's row count changes as items are
+    // picked up/equipped/unequipped.
+    std::vector<std::unique_ptr<RmlClickListener>> m_character_screen_listeners;
 
     static constexpr std::size_t kMaxLogLines = 50;
     std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage/LootDropMessage

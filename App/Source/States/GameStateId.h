@@ -13,6 +13,7 @@ enum class GameStateId
     Exploring,
     TargetSelection,
     GameOver,
+    CharacterScreen,
 };
 
 } // namespace psr

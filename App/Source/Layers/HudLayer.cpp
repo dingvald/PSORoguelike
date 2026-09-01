@@ -1,10 +1,14 @@
 #include "Layers/HudLayer.h"
 
+#include "Messages/CharacterScreenClosedMessage.h"
+#include "Messages/CharacterScreenMessage.h"
 #include "Messages/CombatLogEntryMessage.h"
+#include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/LootDropMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
@@ -12,6 +16,7 @@
 #include "Messages/StatusEffectsMessage.h"
 
 #include "ApplicationFilepaths.h"
+#include "Items/Equip.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 
@@ -20,6 +25,8 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 
 namespace psr {
 
@@ -78,6 +85,8 @@ void HudLayer::OnAttach()
     Subscribe<GameRestartedMessage>(&HudLayer::OnGameRestarted, this);
     Subscribe<LootDropMessage>(&HudLayer::OnLootDrop, this);
     Subscribe<MesetaChangedMessage>(&HudLayer::OnMesetaChanged, this);
+    Subscribe<CharacterScreenMessage>(&HudLayer::OnCharacterScreenState, this);
+    Subscribe<CharacterScreenClosedMessage>(&HudLayer::OnCharacterScreenClosed, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -88,6 +97,7 @@ void HudLayer::OnAttach()
 void HudLayer::OnDetach()
 {
     m_hotbar_listeners.clear();
+    m_character_screen_listeners.clear();
     if (m_document)
     {
         m_document->Close();
@@ -248,6 +258,72 @@ void HudLayer::OnMesetaChanged(const MesetaChangedMessage& message)
 
     if (Rml::Element* text = m_document->GetElementById("meseta-text"))
         text->SetInnerRML(EscapeRml(std::to_string(message.current_meseta)));
+}
+
+void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("character-screen"))
+        overlay->SetProperty("display", "flex");
+
+    m_character_screen_listeners.clear();
+
+    static constexpr std::array<const char*, 5> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs"};
+
+    if (Rml::Element* equipment_list = m_document->GetElementById("character-screen-equipment"))
+    {
+        std::string markup;
+        for (std::size_t i = 0; i < message.equipment.size(); ++i)
+        {
+            const std::string label =
+                message.equipment[i] ? EscapeRml(message.equipment[i]->display_name) : std::string("(empty)");
+            markup += std::string("<div class=\"equip-row\">") + kSlotLabels[i] + ": " + label + "</div>";
+        }
+        equipment_list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        equipment_list->QuerySelectorAll(rows, ".equip-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const EquipmentSlot slot = static_cast<EquipmentSlot>(i);
+            auto listener =
+                std::make_unique<RmlClickListener>([this, slot]() { Publish(EquipmentSlotActivatedMessage{slot}); });
+            listener->Attach(*rows[i]);
+            m_character_screen_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (Rml::Element* inventory_list = m_document->GetElementById("character-screen-inventory"))
+    {
+        std::string markup;
+        for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
+            markup += "<div class=\"inventory-row\">" + EscapeRml(entry.display_name) + "</div>";
+        inventory_list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        inventory_list->QuerySelectorAll(rows, ".inventory-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener =
+                std::make_unique<RmlClickListener>([this, index]() { Publish(InventoryItemActivatedMessage{index}); });
+            listener->Attach(*rows[i]);
+            m_character_screen_listeners.push_back(std::move(listener));
+        }
+    }
+}
+
+void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("character-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_character_screen_listeners.clear();
 }
 
 } // namespace psr

@@ -21,6 +21,7 @@
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/Items/ItemDropEvent.h"
 #include "Engine/Items/ItemPickupEvent.h"
 #include "Engine/Messages/MessageBus.h"
 
@@ -47,6 +48,8 @@ void CombatLogBridge::Subscribe(Entity actor)
                                                                { OnPhotonArtCast(entity, event); });
     events.Subscribe<AfterItemPickupEvent, CombatLogBridge>([this](Entity entity, AfterItemPickupEvent& event)
                                                             { OnItemPickup(entity, event); });
+    events.Subscribe<AfterItemDropEvent, CombatLogBridge>([this](Entity entity, AfterItemDropEvent& event)
+                                                          { OnItemDrop(entity, event); });
     events.Subscribe<AfterStatusEffectsChangedEvent, CombatLogBridge>(
         [this](Entity entity, AfterStatusEffectsChangedEvent& event) { OnStatusEffectsChanged(entity, event); });
 }
@@ -88,10 +91,16 @@ void CombatLogBridge::OnPhotonArtCast(Entity actor, AfterPhotonArtCastEvent& eve
 
 void CombatLogBridge::OnItemPickup(Entity actor, AfterItemPickupEvent& event)
 {
-    // Unreachable until a pickup system exists -- see ItemPickupEvent.h.
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
     const std::string item_name = label ? *label : std::string("an item");
     m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " picked up " + item_name});
+}
+
+void CombatLogBridge::OnItemDrop(Entity actor, AfterItemDropEvent& event)
+{
+    const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
+    const std::string item_name = label ? *label : std::string("an item");
+    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " dropped " + item_name});
 }
 
 void CombatLogBridge::PublishPlayerStatus()

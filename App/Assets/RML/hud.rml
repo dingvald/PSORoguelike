@@ -41,5 +41,12 @@
             <div id="game-over-text">YOU DIED</div>
             <div id="game-over-hint">Press any key to restart</div>
         </div>
+
+        <div id="character-screen">
+            <div id="character-screen-title">Character</div>
+            <div id="character-screen-equipment"></div>
+            <div id="character-screen-inventory"></div>
+            <div id="character-screen-hint">C / Esc to close</div>
+        </div>
     </body>
 </rml>

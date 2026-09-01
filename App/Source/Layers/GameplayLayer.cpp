@@ -13,6 +13,7 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/InventoryComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/SectionIdComponent.h"
@@ -30,12 +31,16 @@
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
+#include "Items/CharacterScreenSnapshot.h"
 #include "Items/DropTableLibraryFile.h"
+#include "Items/Equip.h"
 #include "Layers/HudLayer.h"
+#include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
 #include "States/GameState.h"
@@ -91,6 +96,8 @@ void GameplayLayer::OnAttach()
     Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
     Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
     Subscribe<RestartRequestedMessage>(&GameplayLayer::OnRestartRequested, this);
+    Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
+    Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
 
     PushOverlay<HudLayer>();
 
@@ -231,6 +238,7 @@ void GameplayLayer::LoadNewGame()
     // has happened yet to credit any Meseta.
     m_registry.Emplace<SectionIdComponent>(m_player);
     m_registry.Emplace<CurrencyComponent>(m_player);
+    m_registry.Emplace<InventoryComponent>(m_player);
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
@@ -410,6 +418,32 @@ void GameplayLayer::OnHotbarSlotActivated(const HotbarSlotActivatedMessage& mess
         TryActivateSlot(message.slot_index);
 }
 
+void GameplayLayer::OnInventoryItemActivated(const InventoryItemActivatedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (EquipItem(Entity(m_registry, m_player), message.inventory_index))
+        PublishCharacterScreenState();
+}
+
+void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (UnequipSlot(Entity(m_registry, m_player), message.slot))
+        PublishCharacterScreenState();
+}
+
+void GameplayLayer::PublishCharacterScreenState()
+{
+    if (!m_registry.IsValid(m_player))
+        return;
+
+    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes));
+}
+
 void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
 {
     PublishHotbarState();
@@ -466,8 +500,11 @@ void GameplayLayer::OnEvent(Event& event)
     if (!m_turn_coordinator || !m_grid)
         return;
 
-    // Hotbar key-press trigger only intercepts keys while the player is free
-    // to act (Exploring on top, not already mid-target-select).
+    // Hotbar key-press trigger and the Character-screen toggle only
+    // intercept keys while the player is free to act (Exploring on top, not
+    // already mid-target-select or already viewing the Character screen --
+    // closing the latter is CharacterScreenState's own HandleEvent's job,
+    // reached via m_state_machine.HandleEvent below once it's on top).
     if (m_state_machine.Top() == &m_exploring_state)
     {
         EventDispatcher dispatcher(event);
@@ -475,7 +512,17 @@ void GameplayLayer::OnEvent(Event& event)
             [this](KeyPressedEvent& key_event)
             {
                 const std::optional<int> slot = KeyCodeToHotbarSlot(key_event.GetKeyCode());
-                return slot.has_value() && TryActivateSlot(*slot);
+                if (slot.has_value())
+                    return TryActivateSlot(*slot);
+
+                if (key_event.GetKeyCode() == SDLK_C)
+                {
+                    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+                    m_state_machine.Push(m_character_screen_state, context);
+                    return true;
+                }
+
+                return false;
             });
     }
 

@@ -10,6 +10,7 @@
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/Items/ItemDropEvent.h"
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/Messages/MessageQueue.h"
 #include "Messages/CombatLogEntryMessage.h"
@@ -234,4 +235,32 @@ TEST_CASE("CombatLogBridge::PublishPlayerStatus reports no secondary resource wh
 
     REQUIRE(received.has_value());
     REQUIRE_FALSE(received->has_secondary);
+}
+
+TEST_CASE("CombatLogBridge publishes a log entry when the player drops an item", "[CombatLogBridge]")
+{
+    psr::Registry registry;
+    psr::MessageBus bus;
+    psr::MessageQueue hud_queue;
+    psr::TechniqueLibrary techniques;
+    psr::PhotonArtLibrary photon_arts;
+    psr::StatusEffectLibrary status_effects;
+
+    psr::Entity player = MakePlayer(registry, /*hp=*/50, /*tp=*/20);
+
+    std::vector<std::string> log_lines;
+    hud_queue.RegisterHandler<psr::CombatLogEntryMessage>([&](const psr::CombatLogEntryMessage& message)
+                                                          { log_lines.push_back(message.text); });
+    bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
+
+    psr::CombatLogBridge bridge(registry, bus, techniques, photon_arts, status_effects, player.Handle());
+    bridge.Subscribe(player);
+
+    psr::AfterItemDropEvent event{/*item_prefab_id=*/0}; // unresolvable id -> falls back to "an item"
+    player.Dispatch(event);
+
+    hud_queue.HandleQueuedMessages();
+
+    REQUIRE(log_lines.size() == 1);
+    REQUIRE(log_lines[0] == "Player dropped an item");
 }

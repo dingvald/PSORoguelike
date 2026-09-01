@@ -17,6 +17,7 @@ struct AfterDamageEvent;
 struct AfterTechniqueCastEvent;
 struct AfterPhotonArtCastEvent;
 struct AfterItemPickupEvent;
+struct AfterItemDropEvent;
 struct AfterStatusEffectsChangedEvent;
 
 // Bridges per-entity combat events (dispatched via EventHandlerComponent,
@@ -68,7 +69,8 @@ private:
     void OnDamage(Entity actor, AfterDamageEvent& event);
     void OnTechniqueCast(Entity actor, AfterTechniqueCastEvent& event);
     void OnPhotonArtCast(Entity actor, AfterPhotonArtCastEvent& event);
-    void OnItemPickup(Entity actor, AfterItemPickupEvent& event); // no producer yet, see ItemPickupEvent.h
+    void OnItemPickup(Entity actor, AfterItemPickupEvent& event);
+    void OnItemDrop(Entity actor, AfterItemDropEvent& event);
     void OnStatusEffectsChanged(Entity actor, AfterStatusEffectsChangedEvent& event);
 
     std::string DisplayName(entt::entity entity) const;
