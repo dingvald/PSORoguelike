@@ -15,6 +15,7 @@
 #include "Engine/Render/TileRenderer.h"
 #include "Engine/World/Grid.h"
 #include "Items/AffixLibrary.h"
+#include "Items/DropTableLibrary.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
 #include "States/ExploringState.h"
@@ -23,6 +24,7 @@
 #include "States/TargetSelectionState.h"
 #include "Systems/CombatLogBridge.h"
 #include "Systems/EnemyAiSystem.h"
+#include "Systems/LootDropSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -117,6 +119,7 @@ private:
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
+    DropTableLibrary m_drop_tables;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -157,6 +160,12 @@ private:
     // declaration order relative to them doesn't matter for construction/
     // destruction safety.
     std::optional<CombatLogBridge> m_combat_log_bridge;
+
+    // Rolls loot when the player lands a killing blow -- see LootDropSystem.h.
+    // Holds only pointers into m_registry/m_grid/m_drop_tables/m_rng, so its
+    // declaration order relative to them doesn't matter for construction/
+    // destruction safety.
+    std::optional<LootDropSystem> m_loot_drop_system;
 
     // Draws the player's active status effects as tinted markers in the
     // world -- see StatusEffectWorldMarkers.h. Holds only pointers into

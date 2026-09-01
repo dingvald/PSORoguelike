@@ -3,6 +3,7 @@
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/DropTableComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Components/StatsComponent.h"
@@ -15,6 +16,7 @@
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Items/AffixLibrary.h"
+#include "Items/DropTableLibrary.h"
 #include "UI/ColorPickerPopup.h"
 #include "UI/FieldPickers.h"
 #include "UI/FieldWidgets.h"
@@ -187,10 +189,17 @@ private:
     WeaponComponent m_weapon;
     ArmorComponent m_armor;
     RarityComponent m_rarity;
+    DropTableComponent m_drop_table;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
     AffixLibrary m_affixes;
+
+    // Drop table library (App/Assets/Data/DropTables), loaded once in
+    // OnAttach -- backs the drop-table card's BuildIdEnumField picker (same
+    // "real picker sourced from a loaded library" treatment as
+    // prefix/suffix_affix_id).
+    DropTableLibrary m_drop_tables;
 
     // Photon Art / Technique libraries, loaded once in OnAttach -- back the
     // weapon card's photon_art_ids/technique_ids row-list BuildIdEnumField

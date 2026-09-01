@@ -21,6 +21,8 @@ struct CombatLogEntryMessage;
 struct StatusEffectsMessage;
 struct PlayerDefeatedMessage;
 struct GameRestartedMessage;
+struct LootDropMessage;
+struct MesetaChangedMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -61,12 +63,16 @@ private:
     void OnStatusEffects(const StatusEffectsMessage& message);
     void OnPlayerDefeated(const PlayerDefeatedMessage& message);
     void OnGameRestarted(const GameRestartedMessage& message);
+    void OnLootDrop(const LootDropMessage& message);
+    void OnMesetaChanged(const MesetaChangedMessage& message);
+
+    void AppendLogLine(const std::string& text);
 
     Rml::ElementDocument* m_document = nullptr;
     std::vector<std::unique_ptr<RmlClickListener>> m_hotbar_listeners;
 
     static constexpr std::size_t kMaxLogLines = 50;
-    std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage
+    std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage/LootDropMessage
 };
 
 } // namespace psr

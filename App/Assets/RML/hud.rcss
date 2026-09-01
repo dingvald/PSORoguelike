@@ -65,6 +65,13 @@ body {
     margin-top: 0.4em;
 }
 
+.meseta-text {
+    display: block;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #e8c34a;
+}
+
 .status-chip {
     display: inline-block;
     margin-right: 0.4em;

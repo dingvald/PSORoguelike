@@ -5,6 +5,8 @@
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/LootDropMessage.h"
+#include "Messages/MesetaChangedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
@@ -74,6 +76,8 @@ void HudLayer::OnAttach()
     Subscribe<StatusEffectsMessage>(&HudLayer::OnStatusEffects, this);
     Subscribe<PlayerDefeatedMessage>(&HudLayer::OnPlayerDefeated, this);
     Subscribe<GameRestartedMessage>(&HudLayer::OnGameRestarted, this);
+    Subscribe<LootDropMessage>(&HudLayer::OnLootDrop, this);
+    Subscribe<MesetaChangedMessage>(&HudLayer::OnMesetaChanged, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -166,12 +170,14 @@ void HudLayer::OnHotbarState(const HotbarStateMessage& message)
     }
 }
 
-void HudLayer::OnLogEntry(const CombatLogEntryMessage& message)
+void HudLayer::OnLogEntry(const CombatLogEntryMessage& message) { AppendLogLine(message.text); }
+
+void HudLayer::AppendLogLine(const std::string& text)
 {
     if (!m_document)
         return;
 
-    m_log_lines.push_back(message.text);
+    m_log_lines.push_back(text);
     while (m_log_lines.size() > kMaxLogLines)
         m_log_lines.pop_front();
 
@@ -231,6 +237,17 @@ void HudLayer::OnGameRestarted(const GameRestartedMessage& /*message*/)
     m_log_lines.clear();
     if (Rml::Element* log = m_document->GetElementById("event-log"))
         log->SetInnerRML("");
+}
+
+void HudLayer::OnLootDrop(const LootDropMessage& message) { AppendLogLine("Found " + message.item_name); }
+
+void HudLayer::OnMesetaChanged(const MesetaChangedMessage& message)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* text = m_document->GetElementById("meseta-text"))
+        text->SetInnerRML(EscapeRml(std::to_string(message.current_meseta)));
 }
 
 } // namespace psr

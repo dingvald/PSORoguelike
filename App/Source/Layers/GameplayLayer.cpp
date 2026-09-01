@@ -8,12 +8,14 @@
 #include "Combat/StatusEffectLibraryFile.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibraryFile.h"
+#include "Components/CurrencyComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
+#include "Components/SectionIdComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
@@ -28,11 +30,13 @@
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
+#include "Items/DropTableLibraryFile.h"
 #include "Layers/HudLayer.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/MesetaChangedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
 #include "States/GameState.h"
 
@@ -139,6 +143,7 @@ void GameplayLayer::LoadNewGame()
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
+    m_drop_tables = LoadDropTableLibrary(ApplicationFilepaths::DropTablesPath);
 
     // Created before dungeon generation below so CombatLogBridge (constructed
     // right after) can Subscribe() every enemy on_enemy_spawned stamps,
@@ -221,10 +226,18 @@ void GameplayLayer::LoadNewGame()
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{100, 100});
+    // Same "hardcoded until M10.3 character creation exists" deferral as
+    // HealthComponent above -- there's no Section ID picker yet, and no drop
+    // has happened yet to credit any Meseta.
+    m_registry.Emplace<SectionIdComponent>(m_player);
+    m_registry.Emplace<CurrencyComponent>(m_player);
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
     m_registry.Emplace<EnergyComponent>(m_player); // enqueues the player into the turn queue
+
+    m_loot_drop_system.emplace(m_registry, *m_grid, m_drop_tables, GetMessageBus(), m_rng);
+    m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
     // above) -- there's no interactive equip/inventory system yet (M8.1's UI
@@ -404,6 +417,11 @@ void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
     {
         m_combat_log_bridge->PublishPlayerStatus();
         m_combat_log_bridge->PublishStatusEffects();
+    }
+    if (m_registry.IsValid(m_player))
+    {
+        if (const CurrencyComponent* currency = m_registry.TryGetComponent<CurrencyComponent>(m_player))
+            Publish(MesetaChangedMessage{currency->meseta, 0});
     }
 }
 

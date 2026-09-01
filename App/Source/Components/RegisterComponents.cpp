@@ -2,6 +2,8 @@
 
 #include "Components/AiComponent.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/CurrencyComponent.h"
+#include "Components/DropTableComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
@@ -9,6 +11,7 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
+#include "Components/SectionIdComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/TPComponent.h"
@@ -32,6 +35,8 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     AiComponent::Register(reg);
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
+    CurrencyComponent::Register(reg);
+    DropTableComponent::Register(reg);
     EnergyComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
@@ -43,6 +48,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     RaceComponent::Register(reg);
     RarityComponent::Register(reg);
     RenderableComponent::Register(reg);
+    SectionIdComponent::Register(reg);
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
     WeaponComponent::Register(reg);

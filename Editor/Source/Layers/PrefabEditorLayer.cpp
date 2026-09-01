@@ -12,6 +12,7 @@
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Persistence/JsonFile.h"
 #include "Items/AffixLibraryFile.h"
+#include "Items/DropTableLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
@@ -276,6 +277,21 @@ namespace {
         return object;
     }
 
+    DropTableComponent ReadDropTableRefBody(const rapidjson::Value& body)
+    {
+        DropTableComponent drop_table;
+        drop_table.drop_table_id = ReadNameId(body, "drop_table_id", 0);
+        return drop_table;
+    }
+
+    rapidjson::Value WriteDropTableRefBody(const DropTableComponent& drop_table,
+                                           rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("drop_table_id", WriteNameId(drop_table.drop_table_id, allocator), allocator);
+        return object;
+    }
+
     // Mirrors PieceLibraryFile.cpp's ReadEnum/EnumName: a JSON string mapped
     // against psr::EnumNames<E>::kValues, falling back rather than throwing
     // (this editor is more forgiving of stale/hand-edited files than the
@@ -475,7 +491,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 8> kComponentKinds = {
+    constexpr std::array<ComponentKind, 9> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -514,7 +530,8 @@ namespace {
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-         {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"}}};
+         {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
+         {"drop_table", "Drop Table", "#e89c5d", "<div id=\"field-drop-table\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -579,6 +596,16 @@ void PrefabEditorLayer::OnAttach()
     catch (const std::exception& error)
     {
         m_status_effects = StatusEffectLibrary{};
+        m_error = error.what();
+    }
+
+    try
+    {
+        m_drop_tables = LoadDropTableLibrary(EditorFilepaths::DropTablesPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_drop_tables = DropTableLibrary{};
         m_error = error.what();
     }
 
@@ -903,7 +930,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
-            key == "armor" || key == "mod" || key == "rarity")
+            key == "armor" || key == "mod" || key == "rarity" || key == "drop_table")
             m_component_order.emplace_back(key);
     }
 
@@ -921,6 +948,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
+    m_drop_table =
+        components.HasMember("drop_table") ? ReadDropTableRefBody(components["drop_table"]) : DropTableComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1279,6 +1308,19 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-drop-table"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> drop_table_options = {{0, "-- Select Drop Table --"}};
+        for (const DropTable& table : m_drop_tables.All())
+            drop_table_options.emplace_back(table.id, table.name.empty() ? table.id_string : table.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "drop_table_id", drop_table_options, m_drop_table.drop_table_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_drop_table.drop_table_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+
     if (Rml::Element* add_race_bonus = m_editor->GetElementById("add-race-bonus"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1527,7 +1569,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity"})
+    for (const char* key :
+        {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "drop_table"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1550,6 +1593,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteModBody(allocator);
         else if (key == "rarity")
             body = WriteRarityBody(m_rarity, allocator);
+        else if (key == "drop_table")
+            body = WriteDropTableRefBody(m_drop_table, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

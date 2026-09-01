@@ -63,12 +63,13 @@ private:
         RowAffixes = 3,
         RowPhotonArts = 4,
         RowTechniques = 5,
-        RowExit = 6,
-        RowCount = 7
+        RowDropTables = 6,
+        RowExit = 7,
+        RowCount = 8
     };
-    static constexpr std::array<const char*, RowCount> kRowIds = {"menu-pieces",  "menu-dungeons",    "menu-prefabs",
-                                                                  "menu-affixes", "menu-photon-arts", "menu-techniques",
-                                                                  "menu-exit"};
+    static constexpr std::array<const char*, RowCount> kRowIds = {
+        "menu-pieces",     "menu-dungeons",    "menu-prefabs",    "menu-affixes",
+        "menu-photon-arts", "menu-techniques", "menu-drop-tables", "menu-exit"};
 };
 
 } // namespace psr

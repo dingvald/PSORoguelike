@@ -540,6 +540,73 @@ unit-test — verified instead by running `App.exe` directly and confirming on s
 renders, player sprite appears at the entrance, arrow keys move it turn-by-turn with the camera
 tracking) plus the deliberate-failure check above.
 
+### Gameplay Layer follow-ups: spawn waves, enemy AI, fog of war, game over/restart
+
+**Status:** done, landed across two commits (`8c77b44` "Add piece-authored spawn waves with
+runtime wave-clear gating", `0147975` "Add enemy AI, fog of war, and game-over/restart flow") that
+weren't captured in this file when they merged. Filed here rather than under a numbered milestone
+because none of the four cleanly is one — this is the remaining work needed to actually reach the
+Phase A "fight Forest enemies" checkpoint (the initial `GameplayLayer` landing above still had no
+enemy spawning) plus playability polish (fog of war, game over) beyond what any single bullet
+named.
+
+- **Spawn waves** (`8c77b44`): closes the "Spawns ... for spawn waves" item in
+  `issues_and_bugs.md`, modeled on the socket redesign. `DungeonPiece` gains `PieceSpawn`
+  (`cell_offset`/`prefab_id`/`wave`, `Core/Source/Engine/Dungeon/DungeonPiece.h`), authored/
+  validated through the same schema/JSON pipeline as `PieceSocket`, with a mirrored "Add Spawn" UI
+  in `Editor/Source/Layers/PieceEditorLayer.cpp`. Unlike sockets, waves are runtime-gated, not just
+  data: `DungeonInstantiator::InstantiateDungeon` groups a placed piece's spawns by wave number,
+  stamps the lowest wave immediately (tagged with a new runtime-only `SpawnWaveComponent{group_id,
+  wave}`), and hands later waves to a new `SpawnWaveSystem`
+  (`Core/Source/Engine/Dungeon/SpawnWaveSystem.{h,cpp}`) as `PendingSpawnWave` data. `SpawnWaveSystem`
+  spawns each subsequent wave once every entity from the previous wave dies — deliberately keyed off
+  `SpawnWaveComponent`'s own `entt::on_destroy` signal rather than `DeathEvent`/`HealthSystem`/
+  `DeathSystem` (the same pattern `TurnCoordinator` already uses for `EnergyComponent`), so the
+  mechanic works regardless of why an entity died. An all-invalid-prefab wave is a documented stall
+  edge case, covered by tests. Catch2 coverage: new `SpawnWaveSystemTests.cpp`, extended
+  `DungeonInstantiatorTests.cpp`/`DungeonPieceSchemaTests.cpp`.
+- **Enemy AI** (`0147975`): replaces M6.1's "every non-player actor Waits by default" stub. New
+  `AiComponent` (`App/Source/Components/AiComponent.h`) currently has one behavior,
+  `ChaseAndAttack`, plus a `detection_range` (default 8). `EnemyAiSystem::Decide`
+  (`App/Source/Systems/EnemyAiSystem.{h,cpp}`) finds the nearest `PlayerControlledComponent` entity
+  within Manhattan `detection_range`, snaps the delta to a cardinal direction, and issues a
+  `MoveAction` (trying the perpendicular axis if the primary one is blocked, else Waiting) — no
+  separate attack path, since `MoveAction`'s existing bump-into-hostile fallback (M7.1) already
+  converts a step into an occupied hostile tile into an `AttackAction`. `TurnCoordinator::
+  SetNpcDecision` is wired in `GameplayLayer::OnAttach` to `EnemyAiSystem::Decide`.
+  `TurnCoordinator` also gained `m_live_player_count` (tracked via `PlayerControlledComponent`
+  construct/destroy), so losing the last player returns a new `TurnStep::PlayerDefeated` instead of
+  spinning forever requeuing NPCs. Catch2 coverage: new `EnemyAiSystemTests.cpp`, extended
+  `TurnCoordinatorTests.cpp`.
+- **Fog of war**: `RoomMap` (`Core/Source/Engine/Dungeon/RoomMap.{h,cpp}`) is a flat per-tile array
+  mapping each stamped tile to its placed-piece index, built alongside the `Grid` inside
+  `InstantiateDungeon`; `DungeonInstantiation` also now carries `room_adjacency`. `RoomVisibilityTracker`
+  (pure logic, no Grid/Registry) tracks `Hidden`/`Explored`/`Visible` per room, updated each turn from
+  the player's current room via `RoomMap::GetRoom`, extending visibility to adjacent rooms too.
+  `FogOfWarRenderableLookup` (`App/Source/Render/FogOfWarRenderableLookup.{h,cpp}`) decorates an
+  inner `IRenderableLookup` — the same seam M3.1 reserved and `RegistryRenderableLookup` already
+  implements — hiding entities in never-visited rooms entirely, darkening `Explored`-room tiles
+  (35% factor) and additionally hiding any `AiComponent`/`PlayerControlledComponent` occupant there,
+  and passing `Visible` rooms through unchanged. Kept as a separate decorator (not folded into
+  `RegistryRenderableLookup`) so Editor previews stay unaffected. Catch2 coverage: new
+  `RoomVisibilityTrackerTests.cpp`, `FogOfWarRenderableLookupTests.cpp`.
+- **Game over / restart flow**: new `GameOverState` (`App/Source/States/GameOverState.{h,cpp}`,
+  new `GameStateId::GameOver`) is pushed by `ExploringState` on `TurnStep::PlayerDefeated`,
+  publishes `PlayerDefeatedMessage` once on entry, and on first keypress publishes
+  `RestartRequestedMessage` (latched to avoid double-publish). `GameplayLayer::OnRestartRequested`
+  rebuilds the registry/dungeon from scratch (`LoadNewGame()`), pops `GameOverState` off the state
+  stack to uncover the same `ExploringState`, and publishes `GameRestartedMessage`. `HudLayer`
+  subscribes to both — showing a "You Died" overlay and clearing it/the log on restart.
+- **`InnateWeaponComponent`** (`App/Source/Components/InnateWeaponComponent.{h,cpp}`) is a baked-in
+  weapon reference (`weapon_prefab_id`) for entities with no interactive equip flow: `GameplayLayer`'s
+  spawn hooks read it once to create a weapon entity and set `EquipmentComponent::weapon`, used
+  identically for the player's starting weapon and for enemy spawns (its `DeathEvent` handler
+  destroys the equipped weapon entity on death, since it's not lootable). This is also the first
+  content-authored enemy beyond throwaway test fixtures: `App/Assets/Data/Entities/enemies/
+  booma.json` (`ai`/`innate_weapon`/`health`/`stats`/`race`/`renderable`), with
+  `booma_claws.json`/`saber.json` as its and the player's weapons. Catch2 coverage: new
+  `InnateWeaponComponentTests.cpp`.
+
 ## M7 — Combat System
 
 **Status:** 7.1/7.2/7.3 done
@@ -742,7 +809,10 @@ tracking) plus the deliberate-failure check above.
 
 ## M8 — Itemization & Economy
 
-**Status:** 8.1 done (pulled forward, see the Phase-A note above)
+**Status:** 8.1/8.2 done (8.1 pulled forward, see the Phase-A note above). Note: the Phase A "fight
+Forest enemies" checkpoint itself wasn't actually reachable until enemy spawning/AI landed — see
+"Gameplay Layer follow-ups" above, filed there rather than under M8 since it's checkpoint
+completion work, not itemization.
 
 - **8.1 Item & equipment schema:** Engine: weapon/armor/material components + inventory/equip
   slots. Editor: **Item editor layer** — weapon stats, race-bonus %, equip-slot config. UI:
@@ -814,6 +884,60 @@ tracking) plus the deliberate-failure check above.
 - **8.2 Drop tables & Section ID:** Engine: per-enemy common+rare tables, Section-ID weighting
   (10 IDs), boss guaranteed tables, Meseta currency. Editor: drop-table editor (weighted entry
   list per enemy/boss, Section ID weight matrix). UI: loot-drop toast, Meseta HUD counter.
+  **Done:** Section ID is a real `enum class SectionId` (`App/Source/Items/SectionId.h`, 10 values
+  + `EnumNames`) rather than an open NameId — same fixed-small-roster precedent M7.3's `Element`
+  already set, unlike `RaceComponent`'s deliberately open-ended NameId. `DropTable` is a new bespoke
+  content type following the `Affix`/`Dungeon` five-file family exactly (`App/Source/Items/
+  DropTable.h` + `Schema`/`SchemaEmitter`/`Library`/`LibraryFile`, content at
+  `App/Assets/Data/DropTables/*.json`): `DropTableEntry{item_prefab_id, weight,
+  section_id_weights}` (a `std::array<float, kSectionIdCount>`, authored as a sparse JSON object
+  keyed by section-id name — unlisted IDs default to `1.0`, so most entries never write all 10), and
+  `DropTable{common_entries, rare_entries, guaranteed_item_ids, rare_roll_chance_percent,
+  meseta_min, meseta_max}`. New pure-function `DropTableRoller::Roll` (`App/Source/Items/
+  DropTableRoller.{h,cpp}`, same "randomness passed in, no Registry" shape as
+  `StatusEffectHooks::MaybeApplyElementalStatus`) always includes every guaranteed entry, gates
+  rare-vs-common via `rare_roll_chance_percent`, weighted-picks **one** entry from the chosen pool
+  (weight × that entry's Section-ID multiplier), and rolls Meseta independently — matching PSO's
+  "one item slot per table tier" drop shape, not a full weighted-bag-of-many-items simulation. New
+  `App/Source/Systems/LootDropSystem.{h,cpp}` is `Subscribe()`d only on the player (unlike
+  `CombatLogBridge`'s subscribe-every-actor pattern) since `AfterDamageEvent` is dispatched at the
+  attacker (see M7.1's `DamageEvent.h`) and loot should only drop for a player-landed killing blow:
+  on a `target_defeated` hit it reads the target's new `DropTableComponent` (a NameId ref, same
+  shape as `RaceComponent`) and the player's new `SectionIdComponent`, rolls via `DropTableRoller`,
+  spawns each item as an ordinary ground entity at the target's tile (`Registry::CreateEntity` +
+  `Grid::AddEntity`, the exact call-site pattern `SpawnWaveSystem` already established — no
+  pickup/inventory mechanic exists yet, so loot just sits there, consistent with
+  `EquipmentComponent`'s still-unpopulated M8.1 deferral), and credits a new `CurrencyComponent`
+  (`{int meseta}`) on the player directly. `SectionIdComponent`/`CurrencyComponent` are both
+  hardcoded-emplaced on the player in `GameplayLayer::LoadNewGame` (defaulting to `Viridia`/`0`)
+  rather than authored in `player.json`, mirroring `HealthComponent`'s own "no character creation
+  yet" precedent there. Editor: new `DropTableEditorLayer` (+ `.rml`) follows
+  `AffixEditorLayer`/`PhotonArtEditorLayer`'s List/Edit shell, with `guaranteed_item_ids`/
+  `common_entries`/`rare_entries` as `BuildRowList` repeatable rows (item picked via
+  `BuildIdEnumField` sourced from every authored entity prefab — no dedicated "item library" exists,
+  per M8.1's own note that weapons/armor/mods are just prefabs). **Deviates from the bullet's literal
+  "Section ID weight matrix" wording**: no 2D grid/matrix widget exists anywhere in `FieldWidgets`
+  (confirmed before building this), so each entry's Section-ID overrides live in a collapsed-by-
+  default sub-panel (reusing `WireCollapseToggle`'s existing per-item collapse mechanism verbatim)
+  instead of new matrix-input plumbing — the common case (no favoritism) never needs opening it.
+  `EditorMenuLayer` gained a "Drop Tables" row; `PrefabEditorLayer` gained a "Drop Table" Inspector
+  card (single `BuildIdEnumField` sourced from `DropTableLibrary`, same shape as the Weapon card's
+  affix pickers). UI: per the roadmap's own two-surface wording, a loot drop feeds the **existing**
+  scrolling event log (`CombatLogEntryMessage` path) rather than new toast/fade-timer widget
+  machinery that doesn't exist anywhere else in this codebase — a pragmatic reuse-over-new-code call;
+  Meseta gets a real persistent counter element in `hud.rml` (`HudLayer::OnMesetaChanged`, same
+  pattern as the HP/TP bars). Catch2 coverage in `App-Test/Source/DropTableSchemaTests.cpp` (schema
+  reflection incl. the nested per-Section-ID `Object` field, round-trip incl. sparse overrides,
+  unknown-section-id-key and meseta-min-over-max error paths), `DropTableRollerTests.cpp`
+  (guaranteed drops always included, common/rare gating, a zeroed Section-ID multiplier
+  deterministically excluding an entry, Meseta range, seed-reproducibility),
+  `LootDropSystemTests.cpp` (no-op on a non-lethal hit or a missing `DropTableComponent`, ground-item
+  spawn + `CurrencyComponent` credit + message publication on a lethal player hit, Section-ID
+  weighting reaching all the way from the player's component through to the roll), and
+  `LootComponentsSchemaTests.cpp` (schema shape/authorable flags for the three new components plus a
+  `JsonEntityLoader` round-trip). Content authoring (a real drop table wired onto `booma.json`) is
+  the user's own work through the new editor, per `CLAUDE.md`'s division of labor — not done by
+  Claude.
 - **8.3 Photon crystals / stat materials:** Engine: consumable permanent-stat-boost items
   (Power/Mind/HP Material, etc.). Editor: material-effect fields on the item editor. UI:
   use-item confirmation + stat-gain feedback.

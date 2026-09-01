@@ -16,6 +16,10 @@
                 <span id="secondary-text" class="bar-text"></span>
             </div>
             <div id="status-effects"></div>
+            <div class="bar-row">
+                <span class="bar-label">Meseta</span>
+                <span id="meseta-text" class="meseta-text">0</span>
+            </div>
         </div>
 
         <div id="hotbar">

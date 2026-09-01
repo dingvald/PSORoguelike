@@ -1,0 +1,47 @@
+<rml>
+    <head>
+        <title>Drop Table Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Drop Tables</h1>
+                <span id="new-drop-table" class="btn action">New Drop Table</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="drop-table-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-drop-table" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div class="scroll-panel">
+                <h3>Id</h3>
+                <div id="field-id" class="field-row"></div>
+                <h3>Name</h3>
+                <div id="field-name" class="field-row"></div>
+                <h3>Rare Roll Chance %</h3>
+                <div id="field-rare-chance" class="field-row"></div>
+                <h3>Meseta Min</h3>
+                <div id="field-meseta-min" class="field-row"></div>
+                <h3>Meseta Max</h3>
+                <div id="field-meseta-max" class="field-row"></div>
+                <h3>Guaranteed Item Drops <span id="add-guaranteed" class="btn action">Add Guaranteed Drop</span></h3>
+                <div id="guaranteed-list" class="scroll-panel"></div>
+                <h3>Common Entries <span id="add-common-entry" class="btn action">Add Common Entry</span></h3>
+                <div id="common-entry-list" class="scroll-panel"></div>
+                <h3>Rare Entries <span id="add-rare-entry" class="btn action">Add Rare Entry</span></h3>
+                <div id="rare-entry-list" class="scroll-panel"></div>
+            </div>
+        </div>
+    </body>
+</rml>

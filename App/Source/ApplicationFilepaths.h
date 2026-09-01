@@ -17,4 +17,5 @@ public:
     static const std::filesystem::path PhotonArtsPath;
     static const std::filesystem::path TechniquesPath;
     static const std::filesystem::path StatusEffectsPath;
+    static const std::filesystem::path DropTablesPath;
 };

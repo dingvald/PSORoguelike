@@ -14,3 +14,4 @@ const std::filesystem::path EditorFilepaths::AffixesPath = EditorFilepaths::Data
 const std::filesystem::path EditorFilepaths::PhotonArtsPath = EditorFilepaths::DataPath / "PhotonArts";
 const std::filesystem::path EditorFilepaths::TechniquesPath = EditorFilepaths::DataPath / "Techniques";
 const std::filesystem::path EditorFilepaths::StatusEffectsPath = EditorFilepaths::DataPath / "StatusEffects";
+const std::filesystem::path EditorFilepaths::DropTablesPath = EditorFilepaths::DataPath / "DropTables";
