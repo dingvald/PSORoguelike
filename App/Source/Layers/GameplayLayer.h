@@ -19,6 +19,7 @@
 #include "Items/DropTableLibrary.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
+#include "States/AnimationState.h"
 #include "States/CharacterScreenState.h"
 #include "States/ExploringState.h"
 #include "States/GameOverState.h"
@@ -236,19 +237,21 @@ private:
     // contract requires.
     std::unique_ptr<IAction> m_pending_slot_action;
 
-    // GameStateMachine and its four states this round -- declaration order
-    // matters: m_target_selection_state/m_game_over_state must outlive
-    // m_exploring_state (which holds references to both) and all four must
-    // outlive m_state_machine's use of any of them. m_character_screen_state
-    // isn't referenced by ExploringState's constructor (unlike the other
-    // two) -- it's pushed directly from GameplayLayer::OnEvent's own
-    // 'C'-key interception instead, not from inside ExploringState::Update
-    // -- but it does need m_affixes (declared well above this block)
-    // constructed first for its own constructor argument.
+    // GameStateMachine and its five states this round -- declaration order
+    // matters: m_target_selection_state/m_game_over_state/m_animation_state
+    // must outlive m_exploring_state (which holds references to all three)
+    // and all five must outlive m_state_machine's use of any of them.
+    // m_character_screen_state isn't referenced by ExploringState's
+    // constructor (unlike the other three) -- it's pushed directly from
+    // GameplayLayer::OnEvent's own 'C'-key interception instead, not from
+    // inside ExploringState::Update -- but it does need m_affixes (declared
+    // well above this block) constructed first for its own constructor
+    // argument.
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
+    AnimationState m_animation_state;
     CharacterScreenState m_character_screen_state{m_affixes};
-    ExploringState m_exploring_state{m_target_selection_state, m_game_over_state};
+    ExploringState m_exploring_state{m_target_selection_state, m_game_over_state, m_animation_state};
     GameStateMachine m_state_machine;
 
     std::optional<TextureAtlas> m_atlas;

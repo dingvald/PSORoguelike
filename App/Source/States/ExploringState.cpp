@@ -3,14 +3,16 @@
 #include "Actions/ITargetRequestSink.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
+#include "States/AnimationState.h"
 #include "States/GameOverState.h"
 #include "States/TargetSelectionState.h"
 #include "Systems/TurnCoordinator.h"
 
 namespace psr {
 
-ExploringState::ExploringState(TargetSelectionState& target_selection, GameOverState& game_over)
-    : m_target_selection(&target_selection), m_game_over(&game_over)
+ExploringState::ExploringState(TargetSelectionState& target_selection, GameOverState& game_over,
+                               AnimationState& animation)
+    : m_target_selection(&target_selection), m_game_over(&game_over), m_animation(&animation)
 {
 }
 
@@ -27,6 +29,8 @@ StateTransition ExploringState::Update(GameplayContext& context, float delta_tim
     }
     case TurnStep::PlayerDefeated:
         return StateTransition::Push(*m_game_over);
+    case TurnStep::AnimationsPending:
+        return StateTransition::Push(*m_animation);
     case TurnStep::AwaitingInput:
     case TurnStep::Resolved:
         return StateTransition::None();

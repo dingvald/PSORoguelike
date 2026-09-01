@@ -16,9 +16,11 @@ namespace psr {
 // returned as an AttackAction fallback (see ActionResult::fallback,
 // ResolveAction) rather than performed here, if the occupant has a
 // HealthComponent and is hostile (see Hostility.h). On success, Position
-// snaps to the target tile immediately (so turn logic never waits on
-// animation) and a TweenComponent is emplaced so the render offset eases in
-// from the old tile.
+// snaps to the target tile immediately and a Tween easing the render offset
+// in from the old tile is queued onto TweenComponent -- unlike this class's
+// own past self, the turn loop now DOES wait on that animation: any queued
+// Tween blocks TurnCoordinator::Step until it finishes (see AnimationState),
+// so this move visibly plays out before the next actor's turn resolves.
 class MoveAction : public IAction
 {
 public:

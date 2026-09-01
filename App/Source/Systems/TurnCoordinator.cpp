@@ -3,9 +3,9 @@
 #include "Combat/StatusEffectQueries.h"
 #include "Combat/StatusEffectType.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/TweenComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Actions/TurnEvent.h"
-#include "Systems/TweenSystem.h"
 
 namespace psr {
 
@@ -53,8 +53,6 @@ TurnStep TurnCoordinator::Step(float delta_time)
 {
     if (m_pending_target_request.action)
         return TurnStep::TargetingRequested;
-
-    UpdateTweens(*m_registry, delta_time);
 
     m_input_buffer.Update(delta_time);
     if (!m_pending_key)
@@ -127,6 +125,13 @@ TurnStep TurnCoordinator::Step(float delta_time)
         int energy = m_turn_queue.GetEnergy(actor_handle) - result.cost;
         m_turn_queue.Requeue(actor_handle, energy);
         actor.Get<EnergyComponent>().energy = energy;
+
+        // Takes priority over the player-yield check below: an action that
+        // just queued a Tween (Move/Attack) must block the whole turn queue
+        // until it plays out, even for the player, rather than resolving
+        // outright -- see AnimationState's own doc comment.
+        if (m_registry->Any<TweenComponent>())
+            return TurnStep::AnimationsPending;
 
         if (is_player)
             return TurnStep::Resolved;

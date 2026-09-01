@@ -59,8 +59,11 @@ TEST_CASE("MoveAction emplaces a TweenComponent starting at the pre-move offset"
     psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
     action.Perform(actor);
 
-    const psr::TweenComponent& tween = actor.Get<psr::TweenComponent>();
+    const psr::TweenComponent& tween_component = actor.Get<psr::TweenComponent>();
+    REQUIRE(tween_component.queue.size() == 1);
+    const psr::Tween& tween = tween_component.queue.front();
     REQUIRE(tween.start_offset == psr::Vec2f{-1.0f, 0.0f});
+    REQUIRE(tween.end_offset == psr::Vec2f{});
     REQUIRE(tween.duration == psr::MoveAction::kMoveTweenDuration);
     REQUIRE(tween.elapsed == 0.0f);
 }
@@ -163,10 +166,12 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
 
     // The bump itself is free (cost 0); only the resolved AttackAction's own
     // cost is ever applied -- actor never actually steps onto the enemy's
-    // tile.
+    // tile. The fallback AttackAction found a target, so it queues its own
+    // lunge-and-return Tween pair on the actor -- MoveAction itself never
+    // emplaces one in this branch (see MoveAction.h's own doc comment).
     REQUIRE(result.cost == psr::AttackAction::kAttackCost);
     REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 1});
-    REQUIRE_FALSE(actor.Has<psr::TweenComponent>());
+    REQUIRE(actor.Get<psr::TweenComponent>().queue.size() == 2);
 }
 
 TEST_CASE("MoveAction is a free no-op when a BeforeMoveEvent handler cancels it", "[MoveAction]")

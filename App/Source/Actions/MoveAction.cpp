@@ -61,8 +61,9 @@ ActionResult MoveAction::Perform(Entity actor)
     m_grid->AddEntity(target, actor.Handle());
     position.tile = target;
 
-    actor.GetOrEmplace<TweenComponent>() = TweenComponent{
-        Vec2f{static_cast<float>(tile.x - target.x), static_cast<float>(tile.y - target.y)}, kMoveTweenDuration, 0.0f};
+    actor.GetOrEmplace<TweenComponent>().queue.push_back(
+        Tween{Vec2f{static_cast<float>(tile.x - target.x), static_cast<float>(tile.y - target.y)}, Vec2f{},
+              kMoveTweenDuration, 0.0f, nullptr});
 
     AfterMoveEvent after_move{tile, target};
     actor.Dispatch(after_move);

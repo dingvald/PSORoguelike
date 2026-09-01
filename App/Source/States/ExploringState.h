@@ -6,6 +6,7 @@ namespace psr {
 
 class TargetSelectionState;
 class GameOverState;
+class AnimationState;
 
 // Normal play: forwards key events into TurnCoordinator::PressKey/
 // ReleaseKey and drives its Step() loop every Update() -- the same behavior
@@ -14,11 +15,12 @@ class GameOverState;
 // stack so a modal state (TargetSelectionState) can suspend it the same way
 // UnnamedRoguelike's own ExploringState is suspended by its TargetSelection/
 // Animating/Inventory states. TurnStep::PlayerDefeated suspends it the same
-// way, pushing GameOverState instead.
+// way, pushing GameOverState instead -- and TurnStep::AnimationsPending
+// pushes AnimationState, once a resolved Move/Attack has queued a Tween.
 class ExploringState : public GameState
 {
 public:
-    ExploringState(TargetSelectionState& target_selection, GameOverState& game_over);
+    ExploringState(TargetSelectionState& target_selection, GameOverState& game_over, AnimationState& animation);
 
     GameStateId GetId() const override { return GameStateId::Exploring; }
 
@@ -28,6 +30,7 @@ public:
 private:
     TargetSelectionState* m_target_selection;
     GameOverState* m_game_over;
+    AnimationState* m_animation;
 };
 
 } // namespace psr
