@@ -2,12 +2,14 @@
 
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
+#include "Actions/UseItemAction.h"
 #include "ApplicationFilepaths.h"
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibraryFile.h"
 #include "Combat/StatusEffectLibraryFile.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibraryFile.h"
+#include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
@@ -27,7 +29,9 @@
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
+#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Position.h"
+#include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
@@ -74,6 +78,16 @@ namespace {
     // and are emplaced onto the spawned instance separately below.
     constexpr const char* kPlayerPrefabId = "player";
 
+    // The two starter Item hotbar slots' bound consumable prefabs -- ids only,
+    // not authored data (see the "Default hotbar loadout" comment below).
+    // Content authoring (consumables/monomate.json, consumables/monofluid.json,
+    // through the Prefab Editor's new Consumable card) is the user's own work,
+    // per CLAUDE.md's division of labor -- until authored, these ids simply
+    // never match anything in the player's inventory, so the slots stay
+    // inert rather than erroring.
+    constexpr const char* kMonomatePrefabId = "consumables.monomate";
+    constexpr const char* kMonofluidPrefabId = "consumables.monofluid";
+
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9.
     std::optional<int> KeyCodeToHotbarSlot(int key_code)
     {
@@ -115,7 +129,7 @@ void GameplayLayer::LoadNewGame()
     // constructed m_registry is already empty), so LoadNewGame() doesn't need
     // to know whether it's an initial load or a restart.
     m_registry = Registry();
-    m_pending_cast_action.reset();
+    m_pending_slot_action.reset();
 
     // Content-load/generation failures below are build-input bugs (a missing
     // or malformed file, a dungeon definition with no valid layout), not a
@@ -261,9 +275,11 @@ void GameplayLayer::LoadNewGame()
     // Default hotbar loadout: first 4 weapon-granted Techniques into slots
     // 0-3, first 4 Photon Arts into slots 4-7 (mirrors the old placeholder
     // cast trigger's fixed key ranges, now captured as data instead of
-    // re-derived by key range on every press). Slots 8-9 are always Item
-    // stubs so the HUD always has one of each slot type to render -- item
-    // activation is a deliberate no-op, there is no inventory system yet.
+    // re-derived by key range on every press). Slots 8-9 are Item slots bound
+    // to the two starter consumable prefab ids (see kMonomatePrefabId/
+    // kMonofluidPrefabId above) -- same "bind by prefab NameId, resolve to an
+    // inventory index at activation time" style Technique/PhotonArt slots
+    // already use, see TryActivateSlot's Item case.
     HotbarComponent hotbar;
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
         equipment && equipment->weapon != entt::null)
@@ -286,8 +302,8 @@ void GameplayLayer::LoadNewGame()
             }
         }
     }
-    hotbar.slots[8].type = HotbarSlotType::Item;
-    hotbar.slots[9].type = HotbarSlotType::Item;
+    hotbar.slots[8] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonomatePrefabId)};
+    hotbar.slots[9] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonofluidPrefabId)};
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
     m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
@@ -383,8 +399,8 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
         if (!tp || tp->current_tp < technique->tp_cost)
             return false;
 
-        m_pending_cast_action = std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, slot.id, m_rng);
-        m_turn_coordinator->RequestTargeting(TargetRequest{m_pending_cast_action.get(), technique->targeting_mode,
+        m_pending_slot_action = std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, slot.id, m_rng);
+        m_turn_coordinator->RequestTargeting(TargetRequest{m_pending_slot_action.get(), technique->targeting_mode,
                                                            technique->range_shape, technique->range});
         return true;
     }
@@ -397,12 +413,40 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
         if (!tp || tp->current_tp < art->tp_cost)
             return false;
 
-        m_pending_cast_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, slot.id, m_rng);
+        m_pending_slot_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, slot.id, m_rng);
         m_turn_coordinator->RequestTargeting(
-            TargetRequest{m_pending_cast_action.get(), art->targeting_mode, art->range_shape, art->range});
+            TargetRequest{m_pending_slot_action.get(), art->targeting_mode, art->range_shape, art->range});
         return true;
     }
     case HotbarSlotType::Item:
+    {
+        // slot.id is the consumable prefab's NameId (same binding style as
+        // Technique/PhotonArt above), not an inventory index -- an index
+        // would go stale as the inventory reshuffles. Resolve it to whichever
+        // inventory slot currently holds a matching, consumable-tagged item;
+        // no target-select detour needed, item use is always self-targeted.
+        const InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player);
+        if (!inventory)
+            return false;
+
+        int found_index = -1;
+        for (std::size_t i = 0; i < inventory->items.size(); ++i)
+        {
+            const entt::entity item = inventory->items[i];
+            const PrefabIdComponent* prefab_id = m_registry.TryGetComponent<PrefabIdComponent>(item);
+            if (prefab_id && prefab_id->value == slot.id && m_registry.HasComponent<ConsumableComponent>(item))
+            {
+                found_index = static_cast<int>(i);
+                break;
+            }
+        }
+        if (found_index < 0)
+            return false;
+
+        m_pending_slot_action = std::make_unique<UseItemAction>(found_index);
+        m_turn_coordinator->SetPendingAction(m_pending_slot_action.get());
+        return true;
+    }
     case HotbarSlotType::Empty:
     default:
         return false;
@@ -484,7 +528,13 @@ void GameplayLayer::PublishHotbarState()
                 view.name = art->name;
             break;
         case HotbarSlotType::Item:
+            // slot.id is a consumable prefab's NameId (see TryActivateSlot);
+            // NameIdRegistry::Find resolves it back to the id string JsonEntityLoader
+            // originally hashed, same lookup ItemDisplayName.h uses for a live item
+            // instance -- falls back to the placeholder stub for an unbound slot.
             view.name = "(item)";
+            if (const std::optional<std::string> label = NameIdRegistry::Find(slot.id))
+                view.name = *label;
             break;
         case HotbarSlotType::Empty:
         default:

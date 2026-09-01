@@ -2,6 +2,7 @@
 
 #include "Components/AiComponent.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/EnergyComponent.h"
@@ -36,6 +37,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     AiComponent::Register(reg);
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
+    ConsumableComponent::Register(reg);
     CurrencyComponent::Register(reg);
     DropTableComponent::Register(reg);
     EnergyComponent::Register(reg);

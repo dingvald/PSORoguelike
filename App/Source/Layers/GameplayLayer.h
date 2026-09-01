@@ -55,9 +55,11 @@ struct EquipmentSlotActivatedMessage;
 // TargetSelectionState -- see States/), ported from UnnamedRoguelike so
 // Photon Art/Technique targeting can suspend normal play the same way that
 // sibling suspends its own ExploringState for a modal cursor. Photon Art/
-// Technique activation is driven by the player's HotbarComponent (number
-// keys 1-9/0, or a HudLayer click forwarded as HotbarSlotActivatedMessage)
-// -- see TryActivateSlot.
+// Technique/Item activation is driven by the player's HotbarComponent
+// (number keys 1-9/0, or a HudLayer click forwarded as
+// HotbarSlotActivatedMessage) -- see TryActivateSlot. Item activation skips
+// the target-select detour (self-only) and submits its UseItemAction via
+// TurnCoordinator::SetPendingAction directly.
 class GameplayLayer : public Layer
 {
 public:
@@ -193,8 +195,12 @@ private:
     // only takes a non-owning IAction*, so whoever constructs the action
     // (this layer, for the reasons in the class doc comment) must own its
     // lifetime until it's either resolved (TurnCoordinator::SetPendingAction
-    // then Step()'s normal resolution) or the player cancels.
-    std::unique_ptr<IAction> m_pending_cast_action;
+    // then Step()'s normal resolution) or the player cancels. Also reused for
+    // an activated Item slot's UseItemAction, which skips the target-select
+    // detour entirely (self-only, see TryActivateSlot) but still needs the
+    // same "stay alive until the next Step()" lifetime SetPendingAction's own
+    // contract requires.
+    std::unique_ptr<IAction> m_pending_slot_action;
 
     // GameStateMachine and its four states this round -- declaration order
     // matters: m_target_selection_state/m_game_over_state must outlive

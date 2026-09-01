@@ -15,6 +15,13 @@ namespace psr {
 // resolve damage down to an amount and dispatch IncomingDamageEvent at the
 // target rather than touching HealthComponent themselves.
 //
+// Also reacts to IncomingHealEvent (see HealEvent.h) the same way, in the
+// opposite direction: clamps current_hp up to max_hp and dispatches
+// AfterHealEvent back at the source. UseItemAction is the only source so
+// far -- it routes a Monomate-style item's HP restore through here rather
+// than writing HealthComponent directly, keeping this the one place
+// current_hp is ever mutated.
+//
 // AfterDamageEvent must be dispatched here, before DeathEvent, rather than
 // left to the caller: a self-target hit has source == target, so once
 // DeathEvent's DeathSystem handler destroys the entity, dispatching

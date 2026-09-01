@@ -812,7 +812,50 @@ named.
 **Status:** 8.1/8.2 done (8.1 pulled forward, see the Phase-A note above). Note: the Phase A "fight
 Forest enemies" checkpoint itself wasn't actually reachable until enemy spawning/AI landed — see
 "Gameplay Layer follow-ups" above, filed there rather than under M8 since it's checkpoint
-completion work, not itemization.
+completion work, not itemization. 8.1's previously-deferred inventory/equipment UI is now done too
+— see "M8 follow-ups" immediately below. Recovery consumables (Monomate/Monofluid) and the
+use-item action are also done, as an addition alongside 8.3 rather than 8.3 itself — see the
+addition filed right after 8.3 below.
+
+### M8 follow-ups: item pickup, inventory, and the Character screen
+
+**Status:** done, landed across two commits (`89eab6c` "Add item pickup, drop, and inventory
+systems", `0ccb11d` "Add Character screen: Inventory + Equipment lists with equip/unequip") that
+weren't captured in this file when they merged — the same lag "Gameplay Layer follow-ups" above
+already had once. Filed here rather than folded into 8.1's own bullet because it's UI/interaction
+work fulfilling 8.1's previously-deferred bullet, not a redo of the schema itself.
+
+- **Item pickup/drop** (`89eab6c`): new `ItemComponent` (`Core/Source/Engine/ECS/ItemComponent.h`,
+  empty tag) marks a ground-entity prefab as pickupable — every weapon/armor/mod prefab
+  (`saber.json`, `booma_claws.json`) gained an `"item": {}` component block. New
+  `InventoryComponent` (`App/Source/Components/InventoryComponent.h`, `{items:
+  vector<entt::entity>, capacity=20}`) — deliberately **not** meta-registered
+  (`vector<entt::entity>` has no `FieldKind` mapping), same "runtime-only, never hand-authored"
+  precedent `EquipmentComponent` already set in 8.1, hardcoded-emplaced on the player in
+  `GameplayLayer::LoadNewGame`. New turn-costing `IAction`s in `App/Source/Actions/`:
+  `PickupAction` (100 cost, scans the actor's tile for `ItemComponent` occupants up to capacity,
+  moves them off the `Grid` into `InventoryComponent`) and `DropAction` (100 cost, constructed
+  per-invocation with a runtime-chosen inventory index — the item to drop is a UI choice, not a
+  key binding) reversing it. Both dispatch a new `AfterItemPickupEvent`/`AfterItemDropEvent`
+  (`Core/Source/Engine/Items/ItemPickupEvent.h`/`ItemDropEvent.h`, just `{item_prefab_id}`) at the
+  actor; `CombatLogBridge` gained `OnItemPickup`/`OnItemDrop` subscribers logging a line via the
+  existing event-log path (same reuse-over-new-widget call M8.2 already made for loot toasts).
+- **Character screen** (`0ccb11d`): closes 8.1's deferred "inventory grid / equipment slot panel"
+  UI bullet. New `CharacterScreenState` (`App/Source/States/CharacterScreenState.{h,cpp}`) pushed
+  on `C`, popped on `C`/Escape — the same suspension mechanism `TargetSelectionState` already uses
+  (only the state-stack top changes, turn loop pauses). No separate `.rml` document: folded into
+  the existing `hud.rml`/`hud.rcss` as a `#character-screen` overlay div, same convention as the
+  game-over overlay. New `App/Source/Items/Equip.h/.cpp` — free functions `EquipItem(Entity actor,
+  int inventory_index)`/`UnequipSlot(Entity actor, EquipmentSlot slot)`, deliberately **not**
+  `IAction`s (nothing else can act while the modal is open, so no turn cost). `HudLayer::
+  OnCharacterScreenState` renders both lists (fully-resolved display strings from a new
+  `CharacterScreenSnapshot.h/.cpp`, decorating weapon names with prefix/element/suffix/grind),
+  attaches a click listener per row publishing `InventoryItemActivatedMessage`/
+  `EquipmentSlotActivatedMessage`; `GameplayLayer` handles both (guarded on the Character screen
+  being the active state), calling `EquipItem`/`UnequipSlot` directly and republishing the screen
+  state on success. `EquipItem` currently no-ops silently for non-weapon/non-armor inventory
+  entries (nothing routes a click on those yet) — relevant background for the consumable-item
+  addition below.
 
 - **8.1 Item & equipment schema:** Engine: weapon/armor/material components + inventory/equip
   slots. Editor: **Item editor layer** — weapon stats, race-bonus %, equip-slot config. UI:
@@ -940,7 +983,43 @@ completion work, not itemization.
   Claude.
 - **8.3 Photon crystals / stat materials:** Engine: consumable permanent-stat-boost items
   (Power/Mind/HP Material, etc.). Editor: material-effect fields on the item editor. UI:
-  use-item confirmation + stat-gain feedback.
+  use-item confirmation + stat-gain feedback. **Not started** — see the addition immediately
+  below, which covers a different (instant-recovery) consumable shape first.
+- **Addition: recovery consumables (Monomate/Monofluid) & the use-item action.** Deviates from
+  8.3's literal scope (permanent stat-boost materials) — this is the general-purpose "consume an
+  item" mechanic plus instant HP/TP recovery items, chosen by the user's explicit direction as the
+  next itemization step over 8.3 as originally scoped, since it follows directly from the
+  freshly-landed inventory/pickup plumbing (see "M8 follow-ups" above) now having a real consumer.
+  8.3's stat-materials scope is unaffected and still open. **Done:** new
+  `App/Source/Components/ConsumableComponent.h` (`ConsumableEffect`: `RestoreHp`/`RestoreTp`, flat
+  `amount` — same "just needs to round-trip as data for now" precedent Affix's `amount` set),
+  registered alongside Weapon/Armor/Mod/Rarity. New `Core/Source/Engine/Combat/HealEvent.h`
+  (`IncomingHealEvent`/`AfterHealEvent`) extends `HealthSystem` — still the sole writer of
+  `HealthComponent::current_hp` — to handle healing in the same shape `IncomingDamageEvent`
+  already does, just clamping up to `max_hp` instead of down to 0; TP restoration stays a direct
+  `TPComponent` mutation instead, since (unlike HP) there's no existing "TP system" sole-writer to
+  route through. New `App/Source/Actions/UseItemAction.h/.cpp`, an `IAction` sibling of
+  `PickupAction`/`DropAction`: consumes the item at a given inventory index, applies its
+  `ConsumableComponent` effect, destroys the item entity, and dispatches a new
+  `AfterItemUseEvent` (`Core/Source/Engine/Items/ItemUseEvent.h`, sibling of
+  `ItemPickupEvent.h`/`ItemDropEvent.h`). UI: fills the `HotbarSlotType::Item` gap
+  `HotbarComponent`/`GameplayLayer::TryActivateSlot` had left stubbed since M7.2 (no item id
+  space existed until now) — an Item slot's `id` is a consumable prefab NameId, resolved to
+  whichever inventory slot currently holds a matching item at activation time, then submitted via
+  `TurnCoordinator::SetPendingAction` directly (item use is always self-targeted, so it skips the
+  target-select detour Photon Art/Technique slots go through). `CombatLogBridge` gained an
+  `OnItemUse` subscriber (log line + HUD HP/TP republish, same shape `OnItemPickup`/`OnItemDrop`
+  already use). Editor: a new "Consumable" Inspector card on `PrefabEditorLayer`, following the
+  Rarity card's template. Two starter hotbar Item slots (8-9) are bound in
+  `GameplayLayer::LoadNewGame` to `"consumables.monomate"`/`"consumables.monofluid"` prefab ids —
+  ids only, not authored data; the slots stay inert until matching JSON exists. Content authoring
+  (`consumables/monomate.json`, `consumables/monofluid.json`, through the new editor card) is the
+  user's own work, per `CLAUDE.md`'s division of labor — not done by Claude. Catch2 coverage in
+  `App-Test/Source/ConsumableComponentTests.cpp` (schema shape/authorable flag, `JsonEntityLoader`
+  round-trip) and `App-Test/Source/UseItemActionTests.cpp` (HP heal clamped to `max_hp` with
+  `AfterHealEvent`'s actually-applied amount, TP restore clamped to `max_tp`, free no-op on a
+  missing `InventoryComponent`/out-of-range index/no-`ConsumableComponent` item, item removed from
+  inventory and entity destroyed on success, `AfterItemUseEvent` dispatched).
 
 ## M9 — Mag Companion
 
