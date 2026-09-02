@@ -10,6 +10,7 @@
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
+#include "Messages/InventoryItemHoverChangedMessage.h"
 #include "Messages/LootDropMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
@@ -20,6 +21,7 @@
 #include "Engine/Math/Color.h"
 #include "Items/Equip.h"
 #include "UI/RmlClickListener.h"
+#include "UI/RmlHoverListener.h"
 #include "UI/RmlText.h"
 
 #include <RmlUi/Core.h>
@@ -280,6 +282,7 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         overlay->SetProperty("display", "flex");
 
     m_character_screen_listeners.clear();
+    m_character_screen_hover_listeners.clear();
 
     static constexpr std::array<const char*, 5> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs"};
 
@@ -290,7 +293,9 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         {
             const std::string label =
                 message.equipment[i] ? EscapeRml(message.equipment[i]->display_name) : std::string("(empty)");
-            markup += std::string("<div class=\"equip-row\">") + kSlotLabels[i] + ": " + label + "</div>";
+            const bool focused = message.focus.equipment_slot == static_cast<EquipmentSlot>(i);
+            markup += std::string("<div class=\"equip-row") + (focused ? " focused" : "") + "\">" + kSlotLabels[i] +
+                     ": " + label + "</div>";
         }
         equipment_list->SetInnerRML(markup);
 
@@ -309,8 +314,12 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     if (Rml::Element* inventory_list = m_document->GetElementById("character-screen-inventory"))
     {
         std::string markup;
-        for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
-            markup += "<div class=\"inventory-row\">" + EscapeRml(entry.display_name) + "</div>";
+        for (std::size_t i = 0; i < message.inventory.size(); ++i)
+        {
+            const bool focused = message.focus.inventory_index == static_cast<int>(i);
+            markup += std::string("<div class=\"inventory-row") + (focused ? " focused" : "") + "\">" +
+                     EscapeRml(message.inventory[i].display_name) + "</div>";
+        }
         inventory_list->SetInnerRML(markup);
 
         Rml::ElementList rows;
@@ -322,7 +331,34 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
                 std::make_unique<RmlClickListener>([this, index]() { Publish(InventoryItemActivatedMessage{index}); });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
+
+            auto hover_listener = std::make_unique<RmlHoverListener>(
+                [this, index]() { Publish(InventoryItemHoverChangedMessage{index}); },
+                [this]() { Publish(InventoryItemHoverChangedMessage{std::nullopt}); });
+            hover_listener->Attach(*rows[i]);
+            m_character_screen_hover_listeners.push_back(std::move(hover_listener));
         }
+    }
+
+    if (Rml::Element* stats_panel = m_document->GetElementById("character-screen-stats"))
+    {
+        std::string markup = "<div class=\"stat-row\">Level " + std::to_string(message.level) + "</div>";
+        markup += "<div class=\"stat-row\">EXP " + std::to_string(message.current_exp) + " / " +
+                 std::to_string(message.exp_to_next_level) + "</div>";
+
+        for (const CharacterScreenMessage::StatEntry& stat : message.stats)
+        {
+            std::string row_class = "stat-row";
+            std::string text = EscapeRml(stat.label) + " " + std::to_string(stat.current_value);
+            if (stat.preview_value)
+            {
+                row_class += *stat.preview_value > stat.current_value ? " stat-positive" : " stat-negative";
+                text += " -&gt; " + std::to_string(*stat.preview_value);
+            }
+            markup += "<div class=\"" + row_class + "\">" + text + "</div>";
+        }
+
+        stats_panel->SetInnerRML(markup);
     }
 }
 
@@ -335,6 +371,7 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
         overlay->SetProperty("display", "none");
 
     m_character_screen_listeners.clear();
+    m_character_screen_hover_listeners.clear();
 }
 
 void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)

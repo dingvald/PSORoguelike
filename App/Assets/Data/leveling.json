@@ -1,0 +1,13 @@
+{
+    "schema_version": 1,
+    "exp_base": 100,
+    "exp_growth_exponent": 1.5,
+    "stat_growth_per_level": {
+        "atp": 3,
+        "ata": 2,
+        "mst": 1,
+        "dfp": 1,
+        "evp": 2,
+        "lck": 0
+    }
+}

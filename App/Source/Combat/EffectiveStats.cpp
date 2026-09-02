@@ -4,6 +4,9 @@
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/Registry.h"
 
+#include <array>
+#include <cstddef>
+
 namespace psr {
 
 namespace {
@@ -55,35 +58,57 @@ namespace {
             break;
         }
     }
+
+    // Shared by ComputeEffectiveStats and ComputeEffectiveStatsWithSlotOverride
+    // -- everything past "here's the base stats and the 5 slot occupants" is
+    // identical between a real loadout and a hypothetical one.
+    StatsComponent SumLoadout(Registry& registry, const AffixLibrary& affixes, const StatsComponent& base,
+                              const std::array<entt::entity, 5>& slots)
+    {
+        StatsComponent total = base;
+        for (entt::entity item : slots)
+            AddEquippedStats(total, registry, item);
+
+        const entt::entity weapon = slots[static_cast<std::size_t>(EquipmentSlot::Weapon)];
+        if (weapon != entt::null)
+        {
+            if (const WeaponComponent* weapon_component = registry.TryGetComponent<WeaponComponent>(weapon))
+            {
+                AddAffixBonus(total, affixes, weapon_component->prefix_affix_id);
+                AddAffixBonus(total, affixes, weapon_component->suffix_affix_id);
+            }
+        }
+
+        return total;
+    }
+
+    StatsComponent BaseStats(Entity actor)
+    {
+        if (const StatsComponent* base = actor.TryGet<StatsComponent>())
+            return *base;
+        return StatsComponent{};
+    }
+
+    std::array<entt::entity, 5> LoadoutSlots(Entity actor)
+    {
+        const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
+        if (!equipment)
+            return {entt::null, entt::null, entt::null, entt::null, entt::null};
+        return {equipment->weapon, equipment->head, equipment->torso, equipment->hands, equipment->legs};
+    }
 } // namespace
 
 StatsComponent ComputeEffectiveStats(Entity actor, const AffixLibrary& affixes)
 {
-    StatsComponent total;
-    if (const StatsComponent* base = actor.TryGet<StatsComponent>())
-        total = *base;
+    return SumLoadout(actor.GetRegistry(), affixes, BaseStats(actor), LoadoutSlots(actor));
+}
 
-    const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
-    if (!equipment)
-        return total;
-
-    Registry& registry = actor.GetRegistry();
-    AddEquippedStats(total, registry, equipment->weapon);
-    AddEquippedStats(total, registry, equipment->head);
-    AddEquippedStats(total, registry, equipment->torso);
-    AddEquippedStats(total, registry, equipment->hands);
-    AddEquippedStats(total, registry, equipment->legs);
-
-    if (equipment->weapon != entt::null)
-    {
-        if (const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(equipment->weapon))
-        {
-            AddAffixBonus(total, affixes, weapon->prefix_affix_id);
-            AddAffixBonus(total, affixes, weapon->suffix_affix_id);
-        }
-    }
-
-    return total;
+StatsComponent ComputeEffectiveStatsWithSlotOverride(Entity actor, const AffixLibrary& affixes, EquipmentSlot slot,
+                                                     entt::entity replacement)
+{
+    std::array<entt::entity, 5> slots = LoadoutSlots(actor);
+    slots[static_cast<std::size_t>(slot)] = replacement;
+    return SumLoadout(actor.GetRegistry(), affixes, BaseStats(actor), slots);
 }
 
 } // namespace psr

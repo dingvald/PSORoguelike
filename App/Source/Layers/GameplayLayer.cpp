@@ -16,9 +16,11 @@
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/LevelComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
@@ -47,6 +49,7 @@
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
+#include "Messages/InventoryItemHoverChangedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
 #include "States/GameState.h"
@@ -114,6 +117,7 @@ void GameplayLayer::OnAttach()
     Subscribe<RestartRequestedMessage>(&GameplayLayer::OnRestartRequested, this);
     Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
+    Subscribe<InventoryItemHoverChangedMessage>(&GameplayLayer::OnInventoryItemHoverChanged, this);
 
     PushOverlay<HudLayer>();
 
@@ -167,6 +171,7 @@ void GameplayLayer::LoadNewGame()
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
     m_drop_tables = LoadDropTableLibrary(ApplicationFilepaths::DropTablesPath);
+    m_leveling_config = LoadLevelingConfig(ApplicationFilepaths::LevelingPath);
 
     // Created before dungeon generation below so CombatLogBridge (constructed
     // right after) can Subscribe() every enemy on_enemy_spawned stamps,
@@ -257,6 +262,12 @@ void GameplayLayer::LoadNewGame()
     m_registry.Emplace<SectionIdComponent>(m_player);
     m_registry.Emplace<CurrencyComponent>(m_player);
     m_registry.Emplace<InventoryComponent>(m_player);
+    // The player carries no base StatsComponent from player.json -- their
+    // combat stats come entirely from equipped weapon/armor bonuses today
+    // (see EffectiveStats.cpp) -- so this starts at all zeros and only
+    // LevelComponent's leveling growth ever adds to it.
+    m_registry.Emplace<StatsComponent>(m_player);
+    m_registry.Emplace<LevelComponent>(m_player, LevelComponent{1, 0});
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
@@ -264,6 +275,9 @@ void GameplayLayer::LoadNewGame()
 
     m_loot_drop_system.emplace(m_registry, *m_grid, m_drop_tables, GetMessageBus(), m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
+
+    m_experience_system.emplace(m_registry, GetMessageBus(), m_floating_text, m_leveling_config);
+    m_experience_system->Subscribe(Entity(m_registry, m_player));
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
     // above) -- there's no interactive equip/inventory system yet (M8.1's UI
@@ -489,12 +503,22 @@ void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage
         PublishCharacterScreenState();
 }
 
+void GameplayLayer::OnInventoryItemHoverChanged(const InventoryItemHoverChangedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state)
+        return;
+
+    m_hovered_inventory_index = message.inventory_index;
+    PublishCharacterScreenState();
+}
+
 void GameplayLayer::PublishCharacterScreenState()
 {
     if (!m_registry.IsValid(m_player))
         return;
 
-    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes));
+    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes, m_leveling_config,
+                                        CharacterScreenFocus{m_hovered_inventory_index, std::nullopt}));
 }
 
 void GameplayLayer::PublishFloatingTextState()

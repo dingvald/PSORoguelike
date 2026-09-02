@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Combat/LevelingConfig.h"
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
@@ -28,6 +29,7 @@
 #include "Systems/CombatLogBridge.h"
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
+#include "Systems/ExperienceSystem.h"
 #include "Systems/LootDropSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
@@ -46,6 +48,7 @@ struct HudReadyMessage;
 struct RestartRequestedMessage;
 struct InventoryItemActivatedMessage;
 struct EquipmentSlotActivatedMessage;
+struct InventoryItemHoverChangedMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -130,6 +133,13 @@ private:
     // the change immediately.
     void OnInventoryItemActivated(const InventoryItemActivatedMessage& message);
     void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
+
+    // Published by HudLayer's RmlHoverListener on an inventory row's
+    // mouseover/mouseout -- stores the hovered index (nullopt on mouseout)
+    // and republishes the screen so its stats panel shows the equip preview.
+    // Only meaningful while m_character_screen_state is on top, same guard
+    // OnInventoryItemActivated already has.
+    void OnInventoryItemHoverChanged(const InventoryItemHoverChangedMessage& message);
     void PublishCharacterScreenState();
 
     // Converts every currently-active m_floating_text instance to a screen
@@ -147,6 +157,7 @@ private:
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
     DropTableLibrary m_drop_tables;
+    LevelingConfig m_leveling_config;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -218,6 +229,12 @@ private:
     // destruction safety.
     std::optional<LootDropSystem> m_loot_drop_system;
 
+    // Grants EXP (and levels the player up) when the player lands a killing
+    // blow -- see ExperienceSystem.h. Holds only pointers into
+    // m_registry/m_floating_text/m_leveling_config, so its declaration order
+    // relative to them doesn't matter for construction/destruction safety.
+    std::optional<ExperienceSystem> m_experience_system;
+
     // Draws the player's active status effects as tinted markers in the
     // world -- see StatusEffectWorldMarkers.h. Holds only pointers into
     // m_registry/m_grid/m_status_effects (declaration order doesn't matter
@@ -225,6 +242,13 @@ private:
     // entities from *m_grid, so it must be destroyed before m_grid is --
     // declared after m_grid (members destroy in reverse declaration order).
     std::optional<StatusEffectWorldMarkers> m_status_effect_markers;
+
+    // Which inventory row (if any) the mouse is currently hovering on the
+    // Character screen -- see OnInventoryItemHoverChanged. Keyboard focus is
+    // tracked separately, inside CharacterScreenState itself, since it
+    // rebuilds/republishes the screen message directly rather than round-
+    // tripping through this layer.
+    std::optional<int> m_hovered_inventory_index;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action
@@ -250,7 +274,7 @@ private:
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
-    CharacterScreenState m_character_screen_state{m_affixes};
+    CharacterScreenState m_character_screen_state{m_affixes, m_leveling_config};
     ExploringState m_exploring_state{m_target_selection_state, m_game_over_state, m_animation_state};
     GameStateMachine m_state_machine;
 

@@ -15,6 +15,7 @@ class ElementDocument;
 namespace psr {
 
 class RmlClickListener;
+class RmlHoverListener;
 struct PlayerStatusMessage;
 struct HotbarStateMessage;
 struct CombatLogEntryMessage;
@@ -92,6 +93,12 @@ private:
     // fixed 10 slots) -- the inventory's row count changes as items are
     // picked up/equipped/unequipped.
     std::vector<std::unique_ptr<RmlClickListener>> m_character_screen_listeners;
+
+    // One RmlHoverListener per inventory row (never equipment rows -- the
+    // stat preview only ever applies to a hovered inventory item, per
+    // CharacterScreenMessage's own doc comment), rebuilt alongside
+    // m_character_screen_listeners every OnCharacterScreenState call.
+    std::vector<std::unique_ptr<RmlHoverListener>> m_character_screen_hover_listeners;
 
     static constexpr std::size_t kMaxLogLines = 50;
     std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage/LootDropMessage

@@ -2,7 +2,11 @@
 
 #include "Engine/ECS/Entity.h"
 
+#include <optional>
+
 namespace psr {
+
+class Registry;
 
 // Which EquipmentComponent field an item occupies -- Weapon for a
 // WeaponComponent-tagged item, the other four mirroring ArmorComponent's
@@ -16,6 +20,15 @@ enum class EquipmentSlot
     Hands,
     Legs
 };
+
+// Which EquipmentSlot item would occupy if equipped -- Weapon for a
+// WeaponComponent-tagged item, the matching slot for an ArmorComponent-tagged
+// one, nullopt for anything else (a consumable, say) that can't be equipped
+// at all. Shared by EquipItem (which actually moves the item) and the
+// Character screen's stat-preview (EffectiveStats.h's
+// ComputeEffectiveStatsWithSlotOverride), which only needs to know *where*
+// a hovered/focused inventory item would go, not to move it.
+std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::entity item);
 
 // Moves inventory->items[inventory_index] into whichever EquipmentComponent
 // slot its own WeaponComponent/ArmorComponent implies, swapping whatever

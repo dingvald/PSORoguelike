@@ -7,8 +7,10 @@
 #include "Components/DropTableComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/ExperienceRewardComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/LevelComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
@@ -41,10 +43,12 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     CurrencyComponent::Register(reg);
     DropTableComponent::Register(reg);
     EnergyComponent::Register(reg);
+    ExperienceRewardComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
     InnateWeaponComponent::Register(reg);
     ItemComponent::Register(reg);
+    LevelComponent::Register(reg);
     ModComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);

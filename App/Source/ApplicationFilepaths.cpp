@@ -13,3 +13,4 @@ const std::filesystem::path ApplicationFilepaths::PhotonArtsPath = ApplicationFi
 const std::filesystem::path ApplicationFilepaths::TechniquesPath = ApplicationFilepaths::DataPath / "Techniques";
 const std::filesystem::path ApplicationFilepaths::StatusEffectsPath = ApplicationFilepaths::DataPath / "StatusEffects";
 const std::filesystem::path ApplicationFilepaths::DropTablesPath = ApplicationFilepaths::DataPath / "DropTables";
+const std::filesystem::path ApplicationFilepaths::LevelingPath = ApplicationFilepaths::DataPath / "leveling.json";

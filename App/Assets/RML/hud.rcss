@@ -235,6 +235,7 @@ body {
     margin-bottom: 0.6em;
 }
 
+#character-screen-stats,
 #character-screen-equipment,
 #character-screen-inventory {
     width: 480px;
@@ -242,6 +243,21 @@ body {
     padding: 0.5em 0.6em;
     background-color: rgba(0, 0, 0, 160);
     border: 2px #444;
+}
+
+.stat-row {
+    display: block;
+    padding: 0.2em 0.2em;
+    font-size: 0.85em;
+    color: #ddd;
+}
+
+.stat-positive {
+    color: #4a90e2;
+}
+
+.stat-negative {
+    color: #e24a4a;
 }
 
 .equip-row,
@@ -253,7 +269,9 @@ body {
 }
 
 .equip-row:hover,
-.inventory-row:hover {
+.inventory-row:hover,
+.equip-row.focused,
+.inventory-row.focused {
     color: #fff;
     background-color: rgba(246, 71, 10, 80);
 }

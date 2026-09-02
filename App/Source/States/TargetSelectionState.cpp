@@ -25,17 +25,29 @@ namespace {
     // rather than shared, since MoveAction's own bindings are constructed
     // once as fixed Vec2 offsets baked into each ActionMap entry, not
     // resolved from a raw key code at call time the way this cursor needs.
+    // WASD/numpad are aliases for the same four directions, per the user's
+    // "every menu should be fully keyboard-operable" request -- this only
+    // widens the cursor's own key set, not the core exploration movement
+    // scheme (still arrow-keys-only, a separate question).
     std::optional<Vec2> ResolveDirectionKey(int key_code)
     {
         switch (key_code)
         {
         case SDLK_UP:
+        case SDLK_W:
+        case SDLK_KP_8:
             return Vec2{0, -1};
         case SDLK_DOWN:
+        case SDLK_S:
+        case SDLK_KP_2:
             return Vec2{0, 1};
         case SDLK_LEFT:
+        case SDLK_A:
+        case SDLK_KP_4:
             return Vec2{-1, 0};
         case SDLK_RIGHT:
+        case SDLK_D:
+        case SDLK_KP_6:
             return Vec2{1, 0};
         default:
             return std::nullopt;

@@ -132,6 +132,51 @@ TEST_CASE("TargetSelectionState Directional jumps the cursor straight to the pre
     state.OnExit(context);
 }
 
+TEST_CASE("TargetSelectionState WASD and numpad move the cursor identically to the matching arrow key",
+          "[TargetSelectionState]")
+{
+    Fixture fixture;
+    psr::TargetSelectionState state;
+    psr::TargetRequest request;
+    request.action = &fixture.dummy_action;
+    request.mode = psr::TargetingMode::Directional;
+    state.Begin(request, fixture.actor);
+
+    psr::GameplayContext context = fixture.Context();
+    state.OnEnter(context); // default facing: up, i.e. cursor at {3,2}
+
+    fixture.Send(state, context, SDLK_D); // same jump SDLK_RIGHT produces: {4,3}
+    fixture.Send(state, context, SDLK_SPACE);
+
+    psr::StateTransition transition = state.Update(context, 0.016f);
+    REQUIRE(transition.kind == psr::StateTransitionKind::Pop);
+    CHECK(fixture.registry.GetComponent<psr::SelectedTargetComponent>(fixture.actor).tile == psr::Vec2{4, 3});
+
+    state.OnExit(context);
+}
+
+TEST_CASE("TargetSelectionState Numpad-6 moves the cursor identically to the right arrow key", "[TargetSelectionState]")
+{
+    Fixture fixture;
+    psr::TargetSelectionState state;
+    psr::TargetRequest request;
+    request.action = &fixture.dummy_action;
+    request.mode = psr::TargetingMode::Directional;
+    state.Begin(request, fixture.actor);
+
+    psr::GameplayContext context = fixture.Context();
+    state.OnEnter(context); // default facing: up, i.e. cursor at {3,2}
+
+    fixture.Send(state, context, SDLK_KP_6); // same jump SDLK_RIGHT produces: {4,3}
+    fixture.Send(state, context, SDLK_SPACE);
+
+    psr::StateTransition transition = state.Update(context, 0.016f);
+    REQUIRE(transition.kind == psr::StateTransitionKind::Pop);
+    CHECK(fixture.registry.GetComponent<psr::SelectedTargetComponent>(fixture.actor).tile == psr::Vec2{4, 3});
+
+    state.OnExit(context);
+}
+
 TEST_CASE("TargetSelectionState TargetSquare only confirms within Chebyshev range", "[TargetSelectionState]")
 {
     Fixture fixture;

@@ -24,6 +24,9 @@
         "race": {
             "race_id": "native"
         },
+        "experience_reward": {
+            "exp_reward": 15
+        },
         "renderable": {
             "texture_id": "creature_sprites",
             "texture_size": {
