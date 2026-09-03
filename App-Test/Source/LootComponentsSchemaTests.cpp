@@ -1,4 +1,5 @@
 #include "Components/CurrencyComponent.h"
+#include "Components/CurrencyPickupComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/SectionIdComponent.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
@@ -49,16 +50,18 @@ std::uint32_t PrefabId(const std::string& id) { return entt::hashed_string::valu
 
 } // namespace
 
-TEST_CASE("SectionIdComponent/DropTableComponent/CurrencyComponent register as authorable", "[EntitySchema]")
+TEST_CASE("SectionIdComponent/DropTableComponent/CurrencyComponent/CurrencyPickupComponent register as authorable",
+          "[EntitySchema]")
 {
     entt::meta_ctx ctx;
     psr::ComponentSchemaRegistrar reg{ctx};
     psr::SectionIdComponent::Register(reg);
     psr::DropTableComponent::Register(reg);
     psr::CurrencyComponent::Register(reg);
+    psr::CurrencyPickupComponent::Register(reg);
     const psr::EntitySchemaModel model = reg.Model();
 
-    REQUIRE(model.components.size() == 3);
+    REQUIRE(model.components.size() == 4);
 
     const psr::ComponentSchema& section_id = model.components[0];
     CHECK(section_id.id == "section_id");
@@ -71,9 +74,26 @@ TEST_CASE("SectionIdComponent/DropTableComponent/CurrencyComponent register as a
     const psr::ComponentSchema& drop_table = model.components[1];
     CHECK(drop_table.id == "drop_table");
     CHECK(drop_table.authorable);
-    REQUIRE(drop_table.fields.size() == 1);
-    CHECK(drop_table.fields[0].name == "drop_table_id");
-    CHECK(drop_table.fields[0].kind == psr::FieldKind::NameId);
+    REQUIRE(drop_table.fields.size() == 5);
+
+    CHECK(drop_table.fields[0].name == "entries");
+    CHECK(drop_table.fields[0].kind == psr::FieldKind::Array);
+    const psr::FieldSchema& entry_schema = drop_table.fields[0].ElementSchema();
+    CHECK(entry_schema.kind == psr::FieldKind::Object);
+    REQUIRE(entry_schema.children.size() == 2);
+    CHECK(entry_schema.children[0].name == "item_prefab_id");
+    CHECK(entry_schema.children[0].kind == psr::FieldKind::NameId);
+    CHECK(entry_schema.children[1].name == "weight");
+    CHECK(entry_schema.children[1].kind == psr::FieldKind::Number);
+
+    CHECK(drop_table.fields[1].name == "no_drop_weight");
+    CHECK(drop_table.fields[1].kind == psr::FieldKind::Number);
+    CHECK(drop_table.fields[2].name == "meseta_weight");
+    CHECK(drop_table.fields[2].kind == psr::FieldKind::Number);
+    CHECK(drop_table.fields[3].name == "meseta_min");
+    CHECK(drop_table.fields[3].kind == psr::FieldKind::Integer);
+    CHECK(drop_table.fields[4].name == "meseta_max");
+    CHECK(drop_table.fields[4].kind == psr::FieldKind::Integer);
 
     const psr::ComponentSchema& currency = model.components[2];
     CHECK(currency.id == "currency");
@@ -81,9 +101,16 @@ TEST_CASE("SectionIdComponent/DropTableComponent/CurrencyComponent register as a
     REQUIRE(currency.fields.size() == 1);
     CHECK(currency.fields[0].name == "meseta");
     CHECK(currency.fields[0].kind == psr::FieldKind::Integer);
+
+    const psr::ComponentSchema& currency_pickup = model.components[3];
+    CHECK(currency_pickup.id == "currency_pickup");
+    CHECK(currency_pickup.authorable);
+    REQUIRE(currency_pickup.fields.size() == 1);
+    CHECK(currency_pickup.fields[0].name == "amount");
+    CHECK(currency_pickup.fields[0].kind == psr::FieldKind::Integer);
 }
 
-TEST_CASE("JsonEntityLoader round-trips section_id/drop_table/currency, hashing drop_table_id as a NameId",
+TEST_CASE("JsonEntityLoader round-trips section_id/drop_table/currency, hashing entries' item_prefab_id as a NameId",
           "[JsonEntityLoader]")
 {
     entt::meta_ctx ctx;
@@ -98,7 +125,13 @@ TEST_CASE("JsonEntityLoader round-trips section_id/drop_table/currency, hashing 
                   "schema_version": 1,
                   "components": {
                       "section_id": { "section_id": "redria" },
-                      "drop_table": { "drop_table_id": "booma" },
+                      "drop_table": {
+                          "entries": [ { "item_prefab_id": "monomate", "weight": 2.0 } ],
+                          "no_drop_weight": 3.0,
+                          "meseta_weight": 1.0,
+                          "meseta_min": 5,
+                          "meseta_max": 25
+                      },
                       "currency": { "meseta": 0 }
                   }
               })json");
@@ -117,12 +150,18 @@ TEST_CASE("JsonEntityLoader round-trips section_id/drop_table/currency, hashing 
     CHECK(prefab_registry.get<psr::SectionIdComponent>(it->second).section_id == psr::SectionId::Redria);
 
     REQUIRE(prefab_registry.all_of<psr::DropTableComponent>(it->second));
-    const std::uint32_t drop_table_id = prefab_registry.get<psr::DropTableComponent>(it->second).drop_table_id;
-    CHECK(drop_table_id == entt::hashed_string::value("booma"));
+    const psr::DropTableComponent& drop_table = prefab_registry.get<psr::DropTableComponent>(it->second);
+    REQUIRE(drop_table.entries.size() == 1);
+    CHECK(drop_table.entries[0].item_prefab_id == entt::hashed_string::value("monomate"));
+    CHECK(drop_table.entries[0].weight == 2.0f);
+    CHECK(drop_table.no_drop_weight == 3.0f);
+    CHECK(drop_table.meseta_weight == 1.0f);
+    CHECK(drop_table.meseta_min == 5);
+    CHECK(drop_table.meseta_max == 25);
 
-    std::optional<std::string> label = psr::NameIdRegistry::Find(drop_table_id);
+    std::optional<std::string> label = psr::NameIdRegistry::Find(drop_table.entries[0].item_prefab_id);
     REQUIRE(label.has_value());
-    CHECK(*label == "booma");
+    CHECK(*label == "monomate");
 
     REQUIRE(prefab_registry.all_of<psr::CurrencyComponent>(it->second));
     CHECK(prefab_registry.get<psr::CurrencyComponent>(it->second).meseta == 0);

@@ -16,7 +16,6 @@
                     <li id="menu-affixes" class="menu-row">Affixes</li>
                     <li id="menu-photon-arts" class="menu-row">Photon Arts</li>
                     <li id="menu-techniques" class="menu-row">Techniques</li>
-                    <li id="menu-drop-tables" class="menu-row">Drop Tables</li>
                     <li id="menu-exit" class="menu-row">Exit</li>
                 </ul>
             </div>

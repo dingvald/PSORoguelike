@@ -11,30 +11,30 @@
 
 namespace psr {
 
-namespace {
+std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::entity item)
+{
+    if (registry.HasComponent<WeaponComponent>(item))
+        return EquipmentSlot::Weapon;
 
-    std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::entity item)
+    if (const ArmorComponent* armor = registry.TryGetComponent<ArmorComponent>(item))
     {
-        if (registry.HasComponent<WeaponComponent>(item))
-            return EquipmentSlot::Weapon;
-
-        if (const ArmorComponent* armor = registry.TryGetComponent<ArmorComponent>(item))
+        switch (armor->slot)
         {
-            switch (armor->slot)
-            {
-            case ArmorSlot::Head:
-                return EquipmentSlot::Head;
-            case ArmorSlot::Torso:
-                return EquipmentSlot::Torso;
-            case ArmorSlot::Hands:
-                return EquipmentSlot::Hands;
-            case ArmorSlot::Legs:
-                return EquipmentSlot::Legs;
-            }
+        case ArmorSlot::Head:
+            return EquipmentSlot::Head;
+        case ArmorSlot::Torso:
+            return EquipmentSlot::Torso;
+        case ArmorSlot::Hands:
+            return EquipmentSlot::Hands;
+        case ArmorSlot::Legs:
+            return EquipmentSlot::Legs;
         }
-
-        return std::nullopt;
     }
+
+    return std::nullopt;
+}
+
+namespace {
 
     entt::entity& SlotRef(EquipmentComponent& equipment, EquipmentSlot slot)
     {

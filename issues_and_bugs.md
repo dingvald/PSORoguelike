@@ -14,4 +14,11 @@
 
 ## App
 - [x] Smooth camera movement that follows the player, except during attack tweening
+- [] Three pre-existing App-Test failures, confirmed present on `master` independent of any
+  in-progress work (reproduced with `App-Test.exe "[TweenSystem]","[MoveAction]","[CombatLogBridge]"`
+  both on `master` and with unrelated WIP stashed out): `TweenSystemTests.cpp:86` (a hairline float
+  precision mismatch, `0.050000004f` vs `0.050000001f`), `MoveActionTests.cpp:174` (bump-to-attack
+  fallback queues 4 tweens instead of the expected lunge-and-return pair of 2), and
+  `CombatLogBridgeTests.cpp:106` (a lethal `AfterDamageEvent` only publishes 1 combat-log line
+  instead of the expected hit+defeat pair of 2). Fail in isolation, not order-dependent.
 

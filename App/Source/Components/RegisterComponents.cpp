@@ -4,6 +4,7 @@
 #include "Components/BlocksMovementComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
+#include "Components/CurrencyPickupComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/EnergyComponent.h"
@@ -40,6 +41,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     BlocksMovementComponent::Register(reg);
     ConsumableComponent::Register(reg);
     CurrencyComponent::Register(reg);
+    CurrencyPickupComponent::Register(reg);
     DropTableComponent::Register(reg);
     ElementalResistanceComponent::Register(reg);
     EnergyComponent::Register(reg);

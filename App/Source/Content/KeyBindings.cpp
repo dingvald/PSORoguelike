@@ -10,7 +10,8 @@
 
 namespace psr {
 
-ActionMap<int> CreateDefaultKeyBindings(Grid& grid, const AffixLibrary& affixes, std::mt19937& rng)
+ActionMap<int> CreateDefaultKeyBindings(Grid& grid, const AffixLibrary& affixes, std::mt19937& rng,
+                                        MessageBus& message_bus)
 {
     ActionMap<int> map;
 
@@ -20,7 +21,7 @@ ActionMap<int> CreateDefaultKeyBindings(Grid& grid, const AffixLibrary& affixes,
     map.Bind(SDLK_LEFT, std::make_unique<MoveAction>(grid, affixes, Vec2{-1, 0}, rng));
     map.Bind(SDLK_RIGHT, std::make_unique<MoveAction>(grid, affixes, Vec2{1, 0}, rng));
     map.Bind(SDLK_SPACE, std::make_unique<WaitAction>());
-    map.Bind(SDLK_G, std::make_unique<PickupAction>(grid));
+    map.Bind(SDLK_G, std::make_unique<PickupAction>(grid, message_bus));
 
     // Numpad keys for movement, numpad 5 for wait.
     map.Bind(SDLK_KP_8, std::make_unique<MoveAction>(grid, affixes, Vec2{0, -1}, rng));

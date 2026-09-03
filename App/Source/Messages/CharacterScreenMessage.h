@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Items/Equip.h"
+
 #include <array>
 #include <optional>
 #include <string>
@@ -18,6 +20,34 @@ struct CharacterScreenMessage
     struct ItemEntry
     {
         std::string display_name;
+
+        // ResolveEquipSlot's result for this item -- nullopt for items with
+        // neither a WeaponComponent nor an ArmorComponent (not equippable).
+        // Lets HudLayer's context menu offer "Equip" only when it applies,
+        // and (for the equipment-slot side) find a matching inventory item
+        // to jump focus to.
+        std::optional<EquipmentSlot> equip_slot;
+
+        // Whether this item carries a ConsumableComponent -- lets HudLayer's
+        // context menu offer "Use" only when it applies.
+        bool is_consumable = false;
+    };
+
+    struct StatsSummary
+    {
+        int hp = 0;
+        int max_hp = 0;
+        int tp = 0;
+        int max_tp = 0;
+
+        // ComputeEffectiveStats' result -- base StatsComponent plus
+        // equipped-item/affix bonuses, the same numbers combat actually uses.
+        int atp = 0;
+        int ata = 0;
+        int mst = 0;
+        int dfp = 0;
+        int evp = 0;
+        int lck = 0;
     };
 
     // Index-aligned with the player's InventoryComponent::items.
@@ -26,6 +56,8 @@ struct CharacterScreenMessage
     // Indexed by EquipmentSlot (Weapon, Head, Torso, Hands, Legs); nullopt
     // means that slot is empty.
     std::array<std::optional<ItemEntry>, 5> equipment;
+
+    StatsSummary stats;
 };
 
 } // namespace psr

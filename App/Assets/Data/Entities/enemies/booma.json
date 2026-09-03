@@ -39,7 +39,16 @@
             "render_layer": 1
         },
         "drop_table": {
-            "drop_table_id": 3986310313
+            "entries": [
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 1.0
+                }
+            ],
+            "no_drop_weight": 3.0,
+            "meseta_weight": 2.0,
+            "meseta_min": 5,
+            "meseta_max": 25
         }
     }
 }

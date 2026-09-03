@@ -17,7 +17,6 @@
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Items/AffixLibrary.h"
-#include "Items/DropTableLibrary.h"
 #include "UI/ColorPickerPopup.h"
 #include "UI/FieldPickers.h"
 #include "UI/FieldWidgets.h"
@@ -111,6 +110,7 @@ private:
     void RefreshRaceBonusRows();
     void RefreshPhotonArtIdRows();
     void RefreshTechniqueIdRows();
+    void RefreshDropEntryRows();
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();
@@ -151,6 +151,7 @@ private:
     fieldwidgets::Listeners m_race_bonus_row_listeners;
     fieldwidgets::Listeners m_photon_art_row_listeners;
     fieldwidgets::Listeners m_technique_row_listeners;
+    fieldwidgets::Listeners m_drop_entry_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
 
     // Reorder (drag-drop) finalizes here, one frame after the drag gesture
@@ -197,12 +198,6 @@ private:
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
     AffixLibrary m_affixes;
-
-    // Drop table library (App/Assets/Data/DropTables), loaded once in
-    // OnAttach -- backs the drop-table card's BuildIdEnumField picker (same
-    // "real picker sourced from a loaded library" treatment as
-    // prefix/suffix_affix_id).
-    DropTableLibrary m_drop_tables;
 
     // Photon Art / Technique libraries, loaded once in OnAttach -- back the
     // weapon card's photon_art_ids/technique_ids row-list BuildIdEnumField

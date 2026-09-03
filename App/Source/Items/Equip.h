@@ -2,7 +2,13 @@
 
 #include "Engine/ECS/Entity.h"
 
+#include <entt/entt.hpp>
+
+#include <optional>
+
 namespace psr {
+
+class Registry;
 
 // Which EquipmentComponent field an item occupies -- Weapon for a
 // WeaponComponent-tagged item, the other four mirroring ArmorComponent's
@@ -16,6 +22,13 @@ enum class EquipmentSlot
     Hands,
     Legs
 };
+
+// Which EquipmentSlot `item` would occupy if equipped, from its own
+// WeaponComponent/ArmorComponent -- nullopt if it has neither (nothing to
+// route it to). Shared by EquipItem below and CharacterScreenSnapshot.cpp,
+// which needs the same routing to tag each inventory ItemEntry with whether/
+// where it's equippable without duplicating this switch.
+std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::entity item);
 
 // Moves inventory->items[inventory_index] into whichever EquipmentComponent
 // slot its own WeaponComponent/ArmorComponent implies, swapping whatever

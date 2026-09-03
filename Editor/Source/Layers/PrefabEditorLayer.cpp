@@ -12,7 +12,6 @@
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Persistence/JsonFile.h"
 #include "Items/AffixLibraryFile.h"
-#include "Items/DropTableLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
@@ -223,6 +222,14 @@ namespace {
         return it->value.GetInt();
     }
 
+    float ReadFloat(const rapidjson::Value& object, const char* key, float fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsNumber())
+            return fallback;
+        return it->value.GetFloat();
+    }
+
     StatsComponent ReadStatsBody(const rapidjson::Value& body)
     {
         StatsComponent stats;
@@ -277,18 +284,58 @@ namespace {
         return object;
     }
 
-    DropTableComponent ReadDropTableRefBody(const rapidjson::Value& body)
+    std::vector<LootEntry> ReadLootEntries(const rapidjson::Value& object, const char* key)
+    {
+        std::vector<LootEntry> entries;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsArray())
+            return entries;
+        for (const auto& entry : it->value.GetArray())
+        {
+            if (!entry.IsObject())
+                continue;
+            LootEntry loot_entry;
+            loot_entry.item_prefab_id = ReadNameId(entry, "item_prefab_id", 0);
+            loot_entry.weight = ReadFloat(entry, "weight", loot_entry.weight);
+            entries.push_back(loot_entry);
+        }
+        return entries;
+    }
+
+    rapidjson::Value WriteLootEntries(const std::vector<LootEntry>& entries,
+                                      rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const LootEntry& entry : entries)
+        {
+            rapidjson::Value object(rapidjson::kObjectType);
+            object.AddMember("item_prefab_id", WriteNameId(entry.item_prefab_id, allocator), allocator);
+            object.AddMember("weight", entry.weight, allocator);
+            array.PushBack(object, allocator);
+        }
+        return array;
+    }
+
+    DropTableComponent ReadDropTableBody(const rapidjson::Value& body)
     {
         DropTableComponent drop_table;
-        drop_table.drop_table_id = ReadNameId(body, "drop_table_id", 0);
+        drop_table.entries = ReadLootEntries(body, "entries");
+        drop_table.no_drop_weight = ReadFloat(body, "no_drop_weight", drop_table.no_drop_weight);
+        drop_table.meseta_weight = ReadFloat(body, "meseta_weight", drop_table.meseta_weight);
+        drop_table.meseta_min = ReadInt(body, "meseta_min", drop_table.meseta_min);
+        drop_table.meseta_max = ReadInt(body, "meseta_max", drop_table.meseta_max);
         return drop_table;
     }
 
-    rapidjson::Value WriteDropTableRefBody(const DropTableComponent& drop_table,
-                                           rapidjson::Document::AllocatorType& allocator)
+    rapidjson::Value WriteDropTableBody(const DropTableComponent& drop_table,
+                                        rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("drop_table_id", WriteNameId(drop_table.drop_table_id, allocator), allocator);
+        object.AddMember("entries", WriteLootEntries(drop_table.entries, allocator), allocator);
+        object.AddMember("no_drop_weight", drop_table.no_drop_weight, allocator);
+        object.AddMember("meseta_weight", drop_table.meseta_weight, allocator);
+        object.AddMember("meseta_min", drop_table.meseta_min, allocator);
+        object.AddMember("meseta_max", drop_table.meseta_max, allocator);
         return object;
     }
 
@@ -558,7 +605,13 @@ namespace {
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
           "<div id=\"field-consumable-amount\" class=\"field-row\"></div>"},
-         {"drop_table", "Drop Table", "#e89c5d", "<div id=\"field-drop-table\" class=\"field-row\"></div>"}}};
+         {"drop_table", "Drop Table", "#e89c5d",
+          "<div id=\"field-no-drop-weight\" class=\"field-row\"></div>"
+          "<div id=\"field-meseta-weight\" class=\"field-row\"></div>"
+          "<div id=\"field-meseta-min\" class=\"field-row\"></div>"
+          "<div id=\"field-meseta-max\" class=\"field-row\"></div>"
+          "<h3>Entries<span id=\"add-drop-entry\" class=\"btn\">Add Entry</span></h3>"
+          "<div id=\"drop-entry-list\" class=\"ref-scroll\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -626,16 +679,6 @@ void PrefabEditorLayer::OnAttach()
         m_error = error.what();
     }
 
-    try
-    {
-        m_drop_tables = LoadDropTableLibrary(EditorFilepaths::DropTablesPath);
-    }
-    catch (const std::exception& error)
-    {
-        m_drop_tables = DropTableLibrary{};
-        m_error = error.what();
-    }
-
     LoadDocuments();
     RefreshPrefabList();
     ShowScreen(Mode::List);
@@ -646,6 +689,7 @@ void PrefabEditorLayer::OnDetach()
     m_technique_row_listeners.clear();
     m_photon_art_row_listeners.clear();
     m_race_bonus_row_listeners.clear();
+    m_drop_entry_row_listeners.clear();
     m_form_listeners.clear();
     m_preview_chrome_listeners.clear();
     m_preview_listeners.clear();
@@ -979,7 +1023,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_consumable =
         components.HasMember("consumable") ? ReadConsumableBody(components["consumable"]) : ConsumableComponent{};
     m_drop_table =
-        components.HasMember("drop_table") ? ReadDropTableRefBody(components["drop_table"]) : DropTableComponent{};
+        components.HasMember("drop_table") ? ReadDropTableBody(components["drop_table"]) : DropTableComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1353,17 +1397,46 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
-    if (Rml::Element* row = m_editor->GetElementById("field-drop-table"))
+    if (Rml::Element* row = m_editor->GetElementById("field-no-drop-weight"))
+        keep(fieldwidgets::BuildFloatField(*row, "no_drop_weight", m_drop_table.no_drop_weight,
+                                           [this](float v)
+                                           {
+                                               m_drop_table.no_drop_weight = v;
+                                               MarkDirty();
+                                           }));
+    if (Rml::Element* row = m_editor->GetElementById("field-meseta-weight"))
+        keep(fieldwidgets::BuildFloatField(*row, "meseta_weight", m_drop_table.meseta_weight,
+                                           [this](float v)
+                                           {
+                                               m_drop_table.meseta_weight = v;
+                                               MarkDirty();
+                                           }));
+    if (Rml::Element* row = m_editor->GetElementById("field-meseta-min"))
+        keep(fieldwidgets::BuildIntField(*row, "meseta_min", m_drop_table.meseta_min,
+                                         [this](int v)
+                                         {
+                                             m_drop_table.meseta_min = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-meseta-max"))
+        keep(fieldwidgets::BuildIntField(*row, "meseta_max", m_drop_table.meseta_max,
+                                         [this](int v)
+                                         {
+                                             m_drop_table.meseta_max = v;
+                                             MarkDirty();
+                                         }));
+
+    if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
-        std::vector<std::pair<std::uint32_t, std::string>> drop_table_options = {{0, "-- Select Drop Table --"}};
-        for (const DropTable& table : m_drop_tables.All())
-            drop_table_options.emplace_back(table.id, table.name.empty() ? table.id_string : table.name);
-        keep(fieldwidgets::BuildIdEnumField(*row, "drop_table_id", drop_table_options, m_drop_table.drop_table_id,
-                                            [this](std::uint32_t id)
-                                            {
-                                                m_drop_table.drop_table_id = id;
-                                                MarkDirty();
-                                            }));
+        auto listener = std::make_unique<RmlClickListener>(
+            [this]
+            {
+                m_drop_table.entries.emplace_back();
+                MarkDirty();
+                RefreshDropEntryRows();
+            });
+        listener->Attach(*add_drop_entry);
+        m_form_listeners.push_back(std::move(listener));
     }
 
     if (Rml::Element* add_race_bonus = m_editor->GetElementById("add-race-bonus"))
@@ -1406,6 +1479,7 @@ void PrefabEditorLayer::RefreshEditForm()
     RefreshRaceBonusRows();
     RefreshPhotonArtIdRows();
     RefreshTechniqueIdRows();
+    RefreshDropEntryRows();
     RefreshDirtyDisplay();
 }
 
@@ -1601,6 +1675,70 @@ void PrefabEditorLayer::RefreshTechniqueIdRows()
         m_technique_row_listeners.push_back(std::move(listener));
 }
 
+void PrefabEditorLayer::RefreshDropEntryRows()
+{
+    if (!m_editor)
+        return;
+    m_drop_entry_row_listeners.clear();
+
+    Rml::Element* list = m_editor->GetElementById("drop-entry-list");
+    if (!list)
+        return;
+
+    const std::vector<std::string> content(
+        m_drop_table.entries.size(),
+        "<div class=\"entry-item field-row\"></div><div class=\"entry-weight field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No drop entries configured.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_drop_table.entries.size())
+                m_drop_table.entries.erase(m_drop_table.entries.begin() + static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshDropEntryRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_drop_table.entries, from, to);
+                MarkDirty();
+                RefreshDropEntryRows();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_drop_table.entries.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".entry-item"))
+            for (auto& listener :
+                 fieldwidgets::BuildNameIdField(*row, "item_prefab_id", m_drop_table.entries[i].item_prefab_id,
+                                                LabelFor(m_drop_table.entries[i].item_prefab_id),
+                                                [this, index](std::uint32_t id, std::string name)
+                                                {
+                                                    if (index >= m_drop_table.entries.size())
+                                                        return;
+                                                    m_drop_table.entries[index].item_prefab_id = id;
+                                                    if (!name.empty())
+                                                        NameIdRegistry::Register(id, name);
+                                                    MarkDirty();
+                                                }))
+                m_drop_entry_row_listeners.push_back(std::move(listener));
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".entry-weight"))
+            for (auto& listener : fieldwidgets::BuildFloatField(*row, "weight", m_drop_table.entries[i].weight,
+                                                                [this, index](float v)
+                                                                {
+                                                                    if (index < m_drop_table.entries.size())
+                                                                        m_drop_table.entries[index].weight = v;
+                                                                    MarkDirty();
+                                                                }))
+                m_drop_entry_row_listeners.push_back(std::move(listener));
+    }
+    for (auto& listener : result.listeners)
+        m_drop_entry_row_listeners.push_back(std::move(listener));
+}
+
 void PrefabEditorLayer::ApplyDraftToDocument()
 {
     rapidjson::Document::AllocatorType& allocator = m_draft_document.GetAllocator();
@@ -1615,7 +1753,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // otherwise only affected by add/remove, never by in-place value
     // updates.
     for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
-                             "consumable", "drop_table"})
+                            "consumable", "drop_table"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1643,7 +1781,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
         else if (key == "consumable")
             body = WriteConsumableBody(m_consumable, allocator);
         else if (key == "drop_table")
-            body = WriteDropTableRefBody(m_drop_table, allocator);
+            body = WriteDropTableBody(m_drop_table, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

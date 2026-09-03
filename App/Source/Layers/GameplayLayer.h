@@ -17,7 +17,6 @@
 #include "Engine/Render/VisualEffectSystem.h"
 #include "Engine/World/Grid.h"
 #include "Items/AffixLibrary.h"
-#include "Items/DropTableLibrary.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
 #include "States/AnimationState.h"
@@ -48,6 +47,7 @@ struct HudReadyMessage;
 struct RestartRequestedMessage;
 struct InventoryItemActivatedMessage;
 struct EquipmentSlotActivatedMessage;
+struct HotbarSlotAssignedMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -132,6 +132,11 @@ private:
     // the change immediately.
     void OnInventoryItemActivated(const InventoryItemActivatedMessage& message);
     void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
+
+    // Handles HudLayer's "Assign to Hotbar" flow -- free/instant, same
+    // reasoning as OnEquipmentSlotActivated, but rewrites HotbarComponent
+    // and republishes HotbarStateMessage instead of the Character screen.
+    void OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message);
     void PublishCharacterScreenState();
 
     // Converts every currently-active m_floating_text instance to a screen
@@ -148,7 +153,6 @@ private:
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
-    DropTableLibrary m_drop_tables;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -215,7 +219,7 @@ private:
     std::optional<CombatLogBridge> m_combat_log_bridge;
 
     // Rolls loot when the player lands a killing blow -- see LootDropSystem.h.
-    // Holds only pointers into m_registry/m_grid/m_drop_tables/m_rng, so its
+    // Holds only pointers into m_registry/m_grid/m_rng, so its
     // declaration order relative to them doesn't matter for construction/
     // destruction safety.
     std::optional<LootDropSystem> m_loot_drop_system;

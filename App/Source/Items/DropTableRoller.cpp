@@ -2,49 +2,47 @@
 
 namespace psr {
 
-namespace {
-
-    const DropTableEntry* WeightedPick(const std::vector<DropTableEntry>& pool, SectionId section_id, std::mt19937& rng)
-    {
-        float total_weight = 0.0f;
-        for (const DropTableEntry& entry : pool)
-            total_weight += entry.SectionWeight(section_id);
-        if (total_weight <= 0.0f)
-            return nullptr;
-
-        std::uniform_real_distribution<float> pick_roll(0.0f, total_weight);
-        float roll = pick_roll(rng);
-        for (const DropTableEntry& entry : pool)
-        {
-            const float weight = entry.SectionWeight(section_id);
-            if (roll < weight)
-                return &entry;
-            roll -= weight;
-        }
-        return &pool.back(); // rounding-edge fallback
-    }
-
-} // namespace
-
-DropTableResult Roll(const DropTable& table, SectionId section_id, std::mt19937& rng)
+DropTableResult Roll(const DropTableComponent& table, std::mt19937& rng)
 {
-    DropTableResult result;
-    result.item_prefab_ids = table.guaranteed_item_ids;
+    float total_weight = table.no_drop_weight + table.meseta_weight;
+    for (const LootEntry& entry : table.entries)
+        total_weight += entry.weight;
 
-    std::uniform_real_distribution<float> gate_roll(0.0f, 100.0f);
-    const bool roll_rare = gate_roll(rng) < table.rare_roll_chance_percent;
-    const std::vector<DropTableEntry>& pool = roll_rare ? table.rare_entries : table.common_entries;
+    if (total_weight <= 0.0f)
+        return DropTableResult{};
 
-    if (const DropTableEntry* picked = WeightedPick(pool, section_id, rng))
-        result.item_prefab_ids.push_back(picked->item_prefab_id);
+    std::uniform_real_distribution<float> pick_roll(0.0f, total_weight);
+    float roll = pick_roll(rng);
 
-    if (table.meseta_max > 0)
+    if (roll < table.no_drop_weight)
+        return DropTableResult{};
+    roll -= table.no_drop_weight;
+
+    if (roll < table.meseta_weight)
     {
         std::uniform_int_distribution<int> meseta_roll(table.meseta_min, table.meseta_max);
-        result.meseta = meseta_roll(rng);
+        return DropTableResult{DropTableResult::Kind::Meseta, 0, meseta_roll(rng)};
+    }
+    roll -= table.meseta_weight;
+
+    for (const LootEntry& entry : table.entries)
+    {
+        if (roll < entry.weight)
+            return DropTableResult{DropTableResult::Kind::Item, entry.item_prefab_id, 0};
+        roll -= entry.weight;
     }
 
-    return result;
+    // Rounding-edge fallback: float error can leave `roll` a hair past the
+    // last comparison above. Re-resolve against whichever pool member has
+    // nonzero weight rather than indexing a possibly-empty entries vector.
+    if (!table.entries.empty())
+        return DropTableResult{DropTableResult::Kind::Item, table.entries.back().item_prefab_id, 0};
+    if (table.meseta_weight > 0.0f)
+    {
+        std::uniform_int_distribution<int> meseta_roll(table.meseta_min, table.meseta_max);
+        return DropTableResult{DropTableResult::Kind::Meseta, 0, meseta_roll(rng)};
+    }
+    return DropTableResult{};
 }
 
 } // namespace psr

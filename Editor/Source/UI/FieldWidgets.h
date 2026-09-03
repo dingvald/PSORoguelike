@@ -109,9 +109,9 @@ namespace fieldwidgets {
     // Collapse state is purely a view concern and isn't preserved across a full
     // rebuild of item's parent list.
     //
-    // use_chevron picks the glyph pair: false (default) is PrefabEditorLayer's/
-    // DropTableEditorLayer's original "+"/"-", kept as-is for those pre-existing
-    // cards; true is ">"/"v", used by every new collapsible-card call site
+    // use_chevron picks the glyph pair: false (default) is PrefabEditorLayer's
+    // original "+"/"-", kept as-is for those pre-existing cards; true is
+    // ">"/"v", used by every new collapsible-card call site
     // (BuildCardList below, and any static per-screen card wired directly with
     // this function) -- both are plain ASCII for the same reason the original
     // comment gave: the editor's pixel font isn't guaranteed to have Unicode

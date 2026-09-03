@@ -7,6 +7,7 @@
 #include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
+#include "Messages/HotbarSlotAssignedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
@@ -17,6 +18,8 @@
 #include "Messages/StatusEffectsMessage.h"
 
 #include "ApplicationFilepaths.h"
+#include "Engine/Events/Event.h"
+#include "Engine/Events/KeyEvent.h"
 #include "Engine/Math/Color.h"
 #include "Items/Equip.h"
 #include "UI/RmlClickListener.h"
@@ -25,6 +28,7 @@
 #include <RmlUi/Core.h>
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_keycode.h>
 
 #include <algorithm>
 #include <array>
@@ -33,6 +37,34 @@
 namespace psr {
 
 namespace {
+
+    // Must match #character-screen-context-menu's width/max-height in
+    // hud.rcss -- RenderContextMenu positions using these fixed constants
+    // rather than the element's own live box, to avoid a same-call
+    // pre-layout read (same reasoning as PieceEditorLayer's painter dropdown).
+    constexpr float kContextMenuWidth = 180.0f;
+    constexpr float kContextMenuMaxHeight = 200.0f;
+
+    // Must match #character-screen-hint's initial text in hud.rml -- swapped
+    // back in by CancelAwaitingHotbarSlot, same "must match markup"
+    // reasoning as kContextMenuWidth/kContextMenuMaxHeight above.
+    constexpr const char* kDefaultCharacterScreenHint = "Numpad to navigate, Space to select, C / Esc to close";
+    constexpr const char* kAwaitingHotbarSlotHint = "Press 0-9 to assign to a hotbar slot (Esc to cancel)";
+
+    // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9. Mirrors
+    // GameplayLayer.cpp's own KeyCodeToHotbarSlot -- duplicated rather than
+    // shared since it's a single 6-line pure function used from two
+    // otherwise-unrelated translation units, per CLAUDE.md's "three similar
+    // lines is better than a premature abstraction."
+    std::optional<int> KeyCodeToHotbarSlot(int key_code)
+    {
+        if (key_code >= SDLK_1 && key_code <= SDLK_9)
+            return key_code - SDLK_1;
+        if (key_code == SDLK_0)
+            return 9;
+        return std::nullopt;
+    }
+
     std::string PercentWidth(int current, int max)
     {
         const int clamped_max = std::max(max, 1);
@@ -111,6 +143,7 @@ void HudLayer::OnDetach()
 {
     m_hotbar_listeners.clear();
     m_character_screen_listeners.clear();
+    m_context_menu_listeners.clear();
     if (m_document)
     {
         m_document->Close();
@@ -278,10 +311,17 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     if (!m_document)
         return;
 
+    const bool fresh_open = !m_character_screen_cache.has_value();
+    m_character_screen_cache = message;
+    CloseContextMenu();
+    CancelAwaitingHotbarSlot();
+
     if (Rml::Element* overlay = m_document->GetElementById("character-screen"))
         overlay->SetProperty("display", "flex");
 
     m_character_screen_listeners.clear();
+
+    RenderStatsPanel(message.stats);
 
     static constexpr std::array<const char*, 5> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs"};
 
@@ -300,9 +340,9 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         equipment_list->QuerySelectorAll(rows, ".equip-row");
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
-            const EquipmentSlot slot = static_cast<EquipmentSlot>(i);
-            auto listener =
-                std::make_unique<RmlClickListener>([this, slot]() { Publish(EquipmentSlotActivatedMessage{slot}); });
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]() { OpenContextMenu(CharacterScreenPanel::Equipment, index); });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
         }
@@ -320,12 +360,23 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
             const int index = static_cast<int>(i);
-            auto listener =
-                std::make_unique<RmlClickListener>([this, index]() { Publish(InventoryItemActivatedMessage{index}); });
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]() { OpenContextMenu(CharacterScreenPanel::Inventory, index); });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
         }
     }
+
+    if (fresh_open)
+    {
+        m_focused_panel = CharacterScreenPanel::Stats;
+        m_focused_row = 0;
+    }
+    else
+    {
+        m_focused_row = std::clamp(m_focused_row, 0, std::max(0, CharacterScreenRowCount(m_focused_panel) - 1));
+    }
+    RenderFocusHighlights();
 }
 
 void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*message*/)
@@ -337,6 +388,430 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
         overlay->SetProperty("display", "none");
 
     m_character_screen_listeners.clear();
+    CloseContextMenu();
+    CancelAwaitingHotbarSlot();
+    m_character_screen_cache.reset();
+    m_focused_panel = CharacterScreenPanel::Stats;
+    m_focused_row = 0;
+}
+
+void HudLayer::RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stats)
+{
+    Rml::Element* panel = m_document->GetElementById("character-screen-stats");
+    if (!panel)
+        return;
+
+    std::string markup;
+    markup += "<div class=\"stat-row\">HP: " + std::to_string(stats.hp) + " / " + std::to_string(stats.max_hp) + "</div>";
+    markup += "<div class=\"stat-row\">TP: " + std::to_string(stats.tp) + " / " + std::to_string(stats.max_tp) + "</div>";
+    markup += "<div class=\"stat-row\">ATP: " + std::to_string(stats.atp) + "</div>";
+    markup += "<div class=\"stat-row\">ATA: " + std::to_string(stats.ata) + "</div>";
+    markup += "<div class=\"stat-row\">MST: " + std::to_string(stats.mst) + "</div>";
+    markup += "<div class=\"stat-row\">DFP: " + std::to_string(stats.dfp) + "</div>";
+    markup += "<div class=\"stat-row\">EVP: " + std::to_string(stats.evp) + "</div>";
+    markup += "<div class=\"stat-row\">LCK: " + std::to_string(stats.lck) + "</div>";
+    panel->SetInnerRML(markup);
+}
+
+int HudLayer::CharacterScreenRowCount(CharacterScreenPanel panel) const
+{
+    if (!m_character_screen_cache)
+        return 0;
+
+    switch (panel)
+    {
+    case CharacterScreenPanel::Stats:
+        return 0;
+    case CharacterScreenPanel::Equipment:
+        return static_cast<int>(m_character_screen_cache->equipment.size());
+    case CharacterScreenPanel::Inventory:
+        return static_cast<int>(m_character_screen_cache->inventory.size());
+    }
+    return 0; // unreachable for a valid enum value
+}
+
+void HudLayer::MovePanelFocus(int direction)
+{
+    constexpr int kPanelCount = 3;
+    const int next = std::clamp(static_cast<int>(m_focused_panel) + direction, 0, kPanelCount - 1);
+    m_focused_panel = static_cast<CharacterScreenPanel>(next);
+    m_focused_row = std::clamp(m_focused_row, 0, std::max(0, CharacterScreenRowCount(m_focused_panel) - 1));
+    RenderFocusHighlights();
+}
+
+void HudLayer::MoveRowFocus(int direction)
+{
+    const int count = CharacterScreenRowCount(m_focused_panel);
+    if (count <= 0)
+        return;
+
+    m_focused_row = std::clamp(m_focused_row + direction, 0, count - 1);
+    RenderFocusHighlights();
+}
+
+void HudLayer::ActivateFocusedRow()
+{
+    if (m_focused_panel == CharacterScreenPanel::Stats)
+        return;
+
+    OpenContextMenu(m_focused_panel, m_focused_row);
+}
+
+void HudLayer::OpenContextMenu(CharacterScreenPanel panel, int index)
+{
+    if (!m_document || panel == CharacterScreenPanel::Stats)
+        return;
+    if (index < 0 || index >= CharacterScreenRowCount(panel))
+        return;
+
+    CancelAwaitingHotbarSlot();
+
+    m_focused_panel = panel;
+    m_focused_row = index;
+
+    m_menu_options = BuildMenuOptions(panel, index);
+    if (m_menu_options.empty())
+    {
+        RenderFocusHighlights();
+        return;
+    }
+
+    m_menu_open = true;
+    m_menu_panel = panel;
+    m_menu_index = index;
+    m_menu_highlight = 0;
+    RenderContextMenu();
+    RenderFocusHighlights();
+}
+
+void HudLayer::CloseContextMenu()
+{
+    m_menu_open = false;
+    m_menu_options.clear();
+    m_context_menu_listeners.clear();
+
+    if (m_document)
+        if (Rml::Element* menu = m_document->GetElementById("character-screen-context-menu"))
+            menu->SetProperty("display", "none");
+}
+
+void HudLayer::MoveMenuHighlight(int direction)
+{
+    if (m_menu_options.empty())
+        return;
+
+    const int count = static_cast<int>(m_menu_options.size());
+    m_menu_highlight = ((m_menu_highlight + direction) % count + count) % count;
+    UpdateMenuHighlightClasses();
+}
+
+void HudLayer::ChooseHighlightedMenuOption()
+{
+    if (m_menu_highlight < 0 || m_menu_highlight >= static_cast<int>(m_menu_options.size()))
+        return;
+
+    const ContextMenuOption::Action action = m_menu_options[static_cast<std::size_t>(m_menu_highlight)].action;
+    const CharacterScreenPanel panel = m_menu_panel;
+    const int index = m_menu_index;
+
+    if (action == ContextMenuOption::Action::AssignToHotbar)
+    {
+        BeginAwaitingHotbarSlot(index);
+        return;
+    }
+
+    CloseContextMenu();
+
+    switch (action)
+    {
+    case ContextMenuOption::Action::Equip:
+        if (panel == CharacterScreenPanel::Equipment)
+            JumpToMatchingInventoryItem(static_cast<EquipmentSlot>(index));
+        else
+            Publish(InventoryItemActivatedMessage{index, InventoryItemAction::Equip});
+        break;
+    case ContextMenuOption::Action::Remove:
+        Publish(EquipmentSlotActivatedMessage{static_cast<EquipmentSlot>(index)});
+        break;
+    case ContextMenuOption::Action::Use:
+        Publish(InventoryItemActivatedMessage{index, InventoryItemAction::Use});
+        break;
+    case ContextMenuOption::Action::Drop:
+        Publish(InventoryItemActivatedMessage{index, InventoryItemAction::Drop});
+        break;
+    case ContextMenuOption::Action::AssignToHotbar:
+        break; // handled above, before the menu closes
+    }
+}
+
+void HudLayer::BeginAwaitingHotbarSlot(int inventory_index)
+{
+    CloseContextMenu();
+    m_awaiting_hotbar_slot = true;
+    m_awaiting_hotbar_inventory_index = inventory_index;
+    SetCharacterScreenHint(kAwaitingHotbarSlotHint, /*awaiting=*/true);
+}
+
+void HudLayer::CancelAwaitingHotbarSlot()
+{
+    m_awaiting_hotbar_slot = false;
+    m_awaiting_hotbar_inventory_index = -1;
+    SetCharacterScreenHint(kDefaultCharacterScreenHint, /*awaiting=*/false);
+}
+
+void HudLayer::SetCharacterScreenHint(const char* text, bool awaiting)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* hint = m_document->GetElementById("character-screen-hint");
+    if (!hint)
+        return;
+
+    hint->SetInnerRML(EscapeRml(text));
+    hint->SetClass("awaiting-hotbar-slot", awaiting);
+}
+
+void HudLayer::JumpToMatchingInventoryItem(EquipmentSlot slot)
+{
+    m_focused_panel = CharacterScreenPanel::Inventory;
+    m_focused_row = 0;
+
+    if (m_character_screen_cache)
+    {
+        const std::vector<CharacterScreenMessage::ItemEntry>& inventory = m_character_screen_cache->inventory;
+        for (std::size_t i = 0; i < inventory.size(); ++i)
+        {
+            if (inventory[i].equip_slot == slot)
+            {
+                m_focused_row = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    RenderFocusHighlights();
+}
+
+std::vector<HudLayer::ContextMenuOption> HudLayer::BuildMenuOptions(CharacterScreenPanel panel, int index) const
+{
+    std::vector<ContextMenuOption> options;
+    if (!m_character_screen_cache)
+        return options;
+
+    if (panel == CharacterScreenPanel::Equipment)
+    {
+        if (index < 0 || index >= static_cast<int>(m_character_screen_cache->equipment.size()))
+            return options;
+
+        options.push_back({ContextMenuOption::Action::Equip, "Equip"});
+        if (m_character_screen_cache->equipment[static_cast<std::size_t>(index)].has_value())
+            options.push_back({ContextMenuOption::Action::Remove, "Remove"});
+    }
+    else if (panel == CharacterScreenPanel::Inventory)
+    {
+        if (index < 0 || index >= static_cast<int>(m_character_screen_cache->inventory.size()))
+            return options;
+
+        const CharacterScreenMessage::ItemEntry& entry =
+            m_character_screen_cache->inventory[static_cast<std::size_t>(index)];
+        if (entry.equip_slot.has_value())
+            options.push_back({ContextMenuOption::Action::Equip, "Equip"});
+        if (entry.is_consumable)
+        {
+            options.push_back({ContextMenuOption::Action::Use, "Use"});
+            options.push_back({ContextMenuOption::Action::AssignToHotbar, "Assign to Hotbar"});
+        }
+        options.push_back({ContextMenuOption::Action::Drop, "Drop"});
+    }
+
+    return options;
+}
+
+void HudLayer::RenderContextMenu()
+{
+    Rml::Element* menu = m_document->GetElementById("character-screen-context-menu");
+    Rml::Element* anchor = CharacterScreenRowElement(m_menu_panel, m_menu_index);
+    Rml::Element* screen = m_document->GetElementById("character-screen");
+    if (!menu || !anchor || !screen)
+        return;
+
+    m_context_menu_listeners.clear();
+
+    std::string markup;
+    for (const ContextMenuOption& option : m_menu_options)
+        markup += "<div class=\"menu-row\">" + EscapeRml(option.label) + "</div>";
+    menu->SetInnerRML(markup);
+    menu->SetProperty("display", "block");
+
+    Rml::ElementList rows;
+    menu->QuerySelectorAll(rows, ".menu-row");
+    for (std::size_t i = 0; i < rows.size(); ++i)
+    {
+        const int option_index = static_cast<int>(i);
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, option_index]()
+            {
+                m_menu_highlight = option_index;
+                ChooseHighlightedMenuOption();
+            });
+        listener->Attach(*rows[i]);
+        m_context_menu_listeners.push_back(std::move(listener));
+    }
+
+    // Anchored to the right of the target row, flipped/clamped to stay
+    // within #character-screen -- see kContextMenuWidth/kContextMenuMaxHeight's
+    // doc comment for why fixed constants are used instead of live layout.
+    const Rml::Vector2f screen_offset = screen->GetAbsoluteOffset();
+    const Rml::Vector2f screen_size = screen->GetBox().GetSize();
+    const Rml::Vector2f anchor_offset = anchor->GetAbsoluteOffset();
+    const Rml::Vector2f anchor_size = anchor->GetBox().GetSize();
+
+    float local_x = anchor_offset.x + anchor_size.x - screen_offset.x;
+    float local_y = anchor_offset.y - screen_offset.y;
+
+    if (local_y + kContextMenuMaxHeight > screen_size.y)
+        local_y = std::max(0.0f, local_y - kContextMenuMaxHeight + anchor_size.y);
+    local_x = std::clamp(local_x, 0.0f, std::max(0.0f, screen_size.x - kContextMenuWidth));
+    local_y = std::clamp(local_y, 0.0f, std::max(0.0f, screen_size.y - kContextMenuMaxHeight));
+
+    menu->SetProperty("left", std::to_string(local_x) + "px");
+    menu->SetProperty("top", std::to_string(local_y) + "px");
+
+    UpdateMenuHighlightClasses();
+}
+
+void HudLayer::UpdateMenuHighlightClasses()
+{
+    Rml::Element* menu = m_document->GetElementById("character-screen-context-menu");
+    if (!menu)
+        return;
+
+    Rml::ElementList rows;
+    menu->QuerySelectorAll(rows, ".menu-row");
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", static_cast<int>(i) == m_menu_highlight);
+}
+
+void HudLayer::RenderFocusHighlights()
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* stats = m_document->GetElementById("character-screen-stats"))
+        stats->SetClass("focused", m_focused_panel == CharacterScreenPanel::Stats);
+
+    RenderRowFocus("character-screen-equipment", ".equip-row", CharacterScreenPanel::Equipment);
+    RenderRowFocus("character-screen-inventory", ".inventory-row", CharacterScreenPanel::Inventory);
+}
+
+void HudLayer::RenderRowFocus(const char* container_id, const char* row_class, CharacterScreenPanel panel)
+{
+    Rml::Element* container = m_document->GetElementById(container_id);
+    if (!container)
+        return;
+
+    container->SetClass("focused", panel == m_focused_panel);
+
+    Rml::ElementList rows;
+    container->QuerySelectorAll(rows, row_class);
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", panel == m_focused_panel && static_cast<int>(i) == m_focused_row);
+}
+
+Rml::Element* HudLayer::CharacterScreenRowElement(CharacterScreenPanel panel, int index)
+{
+    const char* container_id =
+        panel == CharacterScreenPanel::Equipment ? "character-screen-equipment" : "character-screen-inventory";
+    const char* row_class = panel == CharacterScreenPanel::Equipment ? ".equip-row" : ".inventory-row";
+
+    Rml::Element* container = m_document->GetElementById(container_id);
+    if (!container)
+        return nullptr;
+
+    Rml::ElementList rows;
+    container->QuerySelectorAll(rows, row_class);
+    if (index < 0 || index >= static_cast<int>(rows.size()))
+        return nullptr;
+    return rows[static_cast<std::size_t>(index)];
+}
+
+void HudLayer::OnEvent(Event& event)
+{
+    if (!m_document || !m_character_screen_cache)
+        return;
+
+    EventDispatcher dispatcher(event);
+    dispatcher.Dispatch<KeyPressedEvent>(
+        [this](KeyPressedEvent& key_event)
+        {
+            const int key = key_event.GetKeyCode();
+
+            if (m_awaiting_hotbar_slot)
+            {
+                if (key == SDLK_ESCAPE)
+                {
+                    CancelAwaitingHotbarSlot();
+                    return true;
+                }
+                if (const std::optional<int> slot = KeyCodeToHotbarSlot(key))
+                {
+                    const int inventory_index = m_awaiting_hotbar_inventory_index;
+                    CancelAwaitingHotbarSlot();
+                    Publish(HotbarSlotAssignedMessage{inventory_index, *slot});
+                    return true;
+                }
+                return true; // swallow all other keys while awaiting
+            }
+
+            if (m_menu_open)
+            {
+                switch (key)
+                {
+                case SDLK_KP_8:
+                    MoveMenuHighlight(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveMenuHighlight(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ChooseHighlightedMenuOption();
+                    return true;
+                case SDLK_ESCAPE:
+                    CloseContextMenu();
+                    RenderFocusHighlights();
+                    return true;
+                case SDLK_KP_4:
+                case SDLK_KP_6:
+                    return true; // swallow -- no panel-switch while a menu is open
+                default:
+                    return false;
+                }
+            }
+
+            switch (key)
+            {
+            case SDLK_KP_4:
+                MovePanelFocus(-1);
+                return true;
+            case SDLK_KP_6:
+                MovePanelFocus(1);
+                return true;
+            case SDLK_KP_8:
+                MoveRowFocus(-1);
+                return true;
+            case SDLK_KP_2:
+                MoveRowFocus(1);
+                return true;
+            case SDLK_SPACE:
+            case SDLK_KP_5:
+                ActivateFocusedRow();
+                return true;
+            default:
+                return false;
+            }
+        });
 }
 
 void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)

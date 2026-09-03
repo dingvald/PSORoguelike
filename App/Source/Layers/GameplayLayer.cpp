@@ -1,5 +1,6 @@
 #include "Layers/GameplayLayer.h"
 
+#include "Actions/DropAction.h"
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Actions/UseItemAction.h"
@@ -38,14 +39,15 @@
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Render/TileVertexMath.h"
 #include "Items/CharacterScreenSnapshot.h"
-#include "Items/DropTableLibraryFile.h"
 #include "Items/Equip.h"
+#include "Items/Hotbar.h"
 #include "Layers/HudLayer.h"
 #include "Messages/CharacterScreenMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
+#include "Messages/HotbarSlotAssignedMessage.h"
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
@@ -116,6 +118,7 @@ void GameplayLayer::OnAttach()
     Subscribe<RestartRequestedMessage>(&GameplayLayer::OnRestartRequested, this);
     Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
+    Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
 
     PushOverlay<HudLayer>();
 
@@ -168,7 +171,6 @@ void GameplayLayer::LoadNewGame()
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
-    m_drop_tables = LoadDropTableLibrary(ApplicationFilepaths::DropTablesPath);
 
     // Created before dungeon generation below so CombatLogBridge (constructed
     // right after) can Subscribe() every enemy on_enemy_spawned stamps,
@@ -230,7 +232,7 @@ void GameplayLayer::LoadNewGame()
     // later left the dungeon's first enemy wave emplaced before the listener
     // existed, so they never joined the turn queue and never acted.
     m_turn_coordinator.emplace(m_registry);
-    m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng);
+    m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng, GetMessageBus());
 
     // Piece-authored PieceSpawn entries are creatures, not static dungeon
     // furniture -- DungeonInstantiator/SpawnWaveSystem only stamp them with
@@ -282,7 +284,7 @@ void GameplayLayer::LoadNewGame()
 
     m_registry.Emplace<EnergyComponent>(m_player); // enqueues the player into the turn queue
 
-    m_loot_drop_system.emplace(m_registry, *m_grid, m_drop_tables, GetMessageBus(), m_rng);
+    m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
@@ -497,8 +499,22 @@ void GameplayLayer::OnInventoryItemActivated(const InventoryItemActivatedMessage
     if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
         return;
 
-    if (EquipItem(Entity(m_registry, m_player), message.inventory_index))
-        PublishCharacterScreenState();
+    switch (message.action)
+    {
+    case InventoryItemAction::Equip:
+        if (EquipItem(Entity(m_registry, m_player), message.inventory_index))
+            PublishCharacterScreenState();
+        return;
+    case InventoryItemAction::Use:
+        m_pending_slot_action = std::make_unique<UseItemAction>(message.inventory_index);
+        break;
+    case InventoryItemAction::Drop:
+        m_pending_slot_action = std::make_unique<DropAction>(*m_grid, message.inventory_index);
+        break;
+    }
+
+    m_turn_coordinator->SetPendingAction(m_pending_slot_action.get());
+    m_character_screen_state.RequestClose();
 }
 
 void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message)
@@ -508,6 +524,15 @@ void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage
 
     if (UnequipSlot(Entity(m_registry, m_player), message.slot))
         PublishCharacterScreenState();
+}
+
+void GameplayLayer::OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (AssignItemToHotbarSlot(Entity(m_registry, m_player), message.inventory_index, message.hotbar_slot))
+        PublishHotbarState();
 }
 
 void GameplayLayer::PublishCharacterScreenState()

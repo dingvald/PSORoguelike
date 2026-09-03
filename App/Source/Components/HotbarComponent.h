@@ -16,7 +16,8 @@ enum class HotbarSlotType
 };
 
 // One quick-use slot: type plus a NameId into TechniqueLibrary/PhotonArtLibrary
-// (unused for Item -- there is no item id space yet, see ItemPickupEvent.h).
+// (for Item, the bound consumable's PrefabIdComponent NameId instead -- see
+// GameplayLayer::TryActivateSlot's Item case and Items/Hotbar.h).
 struct HotbarSlot
 {
     HotbarSlotType type = HotbarSlotType::Empty;

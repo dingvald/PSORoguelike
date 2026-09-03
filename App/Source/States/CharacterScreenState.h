@@ -32,6 +32,14 @@ public:
     StateTransition Update(GameplayContext& context, float delta_time) override;
     bool HandleEvent(Event& event, GameplayContext& context) override;
 
+    // Called by GameplayLayer after submitting a Use/Drop action chosen from
+    // the Character screen's Inventory context menu -- those are real
+    // energy-costing IActions (see UseItemAction.h/DropAction.h), and
+    // SetPendingAction only resolves once ExploringState is back on top of
+    // the state stack, so the screen must close for the turn to actually
+    // happen. Same close-next-Update() plumbing HandleEvent's Escape/C uses.
+    void RequestClose() { m_close_requested = true; }
+
 private:
     const AffixLibrary* m_affixes;
     bool m_close_requested = false;

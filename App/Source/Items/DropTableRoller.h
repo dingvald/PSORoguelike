@@ -1,28 +1,33 @@
 #pragma once
 
-#include "Items/DropTable.h"
-#include "Items/SectionId.h"
+#include "Components/DropTableComponent.h"
 
 #include <cstdint>
 #include <random>
-#include <vector>
 
 namespace psr {
 
 struct DropTableResult
 {
-    std::vector<std::uint32_t> item_prefab_ids;
+    enum class Kind
+    {
+        None,
+        Item,
+        Meseta
+    };
+
+    Kind kind = Kind::None;
+    std::uint32_t item_prefab_id = 0;
     int meseta = 0;
 };
 
-// Rolls one kill's worth of loot from table: every guaranteed_item_ids entry
-// is always included; then rare_roll_chance_percent gates whether one entry
-// is weighted-picked from rare_entries or common_entries (weight x that
-// entry's section_id multiplier for section_id); an empty/zero-weight pool
-// picks nothing. meseta is rolled independently, uniformly across
-// [meseta_min, meseta_max]. Pure aside from rng -- no Registry/Entity
-// dependency, same "pure function, randomness passed in" shape as
-// MaybeApplyElementalStatus.
-DropTableResult Roll(const DropTable& table, SectionId section_id, std::mt19937& rng);
+// Rolls one kill's worth of loot from table: no_drop_weight, meseta_weight,
+// and each entries[i].weight all share one flat weighted pool -- exactly one
+// outcome is picked per call, matching PSO's own "one item slot per table
+// tier" drop shape. A Meseta outcome's amount is uniform over
+// [meseta_min, meseta_max]; an empty/all-zero-weight table always resolves
+// to Kind::None. Pure aside from rng -- no Registry/Entity dependency, same
+// "pure function, randomness passed in" shape as MaybeApplyElementalStatus.
+DropTableResult Roll(const DropTableComponent& table, std::mt19937& rng);
 
 } // namespace psr

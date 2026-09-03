@@ -235,15 +235,28 @@ body {
     margin-bottom: 0.6em;
 }
 
-#character-screen-equipment,
-#character-screen-inventory {
-    width: 480px;
+#character-screen-columns {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 1100px;
+    gap: 1em;
     margin-bottom: 1em;
+}
+
+.character-screen-panel {
+    flex: 1 1 0;
+    box-sizing: border-box;
     padding: 0.5em 0.6em;
     background-color: rgba(0, 0, 0, 160);
     border: 2px #444;
 }
 
+.character-screen-panel.focused {
+    border: 2px #f6470a;
+}
+
+.stat-row,
 .equip-row,
 .inventory-row {
     display: block;
@@ -258,8 +271,54 @@ body {
     background-color: rgba(246, 71, 10, 80);
 }
 
+.equip-row.focused,
+.inventory-row.focused {
+    color: #fff;
+    border-left: 3px #f6470a;
+}
+
+/* Context menu for a Character-screen row's actions (Equip/Remove/Use/Drop)
+   -- opened next to the focused/clicked row, mirrors the Editor's
+   .painter-dropdown recipe (piece_editor.rcss). width/max-height are fixed
+   and must match kContextMenuWidth/kContextMenuMaxHeight in HudLayer.cpp,
+   which positions this element using those constants rather than reading its
+   live box size, to avoid a same-call pre-layout read. */
+#character-screen-context-menu {
+    display: none;
+    position: absolute;
+    width: 180px;
+    max-height: 200px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: rgba(10, 8, 12, 240);
+    border: 1px #444;
+}
+
+.menu-row {
+    display: block;
+    padding: 0.4em 0.5em;
+    font-size: 0.85em;
+    color: #ddd;
+    cursor: pointer;
+}
+
+.menu-row:hover {
+    color: #fff;
+    background-color: rgba(246, 71, 10, 80);
+}
+
+.menu-row.focused {
+    color: #fff;
+    border-left: 3px #f6470a;
+}
+
 #character-screen-hint {
     margin-top: 0.4em;
     font-size: 0.9em;
     color: #999;
+}
+
+#character-screen-hint.awaiting-hotbar-slot {
+    color: #f6470a;
+    font-weight: bold;
 }

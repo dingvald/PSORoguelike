@@ -815,7 +815,9 @@ Forest enemies" checkpoint itself wasn't actually reachable until enemy spawning
 completion work, not itemization. 8.1's previously-deferred inventory/equipment UI is now done too
 — see "M8 follow-ups" immediately below. Recovery consumables (Monomate/Monofluid) and the
 use-item action are also done, as an addition alongside 8.3 rather than 8.3 itself — see the
-addition filed right after 8.3 below.
+addition filed right after 8.3 below. 8.2's drop-table/Section-ID shape was since simplified and
+Meseta turned into a real pickup, and the Character screen gained a full context-menu/keyboard-nav
+overhaul — see the second "M8 follow-ups" section, right after the first.
 
 ### M8 follow-ups: item pickup, inventory, and the Character screen
 
@@ -856,6 +858,90 @@ work fulfilling 8.1's previously-deferred bullet, not a redo of the schema itsel
   state on success. `EquipItem` currently no-ops silently for non-weapon/non-armor inventory
   entries (nothing routes a click on those yet) — relevant background for the consumable-item
   addition below.
+
+### M8 follow-ups: drop-table simplification, Meseta pickups, and the Character-screen context menu
+
+**Status:** done, landed uncommitted alongside a session boundary and captured here retroactively —
+the same lag the two follow-up sections above already had. Four related changes, bundled because
+they landed together and the last two depend on the first two: dropped loot needing to actually be
+pickupable/usable is what motivated giving the Character screen a real per-item action menu instead
+of Equip being the only thing an inventory click could do.
+
+- **Drop-table simplification:** the standalone `DropTable`/`DropTableSchema`/`DropTableLibrary`/
+  `DropTableLibraryFile` five-file family (`App/Source/Items/`), `DropTableEditorLayer` (+
+  `drop_table_editor.rml`), the "Drop Tables" editor menu row, and both `ApplicationFilepaths`/
+  `EditorFilepaths::DropTablesPath` are deleted outright, along with Section-ID weighting and the
+  common/rare pool split 8.2 originally built. `DropTableComponent`
+  (`App/Source/Components/DropTableComponent.h`) is now authored directly and inline on each
+  enemy/boss prefab instead of referencing a separate library asset by id: a flat weighted pool of
+  `no_drop_weight`, `meseta_weight` (with `meseta_min`/`meseta_max`), and `entries` (a
+  `std::vector<LootEntry{item_prefab_id, weight}>`) — exactly one outcome resolved per kill by the
+  rewritten `DropTableRoller::Roll` (`App/Source/Items/DropTableRoller.cpp`), no Section-ID
+  multiplier or rare-roll gate anymore. `booma.json` was re-authored to the new shape as the one
+  existing content reference. Editor: `PrefabEditorLayer` lost its `m_drop_tables` library
+  dependency and its single `BuildIdEnumField` drop-table picker, gaining `RefreshDropEntryRows` (a
+  `BuildRowList` of item-picker + weight rows, same shape 8.2's `common_entries`/`rare_entries` rows
+  already used) so a table's `entries` are authored inline on the Drop Table card instead of on a
+  separately-edited asset. UI: no change — Meseta still gets the HUD counter 8.2 already built (see
+  below for it becoming pickup-driven rather than instant-credit).
+- **Meseta as a real ground pickup:** previously `LootDropSystem` credited `CurrencyComponent`
+  directly on a Meseta roll — no pickup step, unlike every other drop. New
+  `CurrencyPickupComponent` (`App/Source/Components/CurrencyPickupComponent.h`, single `amount`
+  field) + `App/Assets/Data/Entities/meseta.json` (an `ItemComponent`-tagged ground prefab carrying
+  it) give Meseta the same ground-entity shape every other drop already has.
+  `LootDropSystem::OnDamage` now spawns the `meseta` prefab (its `CurrencyPickupComponent::amount`
+  overwritten with the roll) instead of touching `CurrencyComponent`; `PickupAction::Perform` gained
+  a first pass over the tile's occupants that special-cases a `CurrencyPickupComponent` hit —
+  credits `CurrencyComponent`, publishes `MesetaChangedMessage`, and destroys the pickup entity
+  immediately, never entering `InventoryComponent`/counting against its capacity (Meseta was never
+  meant to occupy an inventory slot). `PickupAction`/`CreateDefaultKeyBindings` both gained a
+  `MessageBus&` parameter to thread through for that publish.
+- **Character-screen context menu overhaul:** the previous Character screen only supported one
+  action per row (click an inventory item to Equip it, click an equipment slot to Unequip). Now
+  every row opens a real context menu instead: Inventory items offer `Equip`/`Use`/`Drop`/`Assign to
+  Hotbar` (filtered — `Use` only appears on a `ConsumableComponent` item, `Equip` only on a
+  weapon/armor item, both driven by two new `CharacterScreenMessage::ItemEntry` fields,
+  `equip_slot`/`is_consumable`, populated in `CharacterScreenSnapshot.cpp` from the already-existing
+  `ResolveEquipSlot` — pulled out of `Equip.cpp`'s anonymous namespace into a shared declaration in
+  `Equip.h` so both call sites use one switch, not two); Equipment slots offer `Remove` (routes to
+  the same `UnequipSlot` as before) plus a same-item shortcut to jump focus onto its matching
+  Inventory row (`HudLayer::JumpToMatchingInventoryItem`) rather than a redundant second Equip path.
+  `InventoryItemActivatedMessage` gained an `InventoryItemAction` enum (`Equip`/`Use`/`Drop`);
+  `GameplayLayer::OnInventoryItemActivated` still resolves `Equip` instantly (free, no turn cost,
+  matching `EquipItem`'s existing contract), but `Use`/`Drop` now construct a real `UseItemAction`/
+  `DropAction` and submit it via `TurnCoordinator::SetPendingAction` — an actual energy-costing turn
+  — closing the Character screen first via a new `CharacterScreenState::RequestClose()` so the
+  submitted action can actually resolve once `ExploringState` is back on top of the state stack.
+  `HotbarSlotAssignedMessage` (new) carries the `Assign to Hotbar` flow: `HudLayer` shows an
+  "awaiting a 0-9 keypress" sub-state after that menu choice, then publishes the message once one is
+  pressed; `GameplayLayer::OnHotbarSlotAssigned` routes it to a new pure function,
+  `AssignItemToHotbarSlot` (`App/Source/Items/Hotbar.h/.cpp` — a `ConsumableComponent` item only,
+  since that's the only kind an Item-type `HotbarSlot` can resolve; see `HotbarComponent.h`'s
+  updated doc comment), which rewrites `HotbarComponent` and republishes `HotbarStateMessage`.
+  `HudLayer` also gained real keyboard navigation for the whole screen — panel focus (Stats/
+  Equipment/Inventory, via a new `CharacterScreenPanel` enum), row focus within a panel, and
+  highlight-driven menu selection — replacing what was previously mouse-click-only interaction;
+  `CharacterScreenMessage::StatsSummary` (new) gives the Stats panel real numbers for the first
+  time: HP/TP straight from `HealthComponent`/`TPComponent`, plus ATP/ATA/MST/DFP/EVP/LCK computed
+  through the existing `ComputeEffectiveStats` (M7.1) — the same numbers combat itself uses, base
+  stats plus equipped-item/affix bonuses. `BuildCharacterScreenMessage` had to take a non-const
+  `Registry&` (previously `const`) since `ComputeEffectiveStats` needs an `Entity`, whose
+  constructor requires one.
+- Editor/UI answers per CLAUDE.md's own framing: the drop-table simplification's editor surface
+  moved (not disappeared — see above); the Character-screen work is entirely UI, no new editor
+  surface needed since nothing here is authorable content. Content authoring (the actual
+  `entries`/`no_drop_weight`/`meseta_weight` values on any given enemy beyond `booma.json`'s
+  existing reference numbers) remains the user's own work through the Prefab Editor, per
+  `CLAUDE.md`'s division of labor. Catch2 coverage: rewritten `DropTableRollerTests.cpp` (flat-pool
+  resolution, no-drop/meseta/item outcomes, the rounding-edge fallback, seed-reproducibility) and
+  `LootComponentsSchemaTests.cpp`/`LootDropSystemTests.cpp` (new `CurrencyPickupComponent` schema
+  shape, Meseta spawning as a real ground entity with the rolled amount, no more direct
+  `CurrencyComponent` credit at drop time) replacing the deleted `DropTableSchemaTests.cpp`; extended
+  `PickupActionTests.cpp` (currency-pickup credit-and-destroy path bypassing `InventoryComponent`
+  capacity, ordinary items unaffected); new `HotbarTests.cpp` (`AssignItemToHotbarSlot`'s
+  bounds/component-guard no-ops and success path) and `CharacterScreenSnapshotTests.cpp`
+  (`ItemEntry::equip_slot`/`is_consumable` population, `StatsSummary` round-trip including the
+  `ComputeEffectiveStats` figures).
 
 - **8.1 Item & equipment schema:** Engine: weapon/armor/material components + inventory/equip
   slots. Editor: **Item editor layer** — weapon stats, race-bonus %, equip-slot config. UI:
@@ -927,7 +1013,11 @@ work fulfilling 8.1's previously-deferred bullet, not a redo of the schema itsel
 - **8.2 Drop tables & Section ID:** Engine: per-enemy common+rare tables, Section-ID weighting
   (10 IDs), boss guaranteed tables, Meseta currency. Editor: drop-table editor (weighted entry
   list per enemy/boss, Section ID weight matrix). UI: loot-drop toast, Meseta HUD counter.
-  **Done:** Section ID is a real `enum class SectionId` (`App/Source/Items/SectionId.h`, 10 values
+  **Superseded in part:** the standalone `DropTable` library/editor and Section-ID weighting
+  described below were later deleted and replaced by a simpler inline-authored shape — see "M8
+  follow-ups: drop-table simplification, Meseta pickups, and the Character-screen context menu"
+  right after the follow-ups section below. Left as-written for the historical record of what 8.2
+  originally built. **Done:** Section ID is a real `enum class SectionId` (`App/Source/Items/SectionId.h`, 10 values
   + `EnumNames`) rather than an open NameId — same fixed-small-roster precedent M7.3's `Element`
   already set, unlike `RaceComponent`'s deliberately open-ended NameId. `DropTable` is a new bespoke
   content type following the `Affix`/`Dungeon` five-file family exactly (`App/Source/Items/

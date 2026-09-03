@@ -1,0 +1,23 @@
+{
+    "schema_version": 1,
+    "components": {
+        "currency_pickup": {
+            "amount": 1
+        },
+        "renderable": {
+            "texture_id": "item_pickup",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#f4d35eff",
+            "color_2": "#a67c00ff",
+            "render_layer": 0
+        },
+        "item": {}
+    }
+}
