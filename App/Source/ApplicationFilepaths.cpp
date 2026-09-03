@@ -12,3 +12,5 @@ const std::filesystem::path ApplicationFilepaths::EntitiesPath = ApplicationFile
 const std::filesystem::path ApplicationFilepaths::PhotonArtsPath = ApplicationFilepaths::DataPath / "PhotonArts";
 const std::filesystem::path ApplicationFilepaths::TechniquesPath = ApplicationFilepaths::DataPath / "Techniques";
 const std::filesystem::path ApplicationFilepaths::StatusEffectsPath = ApplicationFilepaths::DataPath / "StatusEffects";
+const std::filesystem::path ApplicationFilepaths::GrowthCurvePath =
+    ApplicationFilepaths::DataPath / "growth_curve.json";

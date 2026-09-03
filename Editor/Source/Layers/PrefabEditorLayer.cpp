@@ -547,6 +547,21 @@ namespace {
         return object;
     }
 
+    ExperienceValueComponent ReadExperienceValueBody(const rapidjson::Value& body)
+    {
+        ExperienceValueComponent experience_value;
+        experience_value.xp = ReadInt(body, "xp", experience_value.xp);
+        return experience_value;
+    }
+
+    rapidjson::Value WriteExperienceValueBody(const ExperienceValueComponent& experience_value,
+                                              rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("xp", experience_value.xp, allocator);
+        return object;
+    }
+
     ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
     {
         ConsumableComponent consumable;
@@ -581,7 +596,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 12> kComponentKinds = {
+    constexpr std::array<ComponentKind, 13> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -636,7 +651,9 @@ namespace {
           "<div id=\"drop-entry-list\" class=\"ref-scroll\"></div>"},
          {"on_hit_effect", "On Hit Effect", "#e85dc1",
           "<div id=\"field-on-hit-effect-prefab\" class=\"field-row\"></div>"
-          "<div id=\"field-on-hit-effect-duration\" class=\"field-row\"></div>"}}};
+          "<div id=\"field-on-hit-effect-duration\" class=\"field-row\"></div>"},
+         {"experience_value", "Experience Value", "#a3e85d",
+          "<div id=\"field-experience-value-xp\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -1026,7 +1043,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
             key == "armor" || key == "mod" || key == "item" || key == "rarity" || key == "consumable" ||
-            key == "drop_table" || key == "on_hit_effect")
+            key == "drop_table" || key == "on_hit_effect" || key == "experience_value")
             m_component_order.emplace_back(key);
     }
 
@@ -1051,6 +1068,9 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_on_hit_effect = components.HasMember("on_hit_effect") ? ReadOnHitEffectBody(components["on_hit_effect"])
                                                             : OnHitEffectComponent{};
     m_on_hit_effect_prefab_name = LabelFor(m_on_hit_effect.effect_prefab_id);
+    m_experience_value = components.HasMember("experience_value")
+                             ? ReadExperienceValueBody(components["experience_value"])
+                             : ExperienceValueComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1503,6 +1523,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                                m_on_hit_effect.duration = v;
                                                MarkDirty();
                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-experience-value-xp"))
+        keep(fieldwidgets::BuildIntField(*row, "xp", m_experience_value.xp,
+                                         [this](int v)
+                                         {
+                                             m_experience_value.xp = v;
+                                             MarkDirty();
+                                         }));
 
     if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
@@ -1764,7 +1791,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // otherwise only affected by add/remove, never by in-place value
     // updates.
     for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
-                            "consumable", "drop_table", "on_hit_effect"})
+                            "consumable", "drop_table", "on_hit_effect", "experience_value"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1795,6 +1822,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteDropTableBody(m_drop_table, allocator);
         else if (key == "on_hit_effect")
             body = WriteOnHitEffectBody(m_on_hit_effect, allocator);
+        else if (key == "experience_value")
+            body = WriteExperienceValueBody(m_experience_value, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

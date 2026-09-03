@@ -14,6 +14,7 @@
 #include "Combat/Technique.h"
 #include "Combat/TechniqueCastEvent.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/LevelComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
@@ -131,6 +132,9 @@ void CombatLogBridge::PublishPlayerStatus()
         status.current_secondary = tp->current_tp;
         status.max_secondary = tp->max_tp;
     }
+
+    if (const LevelComponent* level = m_registry->TryGetComponent<LevelComponent>(m_player))
+        status.level = level->level;
 
     m_message_bus->Publish(status);
 }

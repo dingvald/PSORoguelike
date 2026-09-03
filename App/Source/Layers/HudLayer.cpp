@@ -12,7 +12,6 @@
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/LootDropMessage.h"
-#include "Messages/MesetaChangedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
@@ -135,7 +134,6 @@ void HudLayer::OnAttach()
     Subscribe<PlayerDefeatedMessage>(&HudLayer::OnPlayerDefeated, this);
     Subscribe<GameRestartedMessage>(&HudLayer::OnGameRestarted, this);
     Subscribe<LootDropMessage>(&HudLayer::OnLootDrop, this);
-    Subscribe<MesetaChangedMessage>(&HudLayer::OnMesetaChanged, this);
     Subscribe<CharacterScreenMessage>(&HudLayer::OnCharacterScreenState, this);
     Subscribe<CharacterScreenClosedMessage>(&HudLayer::OnCharacterScreenClosed, this);
     Subscribe<TechniquesScreenMessage>(&HudLayer::OnTechniquesScreenState, this);
@@ -197,6 +195,9 @@ void HudLayer::OnPlayerStatus(const PlayerStatusMessage& message)
 {
     if (!m_document)
         return;
+
+    if (Rml::Element* level_text = m_document->GetElementById("level-text"))
+        level_text->SetInnerRML(EscapeRml("Lv" + std::to_string(message.level)));
 
     if (Rml::Element* hp_fill = m_document->GetElementById("hp-fill"))
         hp_fill->SetProperty("width", PercentWidth(message.current_hp, message.max_hp));
@@ -326,15 +327,6 @@ void HudLayer::OnGameRestarted(const GameRestartedMessage& /*message*/)
 }
 
 void HudLayer::OnLootDrop(const LootDropMessage& message) { AppendLogLine("Found " + message.item_name); }
-
-void HudLayer::OnMesetaChanged(const MesetaChangedMessage& message)
-{
-    if (!m_document)
-        return;
-
-    if (Rml::Element* text = m_document->GetElementById("meseta-text"))
-        text->SetInnerRML(EscapeRml(std::to_string(message.current_meseta)));
-}
 
 void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
 {

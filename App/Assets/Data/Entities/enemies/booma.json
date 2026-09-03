@@ -49,6 +49,9 @@
             "meseta_weight": 2.0,
             "meseta_min": 5,
             "meseta_max": 25
+        },
+        "experience_value": {
+            "xp": 12
         }
     }
 }

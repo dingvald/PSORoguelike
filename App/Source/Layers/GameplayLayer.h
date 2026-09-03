@@ -19,6 +19,7 @@
 #include "Engine/Render/VisualEffectSystem.h"
 #include "Engine/World/Grid.h"
 #include "Items/AffixLibrary.h"
+#include "Progression/GrowthCurve.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
 #include "States/AnimationState.h"
@@ -31,6 +32,7 @@
 #include "Systems/CombatLogBridge.h"
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
+#include "Systems/ExperienceSystem.h"
 #include "Systems/LootDropSystem.h"
 #include "Systems/MissFlashEffectSystem.h"
 #include "Systems/OnHitEffectSystem.h"
@@ -172,6 +174,11 @@ private:
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
+    // The player's class-agnostic level-up table -- see GrowthCurve.h. A
+    // single hand-authored JSON document (App/Assets/Data/growth_curve.json),
+    // not a per-item content library like the ones above, so it's loaded via
+    // LoadGrowthCurve rather than one of the LoadXLibrary functions.
+    GrowthCurve m_growth_curve;
     std::mt19937 m_rng{std::random_device{}()};
 
     std::optional<Grid> m_grid;
@@ -257,6 +264,12 @@ private:
     // declaration order relative to them doesn't matter for construction/
     // destruction safety.
     std::optional<LootDropSystem> m_loot_drop_system;
+
+    // Awards XP and applies level-ups when the player lands a killing blow --
+    // see ExperienceSystem.h. Holds only pointers into the Layer's own
+    // MessageBus and m_growth_curve, so its declaration order relative to
+    // them doesn't matter for construction/destruction safety.
+    std::optional<ExperienceSystem> m_experience_system;
 
     // Draws the player's active status effects as tinted markers in the
     // world -- see StatusEffectWorldMarkers.h. Holds only pointers into
