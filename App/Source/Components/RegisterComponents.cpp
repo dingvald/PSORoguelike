@@ -9,6 +9,7 @@
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/ExperienceValueComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/OnHitEffectComponent.h"
@@ -46,6 +47,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     DropTableComponent::Register(reg);
     ElementalResistanceComponent::Register(reg);
     EnergyComponent::Register(reg);
+    ExperienceValueComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
     InnateWeaponComponent::Register(reg);

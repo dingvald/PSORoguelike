@@ -69,11 +69,25 @@ body {
     margin-top: 0.4em;
 }
 
-.meseta-text {
+#identity-row {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.5em;
+}
+
+.level-text {
     display: block;
-    font-size: 0.85em;
+    margin-right: 0.5em;
+    font-size: 0.9em;
     font-weight: bold;
-    color: #e8c34a;
+    color: #f6470a;
+}
+
+.name-text {
+    display: block;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #eee;
 }
 
 .status-chip {

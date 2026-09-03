@@ -18,6 +18,7 @@
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/LevelComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
@@ -59,6 +60,7 @@
 #include "Messages/RestartRequestedMessage.h"
 #include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
+#include "Progression/GrowthCurveFile.h"
 #include "States/GameState.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -178,6 +180,7 @@ void GameplayLayer::LoadNewGame()
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
+    m_growth_curve = LoadGrowthCurve(ApplicationFilepaths::GrowthCurvePath);
 
     // Created before dungeon generation below so CombatLogBridge (constructed
     // right after) can Subscribe() every enemy on_enemy_spawned stamps,
@@ -296,6 +299,7 @@ void GameplayLayer::LoadNewGame()
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
     m_registry.Emplace<TabTargetComponent>(m_player);
+    m_registry.Emplace<LevelComponent>(m_player);
     // Same "hardcoded until M10.3 character creation exists" deferral as
     // HealthComponent above -- there's no Section ID picker yet, and no drop
     // has happened yet to credit any Meseta.
@@ -309,6 +313,9 @@ void GameplayLayer::LoadNewGame()
 
     m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
+
+    m_experience_system.emplace(GetMessageBus(), m_growth_curve);
+    m_experience_system->Subscribe(Entity(m_registry, m_player));
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
     // above) -- there's no interactive equip/inventory system yet (M8.1's UI

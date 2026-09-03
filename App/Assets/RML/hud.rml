@@ -5,6 +5,10 @@
     </head>
     <body>
         <div id="bars">
+            <div id="identity-row">
+                <span id="level-text" class="level-text"></span>
+                <span id="name-text" class="name-text">Player</span>
+            </div>
             <div class="bar-row">
                 <span class="bar-label">HP</span>
                 <div class="bar-track"><div id="hp-fill" class="bar-fill hp"></div></div>
@@ -16,10 +20,6 @@
                 <span id="secondary-text" class="bar-text"></span>
             </div>
             <div id="status-effects"></div>
-            <div class="bar-row">
-                <span class="bar-label">Meseta</span>
-                <span id="meseta-text" class="meseta-text">0</span>
-            </div>
         </div>
 
         <div id="hotbar">

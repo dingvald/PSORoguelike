@@ -28,7 +28,6 @@ struct StatusEffectsMessage;
 struct PlayerDefeatedMessage;
 struct GameRestartedMessage;
 struct LootDropMessage;
-struct MesetaChangedMessage;
 struct CharacterScreenClosedMessage;
 struct TechniquesScreenClosedMessage;
 struct FloatingTextStateMessage;
@@ -134,7 +133,6 @@ private:
     void OnPlayerDefeated(const PlayerDefeatedMessage& message);
     void OnGameRestarted(const GameRestartedMessage& message);
     void OnLootDrop(const LootDropMessage& message);
-    void OnMesetaChanged(const MesetaChangedMessage& message);
 
     // Shows the Character screen panel and rebuilds its Stats/Equipment/
     // Inventory contents (SetInnerRML once per container, then
