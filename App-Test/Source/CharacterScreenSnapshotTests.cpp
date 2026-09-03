@@ -54,6 +54,29 @@ TEST_CASE("BuildCharacterScreenMessage tags inventory entries with their equip_s
     REQUIRE_FALSE(message.inventory[3].is_consumable);
 }
 
+TEST_CASE("BuildCharacterScreenMessage fills mod_slot_labels from ArmorComponent::mod_slot_count",
+          "[CharacterScreenSnapshot]")
+{
+    psr::Registry registry;
+    entt::entity player = registry.CreateEntity();
+
+    entt::entity armor = registry.CreateEntity();
+    registry.Emplace<psr::ArmorComponent>(armor, psr::ArmorComponent{psr::ArmorSlot::Torso, 2});
+
+    entt::entity no_slots_armor = registry.CreateEntity();
+    registry.Emplace<psr::ArmorComponent>(no_slots_armor, psr::ArmorComponent{psr::ArmorSlot::Head, 0});
+
+    registry.Emplace<psr::InventoryComponent>(player, psr::InventoryComponent{{armor, no_slots_armor}, 20});
+
+    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes);
+
+    REQUIRE(message.inventory[0].mod_slot_labels.size() == 2);
+    REQUIRE(message.inventory[0].mod_slot_labels[0] == "(empty)");
+    REQUIRE(message.inventory[0].mod_slot_labels[1] == "(empty)");
+
+    REQUIRE(message.inventory[1].mod_slot_labels.empty());
+}
+
 TEST_CASE("BuildCharacterScreenMessage resolves equipment slot entries the same way", "[CharacterScreenSnapshot]")
 {
     psr::Registry registry;
