@@ -6,6 +6,7 @@
 #include "Combat/Hostility.h"
 #include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
+#include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TweenComponent.h"
@@ -16,14 +17,17 @@
 #include "Engine/ECS/Registry.h"
 #include "Engine/Math/Vec2f.h"
 
+#include <cmath>
+#include <memory>
 #include <random>
 #include <utility>
 #include <vector>
 
 namespace psr {
 
-AttackAction::AttackAction(Grid& grid, const AffixLibrary& affixes, Vec2 direction, std::mt19937& rng)
-    : m_grid(&grid), m_affixes(&affixes), m_direction(direction), m_rng(&rng)
+AttackAction::AttackAction(Grid& grid, const AffixLibrary& affixes, Vec2 direction, std::mt19937& rng,
+                           int attack_number)
+    : m_grid(&grid), m_affixes(&affixes), m_direction(direction), m_rng(&rng), m_attack_number(attack_number)
 {
 }
 
@@ -100,18 +104,26 @@ ActionResult AttackAction::Perform(Entity actor)
                 if (!target.IsValid())
                     break;
 
-                const float hit_chance = ComputeHitChance(attacker_stats.ata, defender_stats.evp);
+                const int combo_ata =
+                    static_cast<int>(std::lround(static_cast<float>(attacker_stats.ata) * ComboAtaMultiplier(hit)));
+                const float hit_chance = ComputeHitChance(combo_ata, defender_stats.evp);
                 if (unit_roll(*rng) > hit_chance)
+                {
+                    AttackMissEvent miss{target};
+                    actor.Dispatch(miss);
                     continue; // miss
+                }
 
-                int damage = ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*rng));
-                damage = ApplyRaceBonus(damage, race_bonuses, defender_race_id);
+                const int boosted_atp = ApplyRaceBonus(attacker_stats.atp, race_bonuses, defender_race_id);
+                int damage = ComputeDamage(boosted_atp, defender_stats.dfp, variance_roll(*rng));
+                const bool is_critical = unit_roll(*rng) < ComputeCritChance(attacker_stats.lck);
+                damage = ApplyCritical(damage, is_critical);
 
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                IncomingDamageEvent incoming{actor, damage};
+                IncomingDamageEvent incoming{actor, damage, is_critical};
                 target.Dispatch(incoming);
 
                 if (!target.IsValid())
@@ -134,7 +146,16 @@ ActionResult AttackAction::Perform(Entity actor)
     AfterAttackEvent after_attack{true};
     actor.Dispatch(after_attack);
 
-    return ActionResult(kAttackCost);
+    std::unique_ptr<IAction> extra_attack;
+    if (actor.Has<PlayerControlledComponent>() && m_attack_number < kMaxAttacksPerTurn)
+    {
+        std::uniform_real_distribution<float> extra_attack_roll(0.0f, 1.0f);
+        if (extra_attack_roll(*m_rng) < (kExtraAttackChance - kExtraAttackChanceReduction * (m_attack_number - 1)))
+            extra_attack =
+                std::make_unique<AttackAction>(*m_grid, *m_affixes, m_direction, *m_rng, m_attack_number + 1);
+    }
+
+    return ActionResult(kAttackCost, std::move(extra_attack));
 }
 
 } // namespace psr

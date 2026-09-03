@@ -5,11 +5,20 @@
         "weapon": {
             "range_shape": "single_target",
             "range": 1,
-            "hits_per_turn": 1
+            "hits_per_turn": 1,
+            "grind_level": 0,
+            "prefix_affix_id": 0,
+            "suffix_affix_id": 0,
+            "race_bonuses": [],
+            "photon_art_ids": [],
+            "technique_ids": [],
+            "element": "none",
+            "status_effect_id": 0,
+            "status_chance_percent": 0
         },
         "stats": {
-            "atp": 25,
-            "ata": 15,
+            "atp": 40,
+            "ata": 30,
             "mst": 0,
             "dfp": 0,
             "evp": 0,

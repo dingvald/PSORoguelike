@@ -10,22 +10,22 @@
             "detection_range": 8
         },
         "health": {
-            "current_hp": 20,
-            "max_hp": 20
+            "current_hp": 60,
+            "max_hp": 60
         },
         "stats": {
-            "atp": 15,
-            "ata": 20,
+            "atp": 80,
+            "ata": 60,
             "mst": 0,
-            "dfp": 5,
-            "evp": 10,
-            "lck": 5
+            "dfp": 0,
+            "evp": 60,
+            "lck": 8
         },
         "race": {
             "race_id": "native"
         },
         "renderable": {
-            "texture_id": "creature_sprites",
+            "texture_id": "booma",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -34,9 +34,12 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#5a3a1eff",
+            "color_1": "#b2ada9ff",
             "color_2": "#c9a86aff",
             "render_layer": 1
+        },
+        "drop_table": {
+            "drop_table_id": 3986310313
         }
     }
 }

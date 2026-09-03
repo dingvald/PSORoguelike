@@ -3,7 +3,6 @@
 #include "Components/RegisterComponents.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/JsonEntityLoader.h"
-#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
@@ -36,6 +35,17 @@ namespace {
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "piece_editor.rml";
     const std::filesystem::path kVertexShaderPath = "TileSprite.vert.spv";
     const std::filesystem::path kFragmentShaderPath = "TileSprite.frag.spv";
+
+    // Matches .painter-dropdown's RCSS width/max-height exactly, so
+    // OpenPainterDropdown's edge-flip/clamp math can use these fixed values
+    // instead of reading the just-built element's GetBox() (which may still
+    // reflect the pre-layout box in the same call that made it visible).
+    // Using max-height rather than the dropdown's actual (possibly shorter)
+    // content height only ever makes the flip-up decision more eager, never
+    // less -- it can never render off-screen, just occasionally flip a
+    // little earlier than strictly necessary for a short palette.
+    constexpr float kPainterDropdownWidth = 200.0f;
+    constexpr float kPainterDropdownMaxHeight = 280.0f;
 
     // Turns an entered id ("forest.l_corridor") into its file path
     // ("Pieces/forest/l_corridor.json"), mirroring LoadJsonDirectory's reverse
@@ -132,6 +142,32 @@ namespace {
             label += " + " + parts[i];
         return label;
     }
+
+    // Moves `toolbar` to follow the drag's absolute pointer position,
+    // clamped to stay fully within its parent's (#edit-body's) box. Mirrors
+    // PreviewWindowChrome::HandleResizeDrag, but repositions (left/top)
+    // rather than resizes (width/height).
+    void HandleToolbarDrag(Rml::Element& toolbar, Rml::Event& event)
+    {
+        Rml::Element* parent = toolbar.GetParentNode();
+        if (!parent)
+            return;
+
+        const Rml::Vector2f toolbar_size = toolbar.GetBox().GetSize();
+        const Rml::Vector2f parent_offset = parent->GetAbsoluteOffset();
+        const Rml::Vector2f parent_size = parent->GetBox().GetSize();
+
+        const float mouse_x = event.GetParameter<float>("mouse_x", 0.0f);
+        const float mouse_y = event.GetParameter<float>("mouse_y", 0.0f);
+
+        const float new_left =
+            std::clamp(mouse_x - parent_offset.x, 0.0f, std::max(0.0f, parent_size.x - toolbar_size.x));
+        const float new_top =
+            std::clamp(mouse_y - parent_offset.y, 0.0f, std::max(0.0f, parent_size.y - toolbar_size.y));
+
+        toolbar.SetProperty("left", std::to_string(new_left) + "px");
+        toolbar.SetProperty("top", std::to_string(new_top) + "px");
+    }
 } // namespace
 
 PieceEditorLayer::PieceEditorLayer() : Layer("PieceEditorLayer") {}
@@ -155,12 +191,14 @@ void PieceEditorLayer::OnAttach()
 
 void PieceEditorLayer::OnDetach()
 {
+    m_card_listeners.clear();
     m_inspector_listeners.clear();
     m_form_listeners.clear();
     m_tag_listeners.clear();
     m_preview_chrome_listeners.clear();
     m_grid_listeners.clear();
-    m_palette_listeners.clear();
+    m_toolbar_listeners.clear();
+    m_painter_dropdown_listeners.clear();
     m_list_listeners.clear();
     m_listeners.clear();
 
@@ -234,8 +272,14 @@ void PieceEditorLayer::LoadDocuments()
         for (auto& listener : previewwindow::Build(*preview_window, m_preview_canvas))
             m_preview_chrome_listeners.push_back(std::move(listener));
 
+    for (const char* card_id : {"details-card", "tags-card"})
+        if (Rml::Element* card = m_editor->GetElementById(card_id))
+            for (auto& listener : fieldwidgets::WireCollapseToggle(*card, /*use_chevron=*/true))
+                m_card_listeners.push_back(std::move(listener));
+
     m_editor->Show();
     WireGridInteraction();
+    WireFloatingToolbar();
 }
 
 void PieceEditorLayer::WireButtonClick(const char* element_id, std::function<void()> on_click)
@@ -366,6 +410,8 @@ void PieceEditorLayer::OpenForEdit(const std::string& id)
     m_pending_delete_id.clear();
     m_selected_cell.reset();
     m_error.clear();
+    SelectTool(Tool::Selector, 0.0f, 0.0f);
+    m_toolbar_default_positioned = false;
 
     m_mode = Mode::Edit;
     ShowScreen(Mode::Edit);
@@ -384,6 +430,8 @@ void PieceEditorLayer::BeginNewPiece()
     m_pending_delete_id.clear();
     m_selected_cell.reset();
     m_error.clear();
+    SelectTool(Tool::Selector, 0.0f, 0.0f);
+    m_toolbar_default_positioned = false;
 
     m_mode = Mode::Edit;
     ShowScreen(Mode::Edit);
@@ -506,72 +554,177 @@ void PieceEditorLayer::RefreshEditForm()
     }
 
     RefreshTagList();
-    RefreshPaletteList();
     RefreshInspector();
     RefreshDirtyDisplay();
 }
 
-void PieceEditorLayer::RefreshPaletteList()
+void PieceEditorLayer::WireFloatingToolbar()
 {
     if (!m_editor)
         return;
-    m_palette_listeners.clear();
-    m_palette_icon_elements.clear();
-
-    Rml::Element* list = m_editor->GetElementById("palette-list");
-    if (!list)
+    Rml::Element* toolbar = m_editor->GetElementById("piece-toolbar");
+    Rml::Element* handle = m_editor->GetElementById("piece-toolbar-handle");
+    Rml::Element* body = m_editor->GetElementById("edit-body");
+    if (!toolbar || !handle || !body)
         return;
 
-    std::string markup = "<div class=\"palette-row eraser\"><div class=\"palette-icon\"></div><span "
-                         "class=\"palette-name\">(eraser)</span></div>";
+    // dragstart/drag is RmlUi's real pointer-capture drag -- see
+    // PreviewWindowChrome::Build's .preview-resize-handle for the same
+    // precedent this mirrors (repositioning left/top here instead of
+    // resizing width/height), including why there is deliberately no
+    // mousedown listener here: RmlUi only arms dragstart/drag if that
+    // mousedown finishes propagating unimpeded, so stopping it would disarm
+    // dragging entirely, and it isn't needed -- #grid-panel's paint/erase
+    // listener is a DOM sibling of this toolbar, not an ancestor, and
+    // #edit-body's painter-dropdown dismiss handler already excludes clicks
+    // on the toolbar or its descendants.
+    for (const char* event_name : {"dragstart", "drag"})
+    {
+        auto listener = std::make_unique<RmlEventListener>(event_name,
+                                                            [this, toolbar](Rml::Event& event)
+                                                            {
+                                                                HandleToolbarDrag(*toolbar, event);
+                                                                event.StopPropagation();
+                                                            });
+        listener->Attach(*handle);
+        m_toolbar_listeners.push_back(std::move(listener));
+    }
+
+    const std::array<std::pair<const char*, Tool>, 3> tool_buttons = {
+        {{"tool-selector", Tool::Selector}, {"tool-painter", Tool::Painter}, {"tool-eraser", Tool::Eraser}}};
+    for (const auto& [element_id, tool] : tool_buttons)
+    {
+        if (Rml::Element* button = m_editor->GetElementById(element_id))
+        {
+            // "mousedown", not "click" -- RmlClickListener discards its
+            // event and there's no proof RmlUi's synthesized "click" event
+            // carries mouse_x/mouse_y. Don't "simplify" this to
+            // RmlClickListener: it would silently break the dropdown's
+            // open-at-the-mouse positioning.
+            auto listener = std::make_unique<RmlEventListener>(
+                "mousedown",
+                [this, tool](Rml::Event& event)
+                {
+                    const float mouse_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+                    const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+                    SelectTool(tool, mouse_x, mouse_y);
+                    event.StopPropagation();
+                });
+            listener->Attach(*button);
+            m_toolbar_listeners.push_back(std::move(listener));
+        }
+    }
+
+    // Outside-click dismiss for the painter dropdown: any mousedown within
+    // #edit-body that didn't land on the toolbar or the dropdown itself
+    // closes it. Runs on the bubble phase after the specific element's own
+    // handler (if any), so e.g. a dropdown row's own click (picking a brush)
+    // is unaffected -- this only fires for clicks genuinely outside both.
+    auto dismiss = std::make_unique<RmlEventListener>(
+        "mousedown",
+        [this](Rml::Event& event)
+        {
+            if (!m_painter_dropdown_open || !m_editor)
+                return;
+            Rml::Element* toolbar_elem = m_editor->GetElementById("piece-toolbar");
+            Rml::Element* dropdown_elem = m_editor->GetElementById("painter-dropdown");
+            Rml::Element* target = event.GetTargetElement();
+            for (Rml::Element* walk = target; walk; walk = walk->GetParentNode())
+                if (walk == toolbar_elem || walk == dropdown_elem)
+                    return;
+            ClosePainterDropdown();
+        });
+    dismiss->Attach(*body);
+    m_toolbar_listeners.push_back(std::move(dismiss));
+}
+
+void PieceEditorLayer::SelectTool(Tool tool, float mouse_x, float mouse_y)
+{
+    const bool was_painter = m_active_tool == Tool::Painter;
+    m_active_tool = tool;
+    RefreshToolbarSelection();
+    if (tool == Tool::Painter)
+        OpenPainterDropdown(mouse_x, mouse_y);
+    else if (was_painter)
+        ClosePainterDropdown();
+}
+
+void PieceEditorLayer::RefreshToolbarSelection()
+{
+    if (!m_editor)
+        return;
+    const std::array<std::pair<Tool, const char*>, 3> tool_buttons = {
+        {{Tool::Selector, "tool-selector"}, {Tool::Painter, "tool-painter"}, {Tool::Eraser, "tool-eraser"}}};
+    for (const auto& [tool, element_id] : tool_buttons)
+        if (Rml::Element* button = m_editor->GetElementById(element_id))
+            button->SetClass("selected", tool == m_active_tool);
+}
+
+void PieceEditorLayer::OpenPainterDropdown(float mouse_x, float mouse_y)
+{
+    if (!m_editor)
+        return;
+    Rml::Element* body = m_editor->GetElementById("edit-body");
+    Rml::Element* dropdown = m_editor->GetElementById("painter-dropdown");
+    if (!body || !dropdown)
+        return;
+
+    m_painter_dropdown_listeners.clear();
+    m_painter_dropdown_icon_elements.clear();
+
+    std::string markup;
     for (const PaletteEntry& entry : m_palette)
         markup += "<div class=\"palette-row\"><div class=\"palette-icon\"></div><span class=\"palette-name\">" +
                   EscapeRml(entry.id_string) + "</span></div>";
-    list->SetInnerRML(markup);
+    dropdown->SetInnerRML(markup);
+    dropdown->SetProperty("display", "block");
+    m_painter_dropdown_open = true;
 
     Rml::ElementList rows;
-    list->QuerySelectorAll(rows, ".palette-row");
-    if (!rows.empty())
+    dropdown->QuerySelectorAll(rows, ".palette-row");
+    for (std::size_t i = 0; i < rows.size() && i < m_palette.size(); ++i)
     {
-        auto listener = std::make_unique<RmlClickListener>(
-            [this]
-            {
-                m_active_brush = -1;
-                RefreshPaletteSelection();
-            });
-        listener->Attach(*rows[0]);
-        m_palette_listeners.push_back(std::move(listener));
-    }
-    for (std::size_t i = 1; i < rows.size() && (i - 1) < m_palette.size(); ++i)
-    {
-        const int index = static_cast<int>(i - 1);
-        m_palette_icon_elements.push_back(rows[i]->QuerySelector(".palette-icon"));
-        auto listener = std::make_unique<RmlClickListener>(
-            [this, index]
-            {
-                m_active_brush = index;
-                RefreshPaletteSelection();
-            });
+        const int index = static_cast<int>(i);
+        m_painter_dropdown_icon_elements.push_back(rows[i]->QuerySelector(".palette-icon"));
+        auto listener = std::make_unique<RmlClickListener>([this, index] { PickBrush(index); });
         listener->Attach(*rows[i]);
-        m_palette_listeners.push_back(std::move(listener));
+        m_painter_dropdown_listeners.push_back(std::move(listener));
     }
-    RefreshPaletteSelection();
+
+    const Rml::Vector2f body_offset = body->GetAbsoluteOffset();
+    const Rml::Vector2f body_size = body->GetBox().GetSize();
+
+    float local_x = mouse_x - body_offset.x;
+    float local_y = mouse_y - body_offset.y;
+
+    // Flip to bottom-origin (extend upward from the mouse) if the dropdown
+    // would otherwise overflow the bottom edge; clamp horizontally either
+    // way. Uses the fixed kPainterDropdownWidth/kPainterDropdownMaxHeight
+    // constants rather than dropdown->GetBox() -- see their doc comment.
+    if (local_y + kPainterDropdownMaxHeight > body_size.y)
+        local_y = std::max(0.0f, local_y - kPainterDropdownMaxHeight);
+    local_x = std::clamp(local_x, 0.0f, std::max(0.0f, body_size.x - kPainterDropdownWidth));
+    local_y = std::clamp(local_y, 0.0f, std::max(0.0f, body_size.y - kPainterDropdownMaxHeight));
+
+    dropdown->SetProperty("left", std::to_string(local_x) + "px");
+    dropdown->SetProperty("top", std::to_string(local_y) + "px");
 }
 
-void PieceEditorLayer::RefreshPaletteSelection()
+void PieceEditorLayer::ClosePainterDropdown()
 {
-    if (!m_editor)
+    if (Rml::Element* dropdown = m_editor ? m_editor->GetElementById("painter-dropdown") : nullptr)
+        dropdown->SetProperty("display", "none");
+    m_painter_dropdown_listeners.clear();
+    m_painter_dropdown_icon_elements.clear();
+    m_painter_dropdown_open = false;
+}
+
+void PieceEditorLayer::PickBrush(int palette_index)
+{
+    if (palette_index < 0 || palette_index >= static_cast<int>(m_palette.size()))
         return;
-    Rml::Element* list = m_editor->GetElementById("palette-list");
-    if (!list)
-        return;
-    Rml::ElementList rows;
-    list->QuerySelectorAll(rows, ".palette-row");
-    for (std::size_t i = 0; i < rows.size(); ++i)
-    {
-        const bool selected = m_active_brush < 0 ? (i == 0) : (static_cast<int>(i) == m_active_brush + 1);
-        rows[i]->SetClass("selected", selected);
-    }
+    m_active_brush = palette_index;
+    ClosePainterDropdown();
 }
 
 void PieceEditorLayer::RefreshInspector()
@@ -580,15 +733,17 @@ void PieceEditorLayer::RefreshInspector()
         return;
     m_inspector_listeners.clear();
 
+    Rml::Element* section = m_editor->GetElementById("selected-cell-section");
     Rml::Element* panel = m_editor->GetElementById("cell-inspector");
-    if (!panel)
+    if (!section || !panel)
         return;
 
     if (!m_selected_cell)
     {
-        panel->SetInnerRML("<div class=\"list-empty\">Click a cell to edit it.</div>");
+        section->SetProperty("display", "none");
         return;
     }
+    section->SetProperty("display", "block");
 
     const Vec2 offset = *m_selected_cell;
     PieceCell* cell = FindCell(offset);
@@ -809,18 +964,15 @@ void PieceEditorLayer::RefreshInspector()
 
             if (Rml::Element* prefab_row = row_element.QuerySelector(".spawn-prefab"))
             {
-                const PieceSpawn& spawn = m_draft.spawns[spawn_index];
-                const PaletteEntry* prefab_entry = PaletteFor(spawn.prefab_id);
-                const std::string prefab_name =
-                    prefab_entry ? prefab_entry->id_string : NameIdRegistry::Find(spawn.prefab_id).value_or("");
-                keep(fieldwidgets::BuildNameIdField(*prefab_row, "prefab_id", spawn.prefab_id, prefab_name,
-                                                    [this, spawn_index](std::uint32_t id, std::string name)
+                std::vector<std::pair<std::uint32_t, std::string>> prefab_options;
+                for (const PaletteEntry& entry : m_palette)
+                    prefab_options.emplace_back(entry.prefab_id, entry.id_string);
+                keep(fieldwidgets::BuildIdEnumField(*prefab_row, "prefab_id", prefab_options,
+                                                    m_draft.spawns[spawn_index].prefab_id,
+                                                    [this, spawn_index](std::uint32_t id)
                                                     {
-                                                        if (spawn_index >= m_draft.spawns.size())
-                                                            return;
-                                                        m_draft.spawns[spawn_index].prefab_id = id;
-                                                        if (!name.empty())
-                                                            NameIdRegistry::Register(id, name);
+                                                        if (spawn_index < m_draft.spawns.size())
+                                                            m_draft.spawns[spawn_index].prefab_id = id;
                                                         MarkDirty();
                                                     }));
             }
@@ -1045,6 +1197,46 @@ void PieceEditorLayer::EraseCell(Vec2 offset)
         }
 }
 
+void PieceEditorLayer::EraseCellBroad(Vec2 offset)
+{
+    EraseCell(offset);
+    bool changed = false;
+    for (std::size_t i = m_draft.sockets.size(); i-- > 0;)
+        if (m_draft.sockets[i].cell_offset == offset)
+        {
+            m_draft.sockets.erase(m_draft.sockets.begin() + static_cast<std::ptrdiff_t>(i));
+            changed = true;
+        }
+    for (std::size_t i = m_draft.spawns.size(); i-- > 0;)
+        if (m_draft.spawns[i].cell_offset == offset)
+        {
+            m_draft.spawns.erase(m_draft.spawns.begin() + static_cast<std::ptrdiff_t>(i));
+            changed = true;
+        }
+    if (changed)
+        MarkDirty();
+}
+
+void PieceEditorLayer::EraseBrushFromCell(Vec2 offset)
+{
+    if (m_active_brush < 0 || m_active_brush >= static_cast<int>(m_palette.size()))
+        return;
+    PieceCell* cell = FindCell(offset);
+    if (!cell)
+        return;
+    const std::uint32_t prefab_id = m_palette[static_cast<std::size_t>(m_active_brush)].prefab_id;
+    const std::size_t before = cell->prefabs.size();
+    cell->prefabs.erase(std::remove_if(cell->prefabs.begin(), cell->prefabs.end(),
+                                       [prefab_id](const PieceCellPrefab& p) { return p.prefab_id == prefab_id; }),
+                        cell->prefabs.end());
+    if (cell->prefabs.size() == before)
+        return;
+    if (cell->prefabs.empty())
+        EraseCell(offset); // narrow erase; already calls MarkDirty()
+    else
+        MarkDirty();
+}
+
 EdgeDirection PieceEditorLayer::DefaultExposedEdge(Vec2 offset) const
 {
     for (const auto& [name, edge] : EnumNames<EdgeDirection>::kValues)
@@ -1067,10 +1259,7 @@ EdgeDirection PieceEditorLayer::DefaultExposedEdge(Vec2 offset) const
 void PieceEditorLayer::PaintCell(Vec2 offset)
 {
     if (m_active_brush < 0 || m_active_brush >= static_cast<int>(m_palette.size()))
-    {
-        EraseCell(offset);
-        return;
-    }
+        return; // no brush picked yet
     const PaletteEntry& entry = m_palette[static_cast<std::size_t>(m_active_brush)];
     PieceCell& cell = CellAt(offset);
     const bool present = std::any_of(cell.prefabs.begin(), cell.prefabs.end(),
@@ -1170,21 +1359,49 @@ std::optional<Vec2> PieceEditorLayer::CellUnder(float screen_x, float screen_y) 
     return Vec2{cell_x, cell_y};
 }
 
+void PieceEditorLayer::PositionToolbarDefault()
+{
+    if (m_toolbar_default_positioned || !m_editor)
+        return;
+
+    Rml::Element* toolbar = m_editor->GetElementById("piece-toolbar");
+    Rml::Element* preview_window = m_editor->GetElementById("preview-window");
+    Rml::Element* body = m_editor->GetElementById("edit-body");
+    if (!toolbar || !preview_window || !body)
+        return;
+
+    const Rml::Vector2f toolbar_size = toolbar->GetBox().GetSize();
+    const Rml::Vector2f preview_size = preview_window->GetBox().GetSize();
+    if (toolbar_size.x <= 0.0f || preview_size.x <= 0.0f)
+        return; // #edit-body isn't laid out yet this frame -- retry next frame
+
+    constexpr float kMargin = 12.0f;
+    const Rml::Vector2f preview_offset = preview_window->GetAbsoluteOffset();
+    const Rml::Vector2f body_offset = body->GetAbsoluteOffset();
+    const float left = (preview_offset.x - body_offset.x) + preview_size.x - toolbar_size.x - kMargin;
+    const float top = (preview_offset.y - body_offset.y) + kMargin;
+
+    toolbar->SetProperty("left", std::to_string(std::max(0.0f, left)) + "px");
+    toolbar->SetProperty("top", std::to_string(std::max(0.0f, top)) + "px");
+    m_toolbar_default_positioned = true;
+}
+
 void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, int output_h)
 {
     const bool have_grid = UpdatePreviewCanvas();
     m_grid_valid = have_grid;
     RefreshZoomReadout();
+    PositionToolbarDefault();
 
     const bool gpu_ready = m_tile_atlas && m_tile_atlas->IsLoaded() && m_gpu_pipeline && m_gpu_pipeline->IsLoaded();
     const Vec2 atlas_size = gpu_ready ? m_tile_atlas->GetSize() : Vec2{0, 0};
     const bool previewing = m_preview_transform != PieceTransform{};
 
     // Kept as two separate vertex batches (rather than one combined draw)
-    // because only grid_vertices lives inside "#grid-panel" -- palette icons
-    // sit in the side "#palette-list" instead, and clipping the whole draw to
-    // the panel rect (see below) would clip them out entirely rather than
-    // just the grid content it's meant to contain.
+    // because only grid_vertices lives inside "#grid-panel" -- painter
+    // dropdown icons sit in the floating "#painter-dropdown" instead, and
+    // clipping the whole draw to the panel rect (see below) would clip them
+    // out entirely rather than just the grid content it's meant to contain.
     std::vector<TileVertex> grid_vertices;
     std::vector<TileVertex> palette_vertices;
     if (gpu_ready && atlas_size.x > 0 && atlas_size.y > 0)
@@ -1217,28 +1434,31 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                 }
             }
 
-        if (Rml::Element* list = m_editor->GetElementById("palette-list"))
+        if (m_painter_dropdown_open)
         {
-            const Rml::Vector2f list_offset = list->GetAbsoluteOffset();
-            const Rml::Vector2f list_size = list->GetBox().GetSize();
-            const float top = list_offset.y;
-            const float bottom = list_offset.y + list_size.y;
-            for (std::size_t i = 0; i < m_palette.size() && i < m_palette_icon_elements.size(); ++i)
+            if (Rml::Element* dropdown = m_editor->GetElementById("painter-dropdown"))
             {
-                Rml::Element* icon = m_palette_icon_elements[i];
-                if (!icon || !m_palette[i].has_renderable)
-                    continue;
-                const Rml::Vector2f pos = icon->GetAbsoluteOffset();
-                const Rml::Vector2f size = icon->GetBox().GetSize();
-                if (pos.y + size.y < top || pos.y > bottom)
-                    continue;
-                const RenderableTile& r = m_palette[i].renderable;
-                if (std::optional<SDL_FRect> src =
-                        m_tile_atlas->GetSourceRect(r.texture_id, r.texture_size.x, r.texture_size.y, r.uv.x, r.uv.y))
+                const Rml::Vector2f list_offset = dropdown->GetAbsoluteOffset();
+                const Rml::Vector2f list_size = dropdown->GetBox().GetSize();
+                const float top = list_offset.y;
+                const float bottom = list_offset.y + list_size.y;
+                for (std::size_t i = 0; i < m_palette.size() && i < m_painter_dropdown_icon_elements.size(); ++i)
                 {
-                    const SDL_FRect box{pos.x, pos.y, size.x, size.y};
-                    AppendSpriteQuad(palette_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size, r.color_1,
-                                     r.color_2, output_w, output_h);
+                    Rml::Element* icon = m_painter_dropdown_icon_elements[i];
+                    if (!icon || !m_palette[i].has_renderable)
+                        continue;
+                    const Rml::Vector2f pos = icon->GetAbsoluteOffset();
+                    const Rml::Vector2f size = icon->GetBox().GetSize();
+                    if (pos.y + size.y < top || pos.y > bottom)
+                        continue;
+                    const RenderableTile& r = m_palette[i].renderable;
+                    if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(
+                            r.texture_id, r.texture_size.x, r.texture_size.y, r.uv.x, r.uv.y))
+                    {
+                        const SDL_FRect box{pos.x, pos.y, size.x, size.y};
+                        AppendSpriteQuad(palette_vertices, NativeSizeRect(box, r.texture_size), *src, atlas_size,
+                                         r.color_1, r.color_2, output_w, output_h);
+                    }
                 }
             }
         }
@@ -1323,28 +1543,51 @@ void PieceEditorLayer::WireGridInteraction()
 {
     if (!m_editor)
         return;
-    Rml::Element* target = m_editor->GetElementById("edit-body");
-    if (!target)
+    Rml::Element* body = m_editor->GetElementById("edit-body");
+    Rml::Element* panel = m_editor->GetElementById("grid-panel");
+    if (!body || !panel)
         return;
 
+    // Paint-click and wheel-zoom are scoped to #grid-panel itself, not the
+    // wider #edit-body, so they can never fire for input inside the
+    // side-column (text fields, the cell inspector, the entity palette's
+    // scrollbars) -- those are simply a different branch of the tree and the
+    // event never reaches these listeners at all. mousemove/mouseup stay on
+    // #edit-body so an in-progress paint or pan drag keeps tracking the
+    // pointer even if it strays outside the panel's bounds mid-drag.
     auto down =
         std::make_unique<RmlEventListener>("mousedown", [this](Rml::Event& event) { HandleGridMouseDown(event); });
-    down->Attach(*target);
+    down->Attach(*panel);
     m_grid_listeners.push_back(std::move(down));
 
     auto move =
         std::make_unique<RmlEventListener>("mousemove", [this](Rml::Event& event) { HandleGridMouseMove(event); });
-    move->Attach(*target);
+    move->Attach(*body);
     m_grid_listeners.push_back(std::move(move));
 
     auto up = std::make_unique<RmlEventListener>("mouseup", [this](Rml::Event& event) { HandleGridMouseUp(event); });
-    up->Attach(*target);
+    up->Attach(*body);
     m_grid_listeners.push_back(std::move(up));
 
     auto scroll =
         std::make_unique<RmlEventListener>("mousescroll", [this](Rml::Event& event) { HandleGridMouseScroll(event); });
-    scroll->Attach(*target);
+    scroll->Attach(*panel);
     m_grid_listeners.push_back(std::move(scroll));
+}
+
+void PieceEditorLayer::CollapseDetailCards()
+{
+    if (!m_editor)
+        return;
+    for (const char* card_id : {"details-card", "tags-card"})
+    {
+        Rml::Element* card = m_editor->GetElementById(card_id);
+        if (!card || card->IsClassSet("collapsed"))
+            continue;
+        card->SetClass("collapsed", true);
+        if (Rml::Element* toggle = card->QuerySelector(".collapse-toggle"))
+            toggle->SetInnerRML("&gt;");
+    }
 }
 
 void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
@@ -1364,22 +1607,43 @@ void PieceEditorLayer::HandleGridMouseDown(Rml::Event& event)
     if (!cell)
         return;
 
-    if (button == 0)
+    const auto refresh_if_selected = [this, &cell]
     {
-        m_painting = true;
-        m_erasing = m_active_brush < 0;
-        m_selected_cell = cell;
-        if (m_erasing)
-            EraseCell(*cell);
-        else
+        if (m_selected_cell && *m_selected_cell == *cell)
+            RefreshInspector();
+    };
+
+    switch (m_active_tool)
+    {
+    case Tool::Selector:
+        if (button == 0)
+        {
+            m_selected_cell = cell;
+            CollapseDetailCards();
+            RefreshInspector();
+        }
+        break;
+    case Tool::Painter:
+        if (button == 0)
+        {
+            m_painting = true;
             PaintCell(*cell);
-        RefreshInspector();
-    }
-    else if (button == 1)
-    {
-        m_selected_cell = cell;
-        EraseCell(*cell);
-        RefreshInspector();
+            refresh_if_selected();
+        }
+        else if (button == 1)
+        {
+            EraseBrushFromCell(*cell);
+            refresh_if_selected();
+        }
+        break;
+    case Tool::Eraser:
+        if (button == 0)
+        {
+            m_erasing = true;
+            EraseCellBroad(*cell);
+            refresh_if_selected();
+        }
+        break;
     }
 }
 
@@ -1389,25 +1653,31 @@ void PieceEditorLayer::HandleGridMouseMove(Rml::Event& event)
     const float mouse_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
     m_preview_canvas.OnMouseMove(mouse_x, mouse_y);
 
-    if (!m_painting)
+    if (!m_painting && !m_erasing)
         return;
     const std::optional<Vec2> cell = CellUnder(mouse_x, mouse_y);
     if (!cell)
         return;
-    if (m_erasing)
-        EraseCell(*cell);
-    else
+
+    if (m_painting && m_active_tool == Tool::Painter)
         PaintCell(*cell);
+    else if (m_erasing && m_active_tool == Tool::Eraser)
+        EraseCellBroad(*cell);
+    else
+        return;
+
+    if (m_selected_cell && *m_selected_cell == *cell)
+        RefreshInspector();
 }
 
 void PieceEditorLayer::HandleGridMouseUp(Rml::Event& event)
 {
     const int button = event.GetParameter<int>("button", -1);
     m_preview_canvas.OnMouseUp(button);
-    if (button == 0 && m_painting)
+    if (button == 0)
     {
         m_painting = false;
-        RefreshInspector();
+        m_erasing = false;
     }
 }
 

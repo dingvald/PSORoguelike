@@ -20,9 +20,10 @@ namespace psr {
 // restore by. On a directional hit, element/status_effect_id/
 // status_chance_percent have a chance to inflict an ailment (see
 // StatusEffectHooks.h's MaybeApplyElementalStatus); a Status-family cast
-// applies its ailment unconditionally instead of dealing damage. No
-// elemental resistance/multiplier table exists yet -- element is otherwise
-// informational this pass.
+// applies its ailment unconditionally instead of dealing damage. Damage
+// casts are mitigated by the target's ElementalResistanceComponent for the
+// spell's element (see CombatMath::ComputeTechniqueDamage) -- PSO techniques
+// bypass DFP and physical race/attribute bonuses entirely.
 //
 // Same free-no-op/cost rules as PhotonArtAction, and the same TPComponent
 // pool (see docs/GDD.md's "PP vs. TP (revised -- collapsed to one pool)" section): a missing weapon,

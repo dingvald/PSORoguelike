@@ -32,7 +32,11 @@ void InnateWeaponComponent::DetachHandlers(entt::registry& registry, entt::entit
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.GetOrEmplace<EventHandlerComponent>().Unsubscribe<DeathEvent, InnateWeaponComponent>();
+    // TryGet, not GetOrEmplace: see EquipmentComponent::DetachHandlers's own
+    // doc comment -- this fires from on_destroy<InnateWeaponComponent> mid-
+    // destroy(), where EventHandlerComponent may already be gone.
+    if (EventHandlerComponent* events = self.TryGet<EventHandlerComponent>())
+        events->Unsubscribe<DeathEvent, InnateWeaponComponent>();
 }
 
 } // namespace psr

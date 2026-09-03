@@ -81,13 +81,18 @@ void StatusEffectComponent::DetachHandlers(entt::registry& registry, entt::entit
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.Get<EventHandlerComponent>();
+    // TryGet, not Get: see TPComponent::DetachHandlers's own doc comment --
+    // this fires from on_destroy<StatusEffectComponent> mid-destroy(), where
+    // EventHandlerComponent may already be gone.
+    EventHandlerComponent* events = self.TryGet<EventHandlerComponent>();
+    if (!events)
+        return;
 
-    events.Unsubscribe<BeforeMoveEvent, StatusEffectComponent>();
-    events.Unsubscribe<BeforeAttackEvent, StatusEffectComponent>();
-    events.Unsubscribe<BeforePhotonArtCastEvent, StatusEffectComponent>();
-    events.Unsubscribe<BeforeTechniqueCastEvent, StatusEffectComponent>();
-    events.Unsubscribe<AfterTurnEvent, StatusEffectComponent>();
+    events->Unsubscribe<BeforeMoveEvent, StatusEffectComponent>();
+    events->Unsubscribe<BeforeAttackEvent, StatusEffectComponent>();
+    events->Unsubscribe<BeforePhotonArtCastEvent, StatusEffectComponent>();
+    events->Unsubscribe<BeforeTechniqueCastEvent, StatusEffectComponent>();
+    events->Unsubscribe<AfterTurnEvent, StatusEffectComponent>();
 }
 
 } // namespace psr

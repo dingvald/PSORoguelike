@@ -16,6 +16,7 @@ local AppAssets = path.translate(path.getabsolute("../App/Assets"), "\\")
 -- gets re-copied from source on every build).
 local AppAssetsFwd = path.getabsolute("../App/Assets")
 local EditorRml = path.translate(path.getabsolute("Assets/RML"), "\\")
+local EditorIcons = path.translate(path.getabsolute("Assets/Icons"), "\\")
 
 project "Editor"
    kind "ConsoleApp"
@@ -115,14 +116,16 @@ project "Editor"
        defines { "DIST" }
        symbols "Off"
 
-   -- Two-stage asset copy: bring in App's runtime assets (fonts) first, then
-   -- overlay the editor's own RmlUi chrome documents into the same Assets/RML
-   -- folder -- mirrors UnnamedRoguelike's Editor/Build-Editor.lua pattern.
+   -- Asset copy: bring in App's runtime assets (fonts) first, then overlay
+   -- the editor's own RmlUi chrome documents and toolbar icon PNGs into
+   -- their own Assets/ subfolders -- mirrors UnnamedRoguelike's
+   -- Editor/Build-Editor.lua pattern.
    filter {}
        postbuildcommands
        {
            'xcopy /y /d /s /i /q /e "' .. AppAssets .. '" "%{cfg.targetdir}\\Assets\\"',
            'xcopy /y /d /s /i /q /e "' .. EditorRml .. '" "%{cfg.targetdir}\\Assets\\RML\\"',
+           'xcopy /y /d /s /i /q /e "' .. EditorIcons .. '" "%{cfg.targetdir}\\Assets\\Icons\\"',
        }
 
    -- Assets are "None" items, which Visual Studio's Fast Up-to-Date Check ignores when

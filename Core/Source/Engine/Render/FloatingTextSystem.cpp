@@ -3,10 +3,10 @@
 namespace psr {
 
 void FloatingTextSystem::Spawn(Vec2 origin_tile, std::string text, Color color, Vec2f direction, float speed,
-                                float duration)
+                               float duration)
 {
-    m_instances.push_back(FloatingTextInstance{origin_tile, Vec2f{}, direction, speed, std::move(text), color,
-                                                duration, 0.0f});
+    m_instances.push_back(
+        FloatingTextInstance{origin_tile, Vec2f{}, direction, speed, std::move(text), color, duration, 0.0f});
 }
 
 void FloatingTextSystem::Update(float delta_time)

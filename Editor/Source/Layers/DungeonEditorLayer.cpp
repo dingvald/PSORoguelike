@@ -94,6 +94,7 @@ void DungeonEditorLayer::OnAttach()
 
 void DungeonEditorLayer::OnDetach()
 {
+    m_card_listeners.clear();
     m_lock_row_listeners.clear();
     m_piece_row_listeners.clear();
     m_form_listeners.clear();
@@ -184,6 +185,11 @@ void DungeonEditorLayer::LoadDocuments()
     if (Rml::Element* preview_window = m_editor->GetElementById("preview-window"))
         for (auto& listener : previewwindow::Build(*preview_window, m_preview_canvas))
             m_preview_chrome_listeners.push_back(std::move(listener));
+
+    for (const char* card_id : {"details-card", "pieces-card", "locks-card"})
+        if (Rml::Element* card = m_editor->GetElementById(card_id))
+            for (auto& listener : fieldwidgets::WireCollapseToggle(*card, /*use_chevron=*/true))
+                m_card_listeners.push_back(std::move(listener));
 
     m_editor->Show();
     WirePreviewInteraction();
@@ -505,13 +511,29 @@ void DungeonEditorLayer::RefreshPieceRefRows()
     if (!list)
         return;
 
-    const std::vector<std::string> content(
-        m_draft.pieces.size(),
-        "<div class=\"ref-id field-row\"></div><div class=\"ref-weight field-row\"></div><div class=\"ref-max "
-        "field-row\"></div>");
+    std::vector<std::pair<std::uint32_t, std::string>> piece_options = {{0, "-- Select Piece --"}};
+    for (const DungeonPiece& piece : m_pieces.All())
+        piece_options.emplace_back(piece.id, piece.name.empty() ? piece.id_string : piece.name);
 
-    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
-        *list, content, "<div class=\"list-empty\">No pieces referenced yet.</div>",
+    const auto ResolvePieceName = [this](std::uint32_t piece_id) -> std::string
+    {
+        for (const DungeonPiece& piece : m_pieces.All())
+            if (piece.id == piece_id)
+                return piece.name.empty() ? piece.id_string : piece.name;
+        return "(no piece selected)";
+    };
+
+    std::vector<std::string> summaries;
+    std::vector<std::string> bodies;
+    for (const DungeonPieceRef& ref : m_draft.pieces)
+    {
+        summaries.push_back(EscapeRml(ResolvePieceName(ref.piece_id)));
+        bodies.push_back("<div class=\"ref-id field-row\"></div><div class=\"ref-weight field-row\"></div>"
+                         "<div class=\"ref-max field-row\"></div>");
+    }
+
+    fieldwidgets::CardList result = fieldwidgets::BuildCardList(
+        *list, summaries, bodies, "<div class=\"list-empty\">No pieces referenced yet.</div>",
         [this](std::size_t index)
         {
             if (index < m_draft.pieces.size())
@@ -535,24 +557,23 @@ void DungeonEditorLayer::RefreshPieceRefRows()
             m_piece_row_listeners.push_back(std::move(listener));
     };
 
-    std::vector<std::pair<std::uint32_t, std::string>> piece_options = {{0, "-- Select Piece --"}};
-    for (const DungeonPiece& piece : m_pieces.All())
-        piece_options.emplace_back(piece.id, piece.name.empty() ? piece.id_string : piece.name);
-
-    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.pieces.size(); ++i)
+    for (std::size_t i = 0; i < result.cards.size() && i < m_draft.pieces.size(); ++i)
     {
         const std::size_t index = i;
         const DungeonPieceRef& ref = m_draft.pieces[i];
+        Rml::Element* summary_label = result.cards[i]->QuerySelector(".component-title");
 
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-id"))
+        if (Rml::Element* row = result.cards[i]->QuerySelector(".ref-id"))
             keep(fieldwidgets::BuildIdEnumField(*row, "piece_id", piece_options, ref.piece_id,
-                                                [this, index](std::uint32_t id)
+                                                [this, index, summary_label, ResolvePieceName](std::uint32_t id)
                                                 {
                                                     if (index < m_draft.pieces.size())
                                                         m_draft.pieces[index].piece_id = id;
                                                     MarkDirty();
+                                                    if (summary_label)
+                                                        summary_label->SetInnerRML(EscapeRml(ResolvePieceName(id)));
                                                 }));
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-weight"))
+        if (Rml::Element* row = result.cards[i]->QuerySelector(".ref-weight"))
             keep(fieldwidgets::BuildFloatField(*row, "weight", ref.weight,
                                                [this, index](float v)
                                                {
@@ -560,7 +581,7 @@ void DungeonEditorLayer::RefreshPieceRefRows()
                                                        m_draft.pieces[index].weight = v;
                                                    MarkDirty();
                                                }));
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".ref-max"))
+        if (Rml::Element* row = result.cards[i]->QuerySelector(".ref-max"))
             keep(fieldwidgets::BuildIntField(*row, "max_occurrences", ref.max_occurrences,
                                              [this, index](int v)
                                              {
@@ -584,11 +605,19 @@ void DungeonEditorLayer::RefreshLockRows()
     if (!list)
         return;
 
-    const std::vector<std::string> content(
-        m_draft.locks.size(), "<div class=\"lock-type field-row\"></div><div class=\"lock-count field-row\"></div>");
+    const auto SummaryFor = [](const std::string& lock_type) -> std::string
+    { return lock_type.empty() ? "(untyped lock)" : lock_type; };
 
-    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
-        *list, content, "<div class=\"list-empty\">No locks configured.</div>",
+    std::vector<std::string> summaries;
+    std::vector<std::string> bodies;
+    for (const DungeonLockConfig& lock : m_draft.locks)
+    {
+        summaries.push_back(EscapeRml(SummaryFor(lock.lock_type)));
+        bodies.push_back("<div class=\"lock-type field-row\"></div><div class=\"lock-count field-row\"></div>");
+    }
+
+    fieldwidgets::CardList result = fieldwidgets::BuildCardList(
+        *list, summaries, bodies, "<div class=\"list-empty\">No locks configured.</div>",
         [this](std::size_t index)
         {
             if (index < m_draft.locks.size())
@@ -612,20 +641,23 @@ void DungeonEditorLayer::RefreshLockRows()
             m_lock_row_listeners.push_back(std::move(listener));
     };
 
-    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.locks.size(); ++i)
+    for (std::size_t i = 0; i < result.cards.size() && i < m_draft.locks.size(); ++i)
     {
         const std::size_t index = i;
         const DungeonLockConfig& lock = m_draft.locks[i];
+        Rml::Element* summary_label = result.cards[i]->QuerySelector(".component-title");
 
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".lock-type"))
+        if (Rml::Element* row = result.cards[i]->QuerySelector(".lock-type"))
             keep(fieldwidgets::BuildStringField(*row, "lock_type", lock.lock_type,
-                                                [this, index](std::string v)
+                                                [this, index, summary_label, SummaryFor](std::string v)
                                                 {
                                                     if (index < m_draft.locks.size())
-                                                        m_draft.locks[index].lock_type = std::move(v);
+                                                        m_draft.locks[index].lock_type = v;
                                                     MarkDirty();
+                                                    if (summary_label)
+                                                        summary_label->SetInnerRML(EscapeRml(SummaryFor(v)));
                                                 }));
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".lock-count"))
+        if (Rml::Element* row = result.cards[i]->QuerySelector(".lock-count"))
             keep(fieldwidgets::BuildIntField(*row, "count", lock.count,
                                              [this, index](int v)
                                              {

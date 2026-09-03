@@ -14,6 +14,7 @@
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Engine/Render/TileRenderer.h"
+#include "Engine/Render/VisualEffectSystem.h"
 #include "Engine/World/Grid.h"
 #include "Items/AffixLibrary.h"
 #include "Items/DropTableLibrary.h"
@@ -29,6 +30,7 @@
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
 #include "Systems/LootDropSystem.h"
+#include "Systems/MissFlashEffectSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -225,6 +227,21 @@ private:
     // entities from *m_grid, so it must be destroyed before m_grid is --
     // declared after m_grid (members destroy in reverse declaration order).
     std::optional<StatusEffectWorldMarkers> m_status_effect_markers;
+
+    // Generic short-lived, prefab-authored, fading world-effect entities (see
+    // VisualEffectSystem.h) -- the player-miss flash (m_miss_flash_effect_system
+    // below) is its first consumer, not its only one. Advanced from OnUpdate
+    // directly, same unconditional-every-frame reasoning as m_floating_text.
+    // Holds only pointers into m_registry/m_grid, so declaration order
+    // relative to them doesn't matter for construction/destruction safety.
+    std::optional<VisualEffectSystem> m_visual_effects;
+
+    // Bridges AttackMissEvent onto m_visual_effects for a player-only flash --
+    // see MissFlashEffectSystem.h. Holds only a pointer into m_visual_effects
+    // (declared just above) plus the player's entt::entity, so it must be
+    // constructed after m_visual_effects but declaration order relative to
+    // m_registry/m_grid doesn't matter.
+    std::optional<MissFlashEffectSystem> m_miss_flash_effect_system;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action

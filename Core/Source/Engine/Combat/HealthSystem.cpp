@@ -18,7 +18,7 @@ namespace {
         health.current_hp = std::clamp(health.current_hp - event.amount, 0, health.max_hp);
         const bool defeated = health.current_hp == 0;
 
-        AfterDamageEvent after{target, event.amount, defeated};
+        AfterDamageEvent after{target, event.amount, event.is_critical, defeated};
         event.source.Dispatch(after);
 
         if (defeated)
@@ -54,9 +54,17 @@ void HealthSystem::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.GetOrEmplace<EventHandlerComponent>();
-    events.Unsubscribe<IncomingDamageEvent, HealthSystem>();
-    events.Unsubscribe<IncomingHealEvent, HealthSystem>();
+    // TryGet, not GetOrEmplace: this fires from on_destroy<HealthComponent>
+    // during whole-entity destruction, where entt::registry::destroy()'s
+    // pool-removal order is registration order, not declaration order --
+    // EventHandlerComponent may already be gone by the time this runs.
+    // GetOrEmplace would resurrect it mid-destroy(), corrupting that pool's
+    // bookkeeping for the rest of the entity's (about to be recycled) index.
+    if (EventHandlerComponent* events = self.TryGet<EventHandlerComponent>())
+    {
+        events->Unsubscribe<IncomingDamageEvent, HealthSystem>();
+        events->Unsubscribe<IncomingHealEvent, HealthSystem>();
+    }
 }
 
 } // namespace psr

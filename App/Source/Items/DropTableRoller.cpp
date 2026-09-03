@@ -4,8 +4,7 @@ namespace psr {
 
 namespace {
 
-    const DropTableEntry* WeightedPick(const std::vector<DropTableEntry>& pool, SectionId section_id,
-                                       std::mt19937& rng)
+    const DropTableEntry* WeightedPick(const std::vector<DropTableEntry>& pool, SectionId section_id, std::mt19937& rng)
     {
         float total_weight = 0.0f;
         for (const DropTableEntry& entry : pool)

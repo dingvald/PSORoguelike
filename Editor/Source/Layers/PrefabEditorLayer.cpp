@@ -462,6 +462,11 @@ namespace {
         return rapidjson::Value(rapidjson::kObjectType);
     }
 
+    rapidjson::Value WriteItemBody(rapidjson::Document::AllocatorType&)
+    {
+        return rapidjson::Value(rapidjson::kObjectType);
+    }
+
     RarityComponent ReadRarityBody(const rapidjson::Value& body)
     {
         RarityComponent rarity;
@@ -508,7 +513,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 10> kComponentKinds = {
+    constexpr std::array<ComponentKind, 11> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -547,6 +552,8 @@ namespace {
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
+         {"item", "Item", "#e8c15d",
+          "<div class=\"list-empty\">No fields -- presence marks this prefab as a pickupable item.</div>"},
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
@@ -950,7 +957,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
-            key == "armor" || key == "mod" || key == "rarity" || key == "consumable" || key == "drop_table")
+            key == "armor" || key == "mod" || key == "item" || key == "rarity" || key == "consumable" ||
+            key == "drop_table")
             m_component_order.emplace_back(key);
     }
 
@@ -1606,8 +1614,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key :
-         {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "rarity", "consumable", "drop_table"})
+    for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
+                             "consumable", "drop_table"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1628,6 +1636,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteArmorBody(m_armor, allocator);
         else if (key == "mod")
             body = WriteModBody(allocator);
+        else if (key == "item")
+            body = WriteItemBody(allocator);
         else if (key == "rarity")
             body = WriteRarityBody(m_rarity, allocator);
         else if (key == "consumable")

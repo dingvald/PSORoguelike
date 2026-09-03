@@ -8,7 +8,7 @@
     "loopback_count_max": 10,
     "pieces": [
         {
-            "piece_id": 2421513152,
+            "piece_id": 2207232316,
             "weight": 1.0,
             "max_occurrences": 20
         },
@@ -23,24 +23,39 @@
             "max_occurrences": 1
         },
         {
-            "piece_id": 1232894280,
-            "weight": 1.0,
-            "max_occurrences": 0
-        },
-        {
-            "piece_id": 3084619018,
+            "piece_id": 559081839,
             "weight": 1.0,
             "max_occurrences": 0
         },
         {
             "piece_id": 1538620031,
             "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": 2947626487,
+            "weight": 1.0,
             "max_occurrences": 3
         },
         {
-            "piece_id": 1266449518,
+            "piece_id": 873071481,
             "weight": 1.0,
             "max_occurrences": 0
+        },
+        {
+            "piece_id": 839516243,
+            "weight": 1.0,
+            "max_occurrences": 2
+        },
+        {
+            "piece_id": 906626719,
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": 3859177488,
+            "weight": 1.0,
+            "max_occurrences": 1
         }
     ],
     "locks": []

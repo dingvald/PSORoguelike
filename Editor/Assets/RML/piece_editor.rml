@@ -34,22 +34,48 @@
                     <div class="side-top">
                         <h3>Id</h3>
                         <div id="field-id" class="field-row"></div>
-                        <h3>Name</h3>
-                        <div id="field-name" class="field-row"></div>
-                        <h3>Area tag</h3>
-                        <div id="field-area-tag" class="field-row"></div>
-                        <h3>Category</h3>
-                        <div id="field-category" class="field-row"></div>
-                        <div id="field-can-rotate" class="field-row"></div>
-                        <div id="field-can-mirror" class="field-row"></div>
-                        <h3>Tags<span id="add-tag" class="btn">+</span></h3>
-                        <div id="field-tags" class="ref-scroll"></div>
-                        <h3>Selected cell</h3>
-                        <div id="cell-inspector" class="fields-panel"></div>
+
+                        <div id="details-card" class="inspector-card list-item">
+                            <div class="inspector-card-header">
+                                <span class="collapse-toggle">v</span>
+                                <span class="component-title">Details</span>
+                            </div>
+                            <div class="inspector-card-body list-item-body">
+                                <h3>Name</h3>
+                                <div id="field-name" class="field-row"></div>
+                                <h3>Area tag</h3>
+                                <div id="field-area-tag" class="field-row"></div>
+                                <h3>Category</h3>
+                                <div id="field-category" class="field-row"></div>
+                                <div id="field-can-rotate" class="field-row"></div>
+                                <div id="field-can-mirror" class="field-row"></div>
+                            </div>
+                        </div>
+
+                        <div id="tags-card" class="inspector-card list-item">
+                            <div class="inspector-card-header">
+                                <span class="collapse-toggle">v</span>
+                                <span class="component-title">Tags</span>
+                                <span id="add-tag" class="btn">+</span>
+                            </div>
+                            <div class="inspector-card-body list-item-body">
+                                <div id="field-tags" class="ref-scroll"></div>
+                            </div>
+                        </div>
+
+                        <div id="selected-cell-section">
+                            <h3>Selected cell</h3>
+                            <div id="cell-inspector" class="fields-panel"></div>
+                        </div>
                     </div>
-                    <h3>Entities &mdash; left-click paints, right-click erases</h3>
-                    <div id="palette-list" class="palette-scroll"></div>
                 </div>
+                <div id="piece-toolbar" class="piece-toolbar">
+                    <div id="piece-toolbar-handle" class="piece-toolbar-handle"></div>
+                    <span id="tool-selector" class="piece-tool-btn"><img src="Assets/Icons/selector.png"/></span>
+                    <span id="tool-painter" class="piece-tool-btn"><img src="Assets/Icons/painter.png"/></span>
+                    <span id="tool-eraser" class="piece-tool-btn"><img src="Assets/Icons/eraser.png"/></span>
+                </div>
+                <div id="painter-dropdown" class="painter-dropdown" style="display: none;"></div>
             </div>
         </div>
     </body>

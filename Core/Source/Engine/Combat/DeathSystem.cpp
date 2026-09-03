@@ -32,7 +32,11 @@ void DeathSystem::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    self.GetOrEmplace<EventHandlerComponent>().Unsubscribe<DeathEvent, DeathSystem>();
+    // TryGet, not GetOrEmplace: see HealthSystem::DetachHandlers's own doc
+    // comment -- this fires from on_destroy<HealthComponent> mid-destroy(),
+    // where EventHandlerComponent may already be gone.
+    if (EventHandlerComponent* events = self.TryGet<EventHandlerComponent>())
+        events->Unsubscribe<DeathEvent, DeathSystem>();
 }
 
 } // namespace psr

@@ -50,3 +50,27 @@ TEST_CASE("DamageTextSystem is a no-op when the target has no Position", "[Damag
 
     REQUIRE(floating_text.Active().empty());
 }
+
+TEST_CASE("DamageTextSystem spawns a gray 'Miss!' at the target's tile on AttackMissEvent", "[DamageTextSystem]")
+{
+    psr::Registry registry;
+    psr::FloatingTextSystem floating_text;
+    psr::DamageTextSystem damage_text(floating_text);
+
+    entt::entity actor_handle = registry.CreateEntity();
+    psr::Entity actor(registry, actor_handle);
+    damage_text.Subscribe(actor);
+
+    entt::entity target_handle = registry.CreateEntity();
+    psr::Entity target(registry, target_handle);
+    target.Emplace<psr::Position>(psr::Vec2{3, 4});
+
+    psr::AttackMissEvent event{target};
+    actor.Dispatch(event);
+
+    REQUIRE(floating_text.Active().size() == 1);
+    const psr::FloatingTextInstance& instance = floating_text.Active()[0];
+    REQUIRE(instance.origin_tile == psr::Vec2{3, 4});
+    REQUIRE(instance.text == "Miss!");
+    REQUIRE(instance.color == psr::Color{180, 180, 180});
+}

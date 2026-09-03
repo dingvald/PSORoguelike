@@ -10,6 +10,7 @@
 #include "Components/StatusEffectComponent.h"
 #include "Components/TweenComponent.h"
 #include "Components/WeaponComponent.h"
+#include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -18,6 +19,9 @@
 #include "Systems/TweenSystem.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
+#include <cstddef>
 
 namespace {
 
@@ -39,10 +43,10 @@ struct DamageEventProbe
 {
 };
 
-// A weapon with generous ATP/ATA so hits are overwhelmingly likely (though
-// never guaranteed -- ComputeHitChance clamps at 0.95) and damage is well
-// above 1, keeping the fixed-seed tests below non-flaky in practice without
-// hand-verifying individual RNG draws.
+// A weapon with generous ATP/ATA so hits are guaranteed (ComputeHitChance's
+// Accuracy = ATA - EVP*0.2 clamps to 1.0 once ATA alone exceeds 100) and
+// damage is well above 1, keeping the fixed-seed tests below non-flaky in
+// practice without hand-verifying individual RNG draws.
 entt::entity MakeWeapon(psr::Registry& registry, psr::WeaponRangeShape shape = psr::WeaponRangeShape::SingleTarget,
                         int range = 1, int hits_per_turn = 1)
 {
@@ -200,10 +204,11 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     DrainAttackTween(registry);
 
     REQUIRE(result.cost == psr::AttackAction::kAttackCost);
-    // ATP 80 vs DFP 0 lands well above 1 damage per hit; five overwhelmingly-
-    // likely hits should clear far more than what any single hit could deal.
+    // ATP 80 vs DFP 0 -> floor((80-0)/5*0.9*variance) caps a single hit at 15
+    // (variance <= 1.1); five guaranteed hits clearing more than that proves
+    // multiple hits landed in one Perform().
     const int damage_dealt = 10000 - enemy.Get<psr::HealthComponent>().current_hp;
-    REQUIRE(damage_dealt > 80);
+    REQUIRE(damage_dealt > 15);
 }
 
 TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
@@ -385,4 +390,75 @@ TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-ch
     REQUIRE(status != nullptr);
     REQUIRE_FALSE(status->active.empty());
     CHECK(status->active.front().status_effect_id == burn.id);
+}
+
+TEST_CASE("AttackAction can chain extra attacks for a player, up to kMaxAttacksPerTurn, via ActionResult::fallback",
+          "[AttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{3};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    // High HP so the enemy survives every chained swing across every
+    // attempt below -- isolates "how many attacks chained" from the death
+    // path (already covered by other tests in this file).
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/1000000, /*player=*/false);
+
+    std::size_t max_queue_seen = 0;
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+        psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+        psr::ActionResult result = psr::ResolveAction(action, actor);
+
+        // Only the last ActionResult in the fallback chain's cost is ever
+        // meant to be applied (see ActionExecutor.h) -- a chained extra
+        // attack must not inflate the turn cost.
+        REQUIRE(result.cost == psr::AttackAction::kAttackCost);
+
+        const std::size_t queue_size = actor.Get<psr::TweenComponent>().queue.size();
+        REQUIRE(queue_size % 2 == 0); // each chained AttackAction queues exactly a lunge/return pair
+        REQUIRE(queue_size <= 2 * psr::AttackAction::kMaxAttacksPerTurn);
+        max_queue_seen = std::max(max_queue_seen, queue_size);
+
+        DrainAttackTween(registry);
+    }
+
+    // With kExtraAttackChance == 0.25, seeing the cap hit at least once across
+    // 500 attempts is effectively certain -- proves chaining actually
+    // happens, not just that it's capped.
+    REQUIRE(max_queue_seen == 2 * psr::AttackAction::kMaxAttacksPerTurn);
+}
+
+TEST_CASE("AttackAction never chains extra attacks for a non-player actor", "[AttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{3};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/false);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/1000000, /*player=*/true);
+
+    for (int attempt = 0; attempt < 50; ++attempt)
+    {
+        psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+        psr::ActionResult result = psr::ResolveAction(action, actor);
+
+        REQUIRE(result.cost == psr::AttackAction::kAttackCost);
+        REQUIRE(actor.Get<psr::TweenComponent>().queue.size() == 2);
+
+        DrainAttackTween(registry);
+    }
 }

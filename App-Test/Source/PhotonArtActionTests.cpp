@@ -30,9 +30,9 @@ struct PhotonArtEventProbe
 {
 };
 
-// A weapon that grants kArtId, generous ATP/ATA so hits are overwhelmingly
-// likely (though never guaranteed -- ComputeHitChance clamps at 0.95),
-// mirrors AttackActionTests.cpp's MakeWeapon.
+// A weapon that grants kArtId, generous ATP/ATA so hits are guaranteed
+// (ComputeHitChance's Accuracy = ATA - EVP*0.2 clamps to 1.0 once ATA alone
+// exceeds 100), mirrors AttackActionTests.cpp's MakeWeapon.
 entt::entity MakeWeapon(psr::Registry& registry, bool grants_art = true)
 {
     entt::entity weapon = registry.CreateEntity();

@@ -108,7 +108,15 @@ namespace fieldwidgets {
     // class. No-op (returns empty) if item has no ".collapse-toggle" child.
     // Collapse state is purely a view concern and isn't preserved across a full
     // rebuild of item's parent list.
-    Listeners WireCollapseToggle(Rml::Element& item);
+    //
+    // use_chevron picks the glyph pair: false (default) is PrefabEditorLayer's/
+    // DropTableEditorLayer's original "+"/"-", kept as-is for those pre-existing
+    // cards; true is ">"/"v", used by every new collapsible-card call site
+    // (BuildCardList below, and any static per-screen card wired directly with
+    // this function) -- both are plain ASCII for the same reason the original
+    // comment gave: the editor's pixel font isn't guaranteed to have Unicode
+    // geometric-shape/triangle codepoints.
+    Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron = false);
 
     // Wires native RmlUi drag-and-drop reordering across an already-built row
     // set: rows[i]/handles[i] must be parallel (same length, same order).
@@ -151,6 +159,35 @@ namespace fieldwidgets {
     RowList BuildRowList(Rml::Element& container, const std::vector<std::string>& content_html,
                          const std::string& empty_message, std::function<void(std::size_t)> on_remove,
                          std::function<void(std::size_t, std::size_t)> request_reorder);
+
+    // BuildRowList's sibling for entries with enough fields that showing them
+    // all inline would overwhelm the sidebar -- the fuller header+chevron+body
+    // "inspector card" chrome PrefabEditorLayer's component cards established
+    // (generalized here so other rebuildable lists, e.g. Dungeon's piece-refs/
+    // locks, can look and behave the same way instead of hand-rolling their own
+    // card loop; Prefab's own cards predate this helper and aren't ported to it
+    // -- they keep their own "+"/"-" glyph). Rebuilds container with one
+    // ".inspector-card.list-item" per entry in summaries/bodies (parallel
+    // arrays, same length): summaries[i] is the card header's label (plain
+    // text/markup -- e.g. a resolved display name -- not itself an editable
+    // field; if the field that determines it can change, the caller re-queries
+    // cards[i]->QuerySelector(".component-title") to update it live, same as
+    // Dungeon's piece-ref/lock cards do for their id/type fields), and
+    // bodies[i] is the collapsible body's inner markup (the caller's own
+    // field-row containers, wired exactly as BuildRowList's rows are). Cards
+    // start collapsed, using the ">"/"v" chevron glyph (WireCollapseToggle's
+    // use_chevron=true). Wires collapse, remove (on_remove(index)), and
+    // drag-reorder (request_reorder, same deferred-only constraint as
+    // WireDragReorder/BuildRowList).
+    struct CardList
+    {
+        Listeners listeners;
+        std::vector<Rml::Element*> cards;
+    };
+    CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& summaries,
+                           const std::vector<std::string>& bodies, const std::string& empty_message,
+                           std::function<void(std::size_t)> on_remove,
+                           std::function<void(std::size_t, std::size_t)> request_reorder);
 
     // Shared index math for every request_reorder callback (WireDragReorder/
     // BuildRowList's contract): moves the element at from_index to

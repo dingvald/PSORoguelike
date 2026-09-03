@@ -386,7 +386,7 @@ BuildTextureField(Rml::Element& row, const std::string& label, std::uint32_t ini
     return out;
 }
 
-Listeners WireCollapseToggle(Rml::Element& item)
+Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron)
 {
     Rml::Element* toggle = item.QuerySelector(".collapse-toggle");
     if (!toggle)
@@ -395,14 +395,14 @@ Listeners WireCollapseToggle(Rml::Element& item)
     Rml::Element* item_ptr = &item;
     Listeners out;
     auto listener = std::make_unique<RmlClickListener>(
-        [item_ptr, toggle]
+        [item_ptr, toggle, use_chevron]
         {
-            // Plain "+"/"-" rather than a Unicode triangle glyph: the editor's
-            // pixel font isn't guaranteed to have geometric-shape codepoints,
-            // and ASCII is guaranteed to render in any font.
             const bool now_collapsed = !item_ptr->IsClassSet("collapsed");
             item_ptr->SetClass("collapsed", now_collapsed);
-            toggle->SetInnerRML(now_collapsed ? "+" : "-");
+            if (use_chevron)
+                toggle->SetInnerRML(now_collapsed ? "&gt;" : "v");
+            else
+                toggle->SetInnerRML(now_collapsed ? "+" : "-");
         });
     listener->Attach(*toggle);
     out.push_back(std::move(listener));
@@ -526,6 +526,60 @@ RowList BuildRowList(Rml::Element& container, const std::vector<std::string>& co
     }
 
     for (auto& listener : WireDragReorder(result.rows, handles, std::move(request_reorder)))
+        result.listeners.push_back(std::move(listener));
+
+    return result;
+}
+
+CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& summaries,
+                       const std::vector<std::string>& bodies, const std::string& empty_message,
+                       std::function<void(std::size_t)> on_remove,
+                       std::function<void(std::size_t, std::size_t)> request_reorder)
+{
+    CardList result;
+    if (summaries.empty())
+    {
+        container.SetInnerRML(empty_message);
+        return result;
+    }
+
+    std::string markup;
+    for (std::size_t i = 0; i < summaries.size() && i < bodies.size(); ++i)
+        markup += "<div class=\"inspector-card list-item collapsed\"><div class=\"inspector-card-header\">"
+                  "<span class=\"drag-handle\">|||</span><span class=\"collapse-toggle\">&gt;</span>"
+                  "<span class=\"component-title\">" +
+                  summaries[i] + "</span><span class=\"btn row-card-remove\">x</span></div>"
+                  "<div class=\"inspector-card-body list-item-body\">" + bodies[i] + "</div></div>";
+    container.SetInnerRML(markup);
+
+    Rml::ElementList element_cards;
+    container.QuerySelectorAll(element_cards, ".inspector-card");
+    result.cards.assign(element_cards.begin(), element_cards.end());
+
+    std::vector<Rml::Element*> handles;
+    handles.reserve(result.cards.size());
+    for (Rml::Element* card : result.cards)
+        handles.push_back(card ? card->QuerySelector(".drag-handle") : nullptr);
+
+    for (std::size_t i = 0; i < result.cards.size(); ++i)
+    {
+        Rml::Element* card = result.cards[i];
+        if (!card)
+            continue;
+
+        for (auto& listener : WireCollapseToggle(*card, /*use_chevron=*/true))
+            result.listeners.push_back(std::move(listener));
+
+        const std::size_t index = i;
+        if (Rml::Element* remove_button = card->QuerySelector(".row-card-remove"))
+        {
+            auto listener = std::make_unique<RmlClickListener>([on_remove, index] { on_remove(index); });
+            listener->Attach(*remove_button);
+            result.listeners.push_back(std::move(listener));
+        }
+    }
+
+    for (auto& listener : WireDragReorder(result.cards, handles, std::move(request_reorder)))
         result.listeners.push_back(std::move(listener));
 
     return result;

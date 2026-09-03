@@ -138,9 +138,15 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 if (!target.IsValid())
                     break;
 
-                const float hit_chance = ComputeHitChance(attacker_stats.ata, defender_stats.evp);
+                const int combo_ata =
+                    static_cast<int>(std::lround(static_cast<float>(attacker_stats.ata) * ComboAtaMultiplier(hit)));
+                const float hit_chance = ComputeHitChance(combo_ata, defender_stats.evp);
                 if (unit_roll(*m_rng) > hit_chance)
+                {
+                    AttackMissEvent miss{target};
+                    actor.Dispatch(miss);
                     continue; // miss
+                }
 
                 if (art->effect_family == EffectFamily::Status)
                 {
@@ -150,9 +156,10 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                     continue;
                 }
 
-                int damage = static_cast<int>(std::lround(
-                    ComputeDamage(attacker_stats.atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
-                damage = ApplyRaceBonus(damage, before_cast.race_bonuses, defender_race_id);
+                const int boosted_atp = ApplyRaceBonus(attacker_stats.atp, before_cast.race_bonuses, defender_race_id);
+                int damage = static_cast<int>(
+                    std::lround(ComputeDamage(boosted_atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
+                damage = ApplyCritical(damage, unit_roll(*m_rng) < ComputeCritChance(attacker_stats.lck));
 
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);

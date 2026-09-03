@@ -31,7 +31,7 @@ void LootDropSystem::Subscribe(Entity player)
 {
     EventHandlerComponent& events = player.GetOrEmplace<EventHandlerComponent>();
     events.Subscribe<AfterDamageEvent, LootDropSystem>([this](Entity actor, AfterDamageEvent& event)
-                                                        { OnDamage(actor, event); });
+                                                       { OnDamage(actor, event); });
 }
 
 void LootDropSystem::OnDamage(Entity player, AfterDamageEvent& event)

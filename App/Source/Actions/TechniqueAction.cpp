@@ -8,7 +8,7 @@
 #include "Combat/TargetResolution.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueCastEvent.h"
-#include "Components/RaceComponent.h"
+#include "Components/ElementalResistanceComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
@@ -38,11 +38,10 @@ TechniqueAction::TechniqueAction(Grid& grid, const TechniqueLibrary& techniques,
 ActionResult TechniqueAction::Perform(Entity actor)
 {
     // EquipmentComponent's own handler resolves the equipped weapon (if any)
-    // and fills has_weapon/weapon_grants_id/race_bonuses/attacker_stats;
-    // TPComponent's own handler fills current_tp/has_tp_component -- this
-    // action never reads EquipmentComponent/WeaponComponent directly, and
-    // only touches TPComponent for the deduction below, once the gate has
-    // already passed.
+    // and fills has_weapon/weapon_grants_id/attacker_stats; TPComponent's own
+    // handler fills current_tp/has_tp_component -- this action never reads
+    // EquipmentComponent/WeaponComponent directly, and only touches
+    // TPComponent for the deduction below, once the gate has already passed.
     BeforeTechniqueCastEvent before_cast{m_technique_id};
     actor.Dispatch(before_cast);
     if (before_cast.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
@@ -74,7 +73,6 @@ ActionResult TechniqueAction::Perform(Entity actor)
 
     const StatsComponent& attacker_stats = before_cast.attacker_stats;
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
-    std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
 
     if (offset == Vec2{0, 0})
     {
@@ -88,9 +86,11 @@ ActionResult TechniqueAction::Perform(Entity actor)
         {
             if (actor.Has<HealthComponent>())
             {
+                const ElementalResistanceComponent* self_resistance = actor.TryGet<ElementalResistanceComponent>();
+                const int self_resistance_percent =
+                    self_resistance ? self_resistance->ResistanceFor(technique->element) : 0;
                 int damage = static_cast<int>(
-                    std::lround(ComputeTechniqueDamage(attacker_stats.mst, attacker_stats.dfp, variance_roll(*m_rng)) *
-                                multiplier));
+                    std::lround(ComputeTechniqueDamage(attacker_stats.mst, self_resistance_percent) * multiplier));
 
                 BeforeDamageEvent before{actor, damage};
                 actor.Dispatch(before);
@@ -122,15 +122,17 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 continue;
 
             const StatsComponent defender_stats = ComputeEffectiveStats(target, *m_affixes);
-            const RaceComponent* defender_race = target.TryGet<RaceComponent>();
-            const std::uint32_t defender_race_id = defender_race ? defender_race->race_id : 0;
 
             // hits_per_turn has no Technique-side equivalent (a single
             // resolution per target, unlike PhotonArt's weapon-style
             // multi-hit) -- Techniques are single-cast spells per GDD.
             const float hit_chance = ComputeHitChance(attacker_stats.ata, defender_stats.evp);
             if (unit_roll(*m_rng) > hit_chance)
+            {
+                AttackMissEvent miss{target};
+                actor.Dispatch(miss);
                 continue; // miss
+            }
 
             if (technique->effect_family == EffectFamily::Status)
             {
@@ -140,9 +142,11 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 continue;
             }
 
-            int damage = static_cast<int>(std::lround(
-                ComputeTechniqueDamage(attacker_stats.mst, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
-            damage = ApplyRaceBonus(damage, before_cast.race_bonuses, defender_race_id);
+            const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+            const int resistance_percent =
+                defender_resistance ? defender_resistance->ResistanceFor(technique->element) : 0;
+            int damage = static_cast<int>(
+                std::lround(ComputeTechniqueDamage(attacker_stats.mst, resistance_percent) * multiplier));
 
             BeforeDamageEvent before{target, damage};
             actor.Dispatch(before);

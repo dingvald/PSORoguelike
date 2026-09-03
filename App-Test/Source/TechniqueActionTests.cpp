@@ -4,6 +4,7 @@
 #include "Combat/TechniqueCastEvent.h"
 #include "Combat/TechniqueLibrary.h"
 #include "CombatRegistrySetup.h"
+#include "Components/ElementalResistanceComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
@@ -288,8 +289,13 @@ TEST_CASE("TechniqueAction applies a tier power multiplier", "[TechniqueAction]"
     REQUIRE(boosted_damage > base_damage);
 }
 
-TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
+TEST_CASE("TechniqueAction damage is unaffected by the weapon's race/attribute bonus", "[TechniqueAction]")
 {
+    // PSO's Native/A.Beast/Machine/Dark weapon attribute is a physical
+    // mechanic (see AttackActionTests.cpp/PhotonArtActionTests.cpp's own
+    // "applies a matching race bonus" cases) that never modifies Technique
+    // damage -- this pins that fidelity fix rather than the old (incorrect)
+    // behavior.
     psr::AffixLibrary affixes;
     const std::uint32_t matching_race = 111;
     const std::uint32_t other_race = 222;
@@ -324,10 +330,52 @@ TEST_CASE("TechniqueAction applies a matching race bonus", "[TechniqueAction]")
         return 100000 - enemy.Get<psr::HealthComponent>().current_hp;
     };
 
-    const int damage_with_bonus = RunCast(matching_race);
-    const int damage_without_bonus = RunCast(other_race);
+    const int damage_with_matching_race = RunCast(matching_race);
+    const int damage_with_other_race = RunCast(other_race);
 
-    REQUIRE(damage_with_bonus > damage_without_bonus);
+    REQUIRE(damage_with_matching_race == damage_with_other_race);
+}
+
+TEST_CASE("TechniqueAction damage is reduced by the target's elemental resistance for the spell's element",
+          "[TechniqueAction]")
+{
+    psr::AffixLibrary affixes;
+
+    auto RunCast = [&](int resistance_percent) -> int
+    {
+        psr::Registry registry;
+        psr::Grid grid{5, 5};
+        psr::StatusEffectLibrary status_effects;
+        psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+        std::mt19937 rng{42};
+
+        psr::Technique technique;
+        technique.tp_cost = 0;
+        technique.range_shape = psr::WeaponRangeShape::SingleTarget;
+        technique.range = 1;
+        technique.effect_family = psr::EffectFamily::Damage;
+        technique.element = psr::Element::Fire;
+        psr::TechniqueLibrary techniques = MakeLibrary(technique);
+
+        psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/80, /*ata=*/200, /*tp=*/100000);
+        entt::entity weapon = MakeWeapon(registry);
+        actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+        actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+        psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/100000);
+        psr::ElementalResistanceComponent resistance;
+        resistance.fire = resistance_percent;
+        enemy.Emplace<psr::ElementalResistanceComponent>(resistance);
+
+        psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+        action.Perform(actor);
+        return 100000 - enemy.Get<psr::HealthComponent>().current_hp;
+    };
+
+    const int damage_without_resistance = RunCast(0);
+    const int damage_with_resistance = RunCast(50);
+
+    REQUIRE(damage_with_resistance < damage_without_resistance);
 }
 
 TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEvent on a self-target cast",

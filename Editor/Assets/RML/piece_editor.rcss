@@ -14,6 +14,13 @@
     flex-direction: column;
 }
 
+/* Anchor for .piece-toolbar/.painter-dropdown's position: absolute --
+   content_editor.rcss's .edit-body has no position set (it's display: flex),
+   which would otherwise anchor those to a further ancestor. */
+#edit-body {
+    position: relative;
+}
+
 #field-preview {
     flex: 0 0 auto;
     margin-bottom: 6px;
@@ -71,18 +78,99 @@ h3 .btn {
     display: none;
 }
 
+/* #palette-list is gone (replaced by the floating painter dropdown), so
+   .side-top is .side-column's only remaining child -- it now fills the
+   column instead of capping at 55% with dead space below it. */
 .side-top {
-    flex: 0 0 auto;
-    max-height: 55%;
-    box-sizing: border-box;
-    overflow-y: auto;
-}
-
-.palette-scroll {
     flex: 1 1 auto;
     min-height: 0;
     box-sizing: border-box;
     overflow-y: auto;
+}
+
+/* Floating, draggable tool palette -- position: relative on #edit-body
+   (below) is required for this position: absolute to anchor there instead
+   of some further ancestor. Lives as a sibling of .grid-column/.side-column,
+   not nested inside .grid-column, since that column clips overflow and
+   would cut off a toolbar dragged near its edge. Its <img> icons (in
+   piece_editor.rml) use "Assets/Icons/..." rather than "../Icons/..." --
+   despite this document living in Assets/RML/, <img src> resolves relative
+   to the process's working directory (the Editor's own targetdir, same as
+   EditorFilepaths' non-Data paths), not relative to the document's own
+   folder as RmlUi's JoinPath might suggest.
+
+   left/top below are only the pre-layout fallback -- PositionToolbarDefault
+   overwrites them (top-right corner of #preview-window) once #edit-body has
+   a real laid-out size, on every fresh Edit-mode entry. Once positioned
+   (default or user-dragged), later frames leave it alone. */
+.piece-toolbar {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #1c1e24;
+    border: 1px #33363f;
+    padding: 4px;
+}
+
+.piece-toolbar-handle {
+    display: block;
+    width: 14px;
+    height: 28px;
+    cursor: move;
+    drag: drag;
+    background-color: #33363f;
+}
+
+.piece-toolbar-handle:hover {
+    background-color: #454a56;
+}
+
+.piece-tool-btn {
+    display: block;
+    width: 28px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 5px;
+    background-color: #262932;
+    border: 1px #33363f;
+    cursor: pointer;
+}
+
+.piece-tool-btn:hover {
+    background-color: #2f333e;
+    border-color: #454a56;
+}
+
+.piece-tool-btn.selected {
+    background-color: #23303d;
+    border-color: #5cc8ff;
+}
+
+.piece-tool-btn img {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
+/* Prefab picker for the Painter tool -- opens at the mouse position when the
+   Painter tool is selected, positioned/sized by the layer in C++ (including
+   the edge-flip logic to keep it on screen). Rows below reuse the same
+   .palette-row/.palette-icon/.palette-name look #palette-list used to have.
+   width/max-height are fixed (not just min-*) and must match
+   kPainterDropdownWidth/kPainterDropdownMaxHeight in PieceEditorLayer.cpp --
+   the layer positions this element using those constants rather than reading
+   its live box size, to avoid a same-call pre-layout read. */
+.painter-dropdown {
+    position: absolute;
+    width: 200px;
+    min-height: 40px;
+    max-height: 280px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: #1c1e24;
     border: 1px #33363f;
 }
 
@@ -124,8 +212,6 @@ h3 .btn {
     white-space: nowrap;
     text-overflow: ellipsis;
 }
-
-.palette-row.eraser .palette-name { color: #e5a15c; }
 
 .fields-panel {
     display: block;

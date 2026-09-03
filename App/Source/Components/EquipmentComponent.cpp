@@ -55,7 +55,6 @@ namespace {
 
         event.has_weapon = true;
         event.weapon_grants_id = Grants(weapon->technique_ids, event.technique_id);
-        event.race_bonuses = weapon->race_bonuses;
     }
 
     void ContributePhotonArtCast(Entity actor, BeforePhotonArtCastEvent& event)
@@ -93,11 +92,19 @@ void EquipmentComponent::DetachHandlers(entt::registry& registry, entt::entity e
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.GetOrEmplace<EventHandlerComponent>();
+    // TryGet, not GetOrEmplace: this fires from on_destroy<EquipmentComponent>
+    // during whole-entity destruction, where entt::registry::destroy()'s
+    // pool-removal order is registration order, not declaration order --
+    // EventHandlerComponent may already be gone by the time this runs.
+    // GetOrEmplace would resurrect it mid-destroy(), corrupting that pool's
+    // bookkeeping for the rest of the entity's (about to be recycled) index.
+    EventHandlerComponent* events = self.TryGet<EventHandlerComponent>();
+    if (!events)
+        return;
 
-    events.Unsubscribe<BeforeAttackEvent, EquipmentComponent>();
-    events.Unsubscribe<BeforeTechniqueCastEvent, EquipmentComponent>();
-    events.Unsubscribe<BeforePhotonArtCastEvent, EquipmentComponent>();
+    events->Unsubscribe<BeforeAttackEvent, EquipmentComponent>();
+    events->Unsubscribe<BeforeTechniqueCastEvent, EquipmentComponent>();
+    events->Unsubscribe<BeforePhotonArtCastEvent, EquipmentComponent>();
 }
 
 } // namespace psr

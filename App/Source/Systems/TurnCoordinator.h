@@ -20,7 +20,7 @@ enum class TurnStep
     AwaitingInput,      // nothing to resolve this call -- no actor is ready, or the player has no pending input
     Resolved,           // the player's action (or a free no-op it attempted) resolved this call
     TargetingRequested, // a pending IAction* has requested a target -- see ITargetRequestSink
-    PlayerDefeated, // the last PlayerControlledComponent-tagged actor was just destroyed -- see Step()'s own comment
+    PlayerDefeated,    // the last PlayerControlledComponent-tagged actor was just destroyed -- see Step()'s own comment
     AnimationsPending, // the just-resolved action queued a TweenComponent -- see ExploringState's AnimationState push
 };
 

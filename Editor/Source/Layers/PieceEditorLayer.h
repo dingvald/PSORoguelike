@@ -69,6 +69,13 @@ private:
         Edit
     };
 
+    enum class Tool
+    {
+        Selector,
+        Painter,
+        Eraser
+    };
+
     // One palette entry: an entity prefab resolved to the sprite it should
     // draw with. Built once from the Entities directory (see BuildPalette).
     struct PaletteEntry
@@ -92,9 +99,10 @@ private:
 
     // -- Edit mode --
     void RefreshEditForm();
-    void RefreshPaletteList();
-    void RefreshPaletteSelection();
     void RefreshInspector();
+    // Collapses "details-card"/"tags-card" (see WireCollapseToggle) so the
+    // cell inspector has room -- called on cell selection.
+    void CollapseDetailCards();
     // One nested tag/connects_to_tags row-list within a socket's row in the
     // inspector -- container is that socket's ".socket-tag-list"/
     // ".socket-connects-list" element; connects_to picks which of the
@@ -113,10 +121,27 @@ private:
     // -- Cell editing --
     PieceCell* FindCell(Vec2 offset);
     PieceCell& CellAt(Vec2 offset); // find-or-create
-    void EraseCell(Vec2 offset);
-    void PaintCell(Vec2 offset); // apply the active brush (prefab or eraser)
+    void EraseCell(Vec2 offset);    // narrow: just the cell/prefabs entry -- used by inspector row-remove
+    void EraseCellBroad(Vec2 offset);     // Eraser tool: EraseCell plus any sockets/spawns at this offset
+    void EraseBrushFromCell(Vec2 offset); // Painter tool's right-click: just the active brush's prefab entry
+    void PaintCell(Vec2 offset);          // apply the active brush
     EdgeDirection DefaultExposedEdge(Vec2 offset) const;
     const PaletteEntry* PaletteFor(std::uint32_t prefab_id) const;
+
+    // -- Floating toolbar / painter dropdown --
+    void WireFloatingToolbar();
+    // Places the toolbar at the preview window's top-right corner, once per
+    // Edit-mode entry (see m_toolbar_default_positioned) and only once
+    // "#preview-window"/"#piece-toolbar" have a real laid-out size -- called
+    // every frame from RenderEditContent until it succeeds, same "retry
+    // until layout is ready" pattern as UpdatePreviewCanvas. Leaves the
+    // toolbar wherever the user last dragged it otherwise.
+    void PositionToolbarDefault();
+    void SelectTool(Tool tool, float mouse_x, float mouse_y);
+    void RefreshToolbarSelection();
+    void OpenPainterDropdown(float mouse_x, float mouse_y);
+    void ClosePainterDropdown();
+    void PickBrush(int palette_index);
 
     // -- Grid render + interaction --
     void RenderEditContent(SDL_Renderer& renderer, int output_w, int output_h);
@@ -137,24 +162,31 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
-    std::vector<std::unique_ptr<RmlClickListener>> m_listeners;         // static toolbar buttons
-    std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners;    // rebuildable piece-list rows
-    std::vector<std::unique_ptr<RmlClickListener>> m_palette_listeners; // rebuildable palette rows
-    std::vector<std::unique_ptr<RmlEventListener>> m_grid_listeners;    // #edit-body mouse listeners
-    fieldwidgets::Listeners m_form_listeners;                           // id/name/area_tag/category fields
+    std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
+    std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable piece-list rows
+    std::vector<std::unique_ptr<RmlEventListener>> m_grid_listeners; // #edit-body mouse listeners
+    fieldwidgets::Listeners m_card_listeners; // static Details/Tags inspector-card collapse toggles
+    fieldwidgets::Listeners m_form_listeners; // id/name/area_tag/category fields
     fieldwidgets::Listeners m_inspector_listeners;
     fieldwidgets::Listeners m_tag_listeners;            // #field-tags rows -- self-refreshed, see RefreshTagList
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
-    std::vector<Rml::Element*> m_palette_icon_elements; // aligned with m_palette
+    fieldwidgets::Listeners m_toolbar_listeners;        // floating toolbar handle + 3 tool buttons, wired once
+    fieldwidgets::Listeners m_painter_dropdown_listeners; // painter dropdown rows -- rebuilt each open
+    std::vector<Rml::Element*> m_painter_dropdown_icon_elements; // aligned with m_palette, valid while dropdown open
 
     // Reorder (drag-drop) finalizes here, one frame after the drag gesture
     // itself -- see fieldwidgets::WireDragReorder's doc comment for why.
     // Drained once at the top of OnRender.
     std::function<void()> m_pending_action;
 
+    // -- Tools / floating toolbar --
+    Tool m_active_tool = Tool::Selector;
+    bool m_painter_dropdown_open = false;
+    bool m_toolbar_default_positioned = false; // see PositionToolbarDefault
+
     // -- Palette --
     std::vector<PaletteEntry> m_palette;
-    int m_active_brush = -1; // -1 = eraser, else index into m_palette
+    int m_active_brush = -1; // -1 = no brush picked yet, else index into m_palette
 
     // -- List state --
     PieceLibrary m_pieces;
@@ -174,7 +206,8 @@ private:
     // so the grid reads as a read-only "how would this look" view.
     PieceTransform m_preview_transform;
 
-    // -- Paint drag --
+    // -- Paint drag -- m_painting/m_erasing track a continuous left-drag
+    // under the Painter/Eraser tool respectively (only one is ever true).
     bool m_painting = false;
     bool m_erasing = false;
 

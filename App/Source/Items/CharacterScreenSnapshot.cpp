@@ -12,7 +12,7 @@
 namespace psr {
 
 CharacterScreenMessage BuildCharacterScreenMessage(const Registry& registry, entt::entity player,
-                                                    const AffixLibrary& affixes)
+                                                   const AffixLibrary& affixes)
 {
     CharacterScreenMessage message;
 
@@ -27,7 +27,7 @@ CharacterScreenMessage BuildCharacterScreenMessage(const Registry& registry, ent
     if (const EquipmentComponent* equipment = registry.TryGetComponent<EquipmentComponent>(player))
     {
         const std::array<entt::entity, 5> slots = {equipment->weapon, equipment->head, equipment->torso,
-                                                    equipment->hands, equipment->legs};
+                                                   equipment->hands, equipment->legs};
         for (std::size_t i = 0; i < slots.size(); ++i)
         {
             if (slots[i] != entt::null)

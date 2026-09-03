@@ -8,15 +8,17 @@ class TargetSelectionState;
 class GameOverState;
 class AnimationState;
 
-// Normal play: forwards key events into TurnCoordinator::PressKey/
-// ReleaseKey and drives its Step() loop every Update() -- the same behavior
-// GameplayLayer::OnEvent/OnUpdate performed directly before this state
-// machine existed, now hosted as the base/bottom state on GameStateMachine's
-// stack so a modal state (TargetSelectionState) can suspend it the same way
-// UnnamedRoguelike's own ExploringState is suspended by its TargetSelection/
-// Animating/Inventory states. TurnStep::PlayerDefeated suspends it the same
-// way, pushing GameOverState instead -- and TurnStep::AnimationsPending
-// pushes AnimationState, once a resolved Move/Attack has queued a Tween.
+// Normal play: forwards key-down events into TurnCoordinator::PressKey
+// (key-up is handled globally by GameplayLayer::OnEvent, not gated to this
+// state -- see its own doc comment) and drives its Step() loop every
+// Update() -- the same behavior GameplayLayer::OnEvent/OnUpdate performed
+// directly before this state machine existed, now hosted as the base/bottom
+// state on GameStateMachine's stack so a modal state (TargetSelectionState)
+// can suspend it the same way UnnamedRoguelike's own ExploringState is
+// suspended by its TargetSelection/Animating/Inventory states.
+// TurnStep::PlayerDefeated suspends it the same way, pushing GameOverState
+// instead -- and TurnStep::AnimationsPending pushes AnimationState, once a
+// resolved Move/Attack has queued a Tween.
 class ExploringState : public GameState
 {
 public:

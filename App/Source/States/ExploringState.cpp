@@ -40,17 +40,13 @@ StateTransition ExploringState::Update(GameplayContext& context, float delta_tim
 
 bool ExploringState::HandleEvent(Event& event, GameplayContext& context)
 {
+    // KeyReleasedEvent is handled unconditionally by GameplayLayer::OnEvent
+    // before the state machine is ever reached -- see its own doc comment.
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<KeyPressedEvent>(
         [&context](KeyPressedEvent& key_event)
         {
             context.turn_coordinator.PressKey(key_event.GetKeyCode());
-            return true;
-        });
-    dispatcher.Dispatch<KeyReleasedEvent>(
-        [&context](KeyReleasedEvent& key_event)
-        {
-            context.turn_coordinator.ReleaseKey(key_event.GetKeyCode());
             return true;
         });
     return event.handled;

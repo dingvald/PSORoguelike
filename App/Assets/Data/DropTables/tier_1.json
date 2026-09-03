@@ -1,0 +1,16 @@
+{
+    "schema_version": 1,
+    "name": "Tier 1",
+    "common_entries": [
+        {
+            "item_prefab_id": 747223895,
+            "weight": 1.0,
+            "section_id_weights": {}
+        }
+    ],
+    "rare_entries": [],
+    "guaranteed_item_ids": [],
+    "rare_roll_chance_percent": 0.0,
+    "meseta_min": 5,
+    "meseta_max": 25
+}

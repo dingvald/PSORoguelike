@@ -121,6 +121,6 @@ TEST_CASE("UnequipSlot moves the item back into inventory and clears the slot", 
 
     REQUIRE(psr::UnequipSlot(actor, psr::EquipmentSlot::Weapon));
 
-    REQUIRE(actor.Get<psr::EquipmentComponent>().weapon == entt::null);
+    REQUIRE((actor.Get<psr::EquipmentComponent>().weapon == entt::null));
     REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{weapon});
 }

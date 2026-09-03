@@ -1,25 +1,15 @@
 {
     "schema_version": 1,
-    "name": "test_hall1",
+    "name": "hall_straight_7",
     "area_tag": "",
     "category": "corridor",
     "can_rotate": true,
     "can_mirror": false,
+    "tags": [],
     "cells": [
         {
             "offset": {
-                "x": 12,
-                "y": 12
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "test"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 11,
+                "x": 9,
                 "y": 12
             },
             "prefabs": [
@@ -41,7 +31,7 @@
         },
         {
             "offset": {
-                "x": 9,
+                "x": 11,
                 "y": 12
             },
             "prefabs": [
@@ -52,18 +42,18 @@
         },
         {
             "offset": {
-                "x": 13,
-                "y": 11
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "wall"
-                }
-            ]
-        },
-        {
-            "offset": {
                 "x": 12,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 8,
                 "y": 11
             },
             "prefabs": [
@@ -74,7 +64,7 @@
         },
         {
             "offset": {
-                "x": 11,
+                "x": 9,
                 "y": 11
             },
             "prefabs": [
@@ -96,7 +86,7 @@
         },
         {
             "offset": {
-                "x": 9,
+                "x": 11,
                 "y": 11
             },
             "prefabs": [
@@ -107,7 +97,18 @@
         },
         {
             "offset": {
-                "x": 8,
+                "x": 12,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
                 "y": 11
             },
             "prefabs": [
@@ -196,6 +197,39 @@
         {
             "offset": {
                 "x": 13,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "test"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 14,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 14,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 14,
                 "y": 12
             },
             "prefabs": [
@@ -208,25 +242,25 @@
     "sockets": [
         {
             "cell_offset": {
-                "x": 8,
+                "x": 14,
                 "y": 12
             },
-            "edge": "west",
+            "edge": "east",
             "tags": [
                 "hallway"
             ],
             "connects_to_tags": [
-                "door",
-                "hallway"
+                "hallway",
+                "door"
             ],
             "fallback_prefab_id": "wall"
         },
         {
             "cell_offset": {
-                "x": 13,
+                "x": 8,
                 "y": 12
             },
-            "edge": "east",
+            "edge": "west",
             "tags": [
                 "hallway"
             ],

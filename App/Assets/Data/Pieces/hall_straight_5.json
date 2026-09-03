@@ -1,10 +1,11 @@
 {
     "schema_version": 1,
-    "name": "test_hall3",
+    "name": "hall_straight_5",
     "area_tag": "",
     "category": "corridor",
     "can_rotate": true,
     "can_mirror": false,
+    "tags": [],
     "cells": [
         {
             "offset": {
@@ -52,12 +53,12 @@
         },
         {
             "offset": {
-                "x": 8,
-                "y": 11
+                "x": 13,
+                "y": 12
             },
             "prefabs": [
                 {
-                    "prefab_id": "wall"
+                    "prefab_id": "test"
                 }
             ]
         },
@@ -168,72 +169,6 @@
             "prefabs": [
                 {
                     "prefab_id": "wall"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 8,
-                "y": 13
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "wall"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 8,
-                "y": 12
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "test"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 13,
-                "y": 12
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "test"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 14,
-                "y": 13
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "wall"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 14,
-                "y": 11
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "wall"
-                }
-            ]
-        },
-        {
-            "offset": {
-                "x": 14,
-                "y": 12
-            },
-            "prefabs": [
-                {
-                    "prefab_id": "test"
                 }
             ]
         }
@@ -241,10 +176,10 @@
     "sockets": [
         {
             "cell_offset": {
-                "x": 14,
+                "x": 9,
                 "y": 12
             },
-            "edge": "east",
+            "edge": "west",
             "tags": [
                 "hallway"
             ],
@@ -256,16 +191,16 @@
         },
         {
             "cell_offset": {
-                "x": 8,
+                "x": 13,
                 "y": 12
             },
-            "edge": "west",
+            "edge": "east",
             "tags": [
                 "hallway"
             ],
             "connects_to_tags": [
-                "door",
-                "hallway"
+                "hallway",
+                "door"
             ],
             "fallback_prefab_id": "wall"
         }

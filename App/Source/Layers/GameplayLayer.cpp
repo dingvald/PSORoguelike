@@ -18,6 +18,7 @@
 #include "Components/InventoryComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
+#include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/WeaponComponent.h"
@@ -40,6 +41,7 @@
 #include "Items/DropTableLibraryFile.h"
 #include "Items/Equip.h"
 #include "Layers/HudLayer.h"
+#include "Messages/CharacterScreenMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
@@ -87,8 +89,8 @@ namespace {
     // per CLAUDE.md's division of labor -- until authored, these ids simply
     // never match anything in the player's inventory, so the slots stay
     // inert rather than erroring.
-    constexpr const char* kMonomatePrefabId = "consumables.monomate";
-    constexpr const char* kMonofluidPrefabId = "consumables.monofluid";
+    constexpr const char* kMonomatePrefabId = "monomate";
+    constexpr const char* kMonofluidPrefabId = "monofluid";
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9.
     std::optional<int> KeyCodeToHotbarSlot(int key_code)
@@ -203,6 +205,23 @@ void GameplayLayer::LoadNewGame()
     // occupancy.
     m_registry.SetGrid(*m_grid);
 
+    // Writes an eased alpha into RenderableComponent::color_1/color_2 --
+    // VisualEffectSystem (Core) can't name that App-only type itself, so this
+    // callback is how it reaches through without knowing what it's writing to
+    // (see VisualEffectSystem.h's own doc comment).
+    m_visual_effects.emplace(m_registry, *m_grid,
+                             [this](entt::entity entity, std::uint8_t alpha)
+                             {
+                                 if (RenderableComponent* renderable =
+                                         m_registry.TryGetComponent<RenderableComponent>(entity))
+                                 {
+                                     renderable->color_1.a = alpha;
+                                     renderable->color_2.a = alpha;
+                                 }
+                             });
+    m_miss_flash_effect_system.emplace(*m_visual_effects, m_player);
+    m_miss_flash_effect_system->Subscribe(Entity(m_registry, m_player));
+
     // Must be constructed before any entity's EnergyComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
     // OnConstruct<EnergyComponent> listener, wired in its constructor. That
@@ -233,6 +252,7 @@ void GameplayLayer::LoadNewGame()
         }
         m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
         m_damage_text_system.Subscribe(Entity(m_registry, entity));
+        m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
     };
 
     const DungeonInstantiation instantiation =
@@ -250,7 +270,7 @@ void GameplayLayer::LoadNewGame()
 
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
-    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{100, 100});
+    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
     // Same "hardcoded until M10.3 character creation exists" deferral as
     // HealthComponent above -- there's no Section ID picker yet, and no drop
     // has happened yet to credit any Meseta.
@@ -354,6 +374,7 @@ void GameplayLayer::OnUpdate(float delta_time)
     m_camera.Update(delta_time);
 
     m_floating_text.Update(delta_time);
+    m_visual_effects->Update(delta_time);
     PublishFloatingTextState();
 }
 
@@ -504,10 +525,9 @@ void GameplayLayer::PublishFloatingTextState()
 
     for (const FloatingTextInstance& instance : m_floating_text.Active())
     {
-        const PixelPosition pixel =
-            TileToPixel(instance.origin_tile, instance.offset, m_camera.GetPosition(), m_last_render_width,
-                        m_last_render_height, static_cast<float>(kTileWidth), static_cast<float>(kTileHeight),
-                        m_camera.GetRenderOffset());
+        const PixelPosition pixel = TileToPixel(
+            instance.origin_tile, instance.offset, m_camera.GetPosition(), m_last_render_width, m_last_render_height,
+            static_cast<float>(kTileWidth), static_cast<float>(kTileHeight), m_camera.GetRenderOffset());
         state.entries.push_back(FloatingTextStateMessage::Entry{pixel.x, pixel.y, instance.text, instance.color});
     }
 
@@ -574,6 +594,22 @@ void GameplayLayer::PublishHotbarState()
 void GameplayLayer::OnEvent(Event& event)
 {
     if (!m_turn_coordinator || !m_grid)
+        return;
+
+    // Key-up must reach the input buffer no matter which GameState is on
+    // top -- unlike presses, releases aren't gated to ExploringState, since a
+    // Move's TweenComponent pushes AnimationState for the animation's
+    // duration and a release landing in that window would otherwise never
+    // clear the buffer's held-key state, leaving it auto-repeating the last
+    // direction indefinitely.
+    EventDispatcher release_dispatcher(event);
+    release_dispatcher.Dispatch<KeyReleasedEvent>(
+        [this](KeyReleasedEvent& key_event)
+        {
+            m_turn_coordinator->ReleaseKey(key_event.GetKeyCode());
+            return true;
+        });
+    if (event.handled)
         return;
 
     // Hotbar key-press trigger and the Character-screen toggle only

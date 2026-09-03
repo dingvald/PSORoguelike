@@ -82,16 +82,20 @@ fieldwidgets::Listeners Build(Rml::Element& container, PreviewCanvas& preview_ca
 
     if (Rml::Element* handle = container.QuerySelector(".preview-resize-handle"))
     {
-        // The handle sits inside "#edit-body", which every editor layer
-        // already wires mousedown/mousemove/mouseup to PreviewCanvas pan and
-        // (for Piece) paint-cell hit-testing. Without stopping propagation, a
-        // resize-drag's initial mousedown would also bubble to #edit-body's
-        // handler -- for Piece, painting/erasing the cell under the handle
-        // while the user is trying to resize instead.
-        auto mouse_down = std::make_unique<RmlEventListener>("mousedown",
-                                                              [](Rml::Event& event) { event.StopPropagation(); });
-        mouse_down->Attach(*handle);
-        listeners.push_back(std::move(mouse_down));
+        // No mousedown listener here, deliberately: RmlUi only arms its
+        // internal drag-candidate search if the mousedown event finishes
+        // propagating unimpeded (see Context::ProcessMouseButtonDown --
+        // `propagate = hover->DispatchEvent(EventId::Mousedown, ...)`, and
+        // the whole dragstart/drag setup is gated on `if (propagate)`).
+        // Calling StopPropagation() on mousedown here would silently disarm
+        // dragstart/drag before they ever fire. It's also unneeded: a
+        // resize-drag's mousedown does bubble to #edit-body's own
+        // mousedown/mousemove listeners (PreviewCanvas pan, Piece's paint-
+        // cell hit-testing), but PreviewCanvas::OnMouseDown only arms
+        // panning for the middle button, and Piece's paint/erase listener
+        // lives on "#grid-panel" -- a DOM sibling of this handle, never an
+        // ancestor -- so it's structurally unreachable by bubbling from here
+        // regardless.
 
         // dragstart/drag is RmlUi's real pointer-capture drag (continues
         // following the pointer even once it leaves the handle's own tiny

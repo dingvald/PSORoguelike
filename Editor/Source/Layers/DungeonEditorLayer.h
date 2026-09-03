@@ -117,7 +117,8 @@ private:
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable dungeon-list rows
     std::vector<std::unique_ptr<RmlEventListener>> m_preview_listeners; // #edit-body pan/zoom listeners
-    fieldwidgets::Listeners m_form_listeners;                        // id/name/area_tag/room/loopback fields
+    fieldwidgets::Listeners m_card_listeners; // static Details/Pieces/Locks inspector-card collapse toggles
+    fieldwidgets::Listeners m_form_listeners; // id/name/area_tag/room/loopback fields
     fieldwidgets::Listeners m_piece_row_listeners;
     fieldwidgets::Listeners m_lock_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome

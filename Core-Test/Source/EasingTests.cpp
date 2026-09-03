@@ -35,3 +35,17 @@ TEST_CASE("EaseInQuad starts slower than linear (back-loaded)", "[Easing]")
 {
     REQUIRE(psr::EaseInQuad(0.25f) < 0.25f);
 }
+
+TEST_CASE("Linear maps t to itself", "[Easing]")
+{
+    REQUIRE(psr::Linear(0.0f) == 0.0f);
+    REQUIRE(psr::Linear(0.25f) == 0.25f);
+    REQUIRE(psr::Linear(1.0f) == 1.0f);
+}
+
+TEST_CASE("Ease dispatches to the matching curve", "[Easing]")
+{
+    REQUIRE(psr::Ease(psr::EasingCurve::Linear, 0.25f) == psr::Linear(0.25f));
+    REQUIRE(psr::Ease(psr::EasingCurve::EaseOutQuad, 0.25f) == psr::EaseOutQuad(0.25f));
+    REQUIRE(psr::Ease(psr::EasingCurve::EaseInQuad, 0.25f) == psr::EaseInQuad(0.25f));
+}

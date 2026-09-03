@@ -34,24 +34,47 @@
                 <div class="side-column">
                     <h3>Id</h3>
                     <div id="field-id" class="field-row"></div>
-                    <h3>Name</h3>
-                    <div id="field-name" class="field-row"></div>
-                    <h3>Area tag</h3>
-                    <div id="field-area-tag" class="field-row"></div>
-                    <h3>Room count</h3>
-                    <div id="field-room-min" class="field-row"></div>
-                    <div id="field-room-max" class="field-row"></div>
-                    <h3>Loopback count</h3>
-                    <div id="field-loopback-min" class="field-row"></div>
-                    <div id="field-loopback-max" class="field-row"></div>
-                    <h3>Pieces &mdash; weight/max per dungeon
-                        <span id="add-piece-ref" class="btn">Add Piece</span>
-                    </h3>
-                    <div id="piece-ref-list" class="ref-scroll"></div>
-                    <h3>Locks &mdash; type + count
-                        <span id="add-lock" class="btn">Add Lock</span>
-                    </h3>
-                    <div id="lock-list" class="ref-scroll"></div>
+
+                    <div id="details-card" class="inspector-card list-item">
+                        <div class="inspector-card-header">
+                            <span class="collapse-toggle">v</span>
+                            <span class="component-title">Details</span>
+                        </div>
+                        <div class="inspector-card-body list-item-body">
+                            <h3>Name</h3>
+                            <div id="field-name" class="field-row"></div>
+                            <h3>Area tag</h3>
+                            <div id="field-area-tag" class="field-row"></div>
+                            <h3>Room count</h3>
+                            <div id="field-room-min" class="field-row"></div>
+                            <div id="field-room-max" class="field-row"></div>
+                            <h3>Loopback count</h3>
+                            <div id="field-loopback-min" class="field-row"></div>
+                            <div id="field-loopback-max" class="field-row"></div>
+                        </div>
+                    </div>
+
+                    <div id="pieces-card" class="inspector-card list-item">
+                        <div class="inspector-card-header">
+                            <span class="collapse-toggle">v</span>
+                            <span class="component-title">Pieces</span>
+                            <span id="add-piece-ref" class="btn">Add Piece</span>
+                        </div>
+                        <div class="inspector-card-body list-item-body">
+                            <div id="piece-ref-list" class="ref-scroll"></div>
+                        </div>
+                    </div>
+
+                    <div id="locks-card" class="inspector-card list-item">
+                        <div class="inspector-card-header">
+                            <span class="collapse-toggle">v</span>
+                            <span class="component-title">Locks</span>
+                            <span id="add-lock" class="btn">Add Lock</span>
+                        </div>
+                        <div class="inspector-card-body list-item-body">
+                            <div id="lock-list" class="ref-scroll"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

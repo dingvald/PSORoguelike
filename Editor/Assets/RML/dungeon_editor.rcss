@@ -1,11 +1,9 @@
 /* Dungeon Editor's own styles, beyond the shared List/Edit shell in
-   content_editor.rcss and the shared row-card system in field_widgets.rcss
-   (both linked before this file) -- just the piece-ref/lock list's scroll
-   box and per-field widths. */
-
-h3 .btn {
-    margin-left: 8px;
-}
+   content_editor.rcss and the shared row-card/inspector-card system in
+   field_widgets.rcss (both linked before this file) -- just the piece-ref/
+   lock list's scroll box. Each entry is its own collapsible inspector card
+   (see fieldwidgets::BuildCardList), so their field-rows stack full-width
+   inside .inspector-card-body rather than needing a flex-item width rule. */
 
 .ref-scroll {
     display: block;
@@ -15,9 +13,4 @@ h3 .btn {
     overflow-y: auto;
     border: 1px #33363f;
     margin-bottom: 6px;
-}
-
-.ref-id, .ref-weight, .ref-max, .lock-type, .lock-count {
-    flex: 1 1 auto;
-    min-width: 0;
 }

@@ -1,0 +1,24 @@
+{
+    "schema_version": 1,
+    "components": {
+        "consumable": {
+            "effect": "restore_hp",
+            "amount": 75
+        },
+        "renderable": {
+            "texture_id": "item_pickup",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#000000ff",
+            "color_2": "#076e00ff",
+            "render_layer": 0
+        },
+        "item": {}
+    }
+}

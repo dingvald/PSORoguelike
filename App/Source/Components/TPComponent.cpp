@@ -44,10 +44,17 @@ void TPComponent::DetachHandlers(entt::registry& registry, entt::entity entity)
 {
     Registry& psr_registry = Registry::FromEntt(registry);
     Entity self(psr_registry, entity);
-    EventHandlerComponent& events = self.Get<EventHandlerComponent>();
+    // TryGet, not Get: this fires from on_destroy<TPComponent> during whole-
+    // entity destruction, where entt::registry::destroy()'s pool-removal
+    // order is registration order, not declaration order -- EventHandlerComponent
+    // may already be gone by the time this runs (see EquipmentComponent::
+    // DetachHandlers's own doc comment for the full mechanism).
+    EventHandlerComponent* events = self.TryGet<EventHandlerComponent>();
+    if (!events)
+        return;
 
-    events.Unsubscribe<BeforeTechniqueCastEvent, TPComponent>();
-    events.Unsubscribe<BeforePhotonArtCastEvent, TPComponent>();
+    events->Unsubscribe<BeforeTechniqueCastEvent, TPComponent>();
+    events->Unsubscribe<BeforePhotonArtCastEvent, TPComponent>();
 }
 
 } // namespace psr

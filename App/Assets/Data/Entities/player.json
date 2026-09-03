@@ -1,23 +1,31 @@
 {
     "schema_version": 1,
-    "components": {
-      "innate_weapon": {
-        "weapon_prefab_id": "weapons.saber"
+  "components": {
+    "innate_weapon": {
+      "weapon_prefab_id": "weapons.saber"
+    },
+    "blocks_movement": {},
+    "renderable": {
+      "texture_id": "human_male",
+      "texture_size": {
+        "x": 16,
+        "y": 24
       },
-      "blocks_movement": {},
-      "renderable": {
-        "texture_id": "human_male",
-        "texture_size": {
-          "x": 16,
-          "y": 24
-        },
-        "uv": {
-          "x": 0,
-          "y": 0
-        },
-        "color_1": "#e0c8a0ff",
-        "color_2": "#3a2a1aff",
-        "render_layer": 1
-      }
+      "uv": {
+        "x": 0,
+        "y": 0
+      },
+      "color_1": "#e0c8a0ff",
+      "color_2": "#3a2a1aff",
+      "render_layer": 1
+    },
+    "stats": {
+      "atp": 45,
+      "ata": 68,
+      "mst": 29,
+      "dfp": 17,
+      "evp": 45,
+      "lck": 10
     }
+  }
 }

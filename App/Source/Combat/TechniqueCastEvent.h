@@ -1,10 +1,8 @@
 #pragma once
 
 #include "Components/StatsComponent.h"
-#include "Components/WeaponComponent.h" // RaceBonusEntry
 
 #include <cstdint>
-#include <vector>
 
 namespace psr {
 
@@ -12,17 +10,18 @@ namespace psr {
 // (Entity::Dispatch) at the very start of Perform(), before TechniqueAction
 // touches any component itself. EquipmentComponent's own handler resolves
 // the equipped weapon (if any) and fills has_weapon/weapon_grants_id/
-// race_bonuses/attacker_stats; TPComponent's own handler fills current_tp/
+// attacker_stats; TPComponent's own handler fills current_tp/
 // has_tp_component. TechniqueAction checks these fields in place of reading
 // EquipmentComponent/WeaponComponent/TPComponent directly, then still
 // performs the actual TP deduction itself once past the gate -- see
 // AfterTechniqueCastEvent, dispatched right after, once the cast is
 // confirmed to happen. Unlike BeforeAttackEvent/BeforePhotonArtCastEvent,
-// this event carries no element/status_effect_id fields of its own --
-// Technique's element is spell-authored (Technique::element) rather than
-// weapon-derived, so TechniqueAction reads those straight off the Technique
-// struct instead. StatusEffectComponent's own handler still sets
-// cancelled = true when the caster is Shocked.
+// this event carries no element/status_effect_id/race_bonuses fields of its
+// own -- Technique's element is spell-authored (Technique::element) rather
+// than weapon-derived, and PSO's Native/A.Beast/Machine/Dark weapon
+// attribute never modifies technique damage, so TechniqueAction has no use
+// for either. StatusEffectComponent's own handler still sets cancelled =
+// true when the caster is Shocked.
 struct BeforeTechniqueCastEvent
 {
     std::uint32_t technique_id = 0;
@@ -30,7 +29,6 @@ struct BeforeTechniqueCastEvent
     bool weapon_grants_id = false;
     int current_tp = 0;
     bool has_tp_component = false;
-    std::vector<RaceBonusEntry> race_bonuses;
     StatsComponent attacker_stats;
     bool cancelled = false;
 };

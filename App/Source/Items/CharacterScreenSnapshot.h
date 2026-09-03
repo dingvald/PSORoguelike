@@ -15,6 +15,6 @@ struct CharacterScreenMessage;
 // call it without depending on each other -- same "layers/states never
 // reference each other" rule CombatLogBridge.h's doc comment already states.
 CharacterScreenMessage BuildCharacterScreenMessage(const Registry& registry, entt::entity player,
-                                                    const AffixLibrary& affixes);
+                                                   const AffixLibrary& affixes);
 
 } // namespace psr

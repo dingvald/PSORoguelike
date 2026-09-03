@@ -65,10 +65,12 @@ namespace {
 
     // No Color -> CSS-string conversion exists anywhere yet -- every other
     // HUD color is a fixed hud.rcss rule, never a per-instance runtime value.
+    // RmlUi's rgba() takes all four channels as 0-255 integers (unlike CSS3's
+    // fractional alpha) -- matches every existing rgba(...) in hud.rcss.
     std::string ColorToRgbaCss(Color color)
     {
-        return "rgba(" + std::to_string(color.r) + "," + std::to_string(color.g) + "," + std::to_string(color.b) +
-               "," + std::to_string(static_cast<float>(color.a) / 255.0f) + ")";
+        return "rgba(" + std::to_string(color.r) + "," + std::to_string(color.g) + "," + std::to_string(color.b) + "," +
+               std::to_string(color.a) + ")";
     }
 } // namespace
 
@@ -350,8 +352,8 @@ void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)
     for (const FloatingTextStateMessage::Entry& entry : message.entries)
     {
         markup += "<span class=\"floating-text\" style=\"left:" + std::to_string(entry.screen_x) +
-                  "px; top:" + std::to_string(entry.screen_y) + "px; color:" + ColorToRgbaCss(entry.color) +
-                  ";\">" + EscapeRml(entry.text) + "</span>";
+                  "px; top:" + std::to_string(entry.screen_y) + "px; color:" + ColorToRgbaCss(entry.color) + ";\">" +
+                  EscapeRml(entry.text) + "</span>";
     }
     layer->SetInnerRML(markup);
 }

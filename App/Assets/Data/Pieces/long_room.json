@@ -5,6 +5,7 @@
     "category": "room",
     "can_rotate": true,
     "can_mirror": false,
+    "tags": [],
     "cells": [
         {
             "offset": {
@@ -1171,5 +1172,22 @@
             "fallback_prefab_id": "wall"
         }
     ],
-    "spawns": []
+    "spawns": [
+        {
+            "cell_offset": {
+                "x": 7,
+                "y": 12
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 0
+        },
+        {
+            "cell_offset": {
+                "x": 14,
+                "y": 12
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 0
+        }
+    ]
 }

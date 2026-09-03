@@ -21,7 +21,17 @@ struct AfterDamageEvent
 {
     Entity target;
     int amount = 0;
+    bool is_critical = false;
     bool target_defeated = false;
+};
+
+// Dispatched by AttackAction/TechniqueAction/PhotonArtAction to the acting
+// entity, same "acting entity" convention as Before/AfterDamageEvent above --
+// fired instead of Before/AfterDamageEvent when a hit roll (ComputeHitChance)
+// fails, so a listener never sees both events for the same swing.
+struct AttackMissEvent
+{
+    Entity target;
 };
 
 // Dispatched by a damage source (AttackAction/PhotonArtAction/TechniqueAction/
@@ -39,6 +49,7 @@ struct IncomingDamageEvent
 {
     Entity source; // who to dispatch AfterDamageEvent at once this is applied
     int amount = 0;
+    bool is_critical = false;
 };
 
 // Dispatched by HealthSystem to an entity whose HealthComponent::current_hp
