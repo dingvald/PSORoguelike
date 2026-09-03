@@ -96,7 +96,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                IncomingDamageEvent incoming{actor, damage};
+                IncomingDamageEvent incoming{actor, damage, false, before_cast.hit_effect_prefab_id,
+                                             before_cast.hit_effect_duration};
                 actor.Dispatch(incoming);
             }
         }
@@ -165,7 +166,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                IncomingDamageEvent incoming{actor, damage};
+                IncomingDamageEvent incoming{actor, damage, false, before_cast.hit_effect_prefab_id,
+                                             before_cast.hit_effect_duration};
                 target.Dispatch(incoming);
 
                 if (art->effect_family == EffectFamily::Drain)

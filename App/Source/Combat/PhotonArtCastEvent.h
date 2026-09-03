@@ -31,6 +31,8 @@ struct BeforePhotonArtCastEvent
     Element element = Element::None;
     std::uint32_t status_effect_id = 0;
     int status_chance_percent = 0;
+    std::uint32_t hit_effect_prefab_id = 0; // weapon's OnHitEffectComponent, 0 = none
+    float hit_effect_duration = 0.3f;
     bool cancelled = false;
 };
 

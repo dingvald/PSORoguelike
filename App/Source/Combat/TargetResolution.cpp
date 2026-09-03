@@ -20,6 +20,17 @@ namespace {
                 return true;
         return false;
     }
+
+    // A tile a non-piercing projectile should stop at: something occupies it
+    // that carries a HealthComponent (hostile or not -- see
+    // BuildProjectilePath's own doc comment).
+    bool IsCreatureTile(Registry& registry, const Grid& grid, Vec2 tile)
+    {
+        for (entt::entity occupant : grid.GetEntities(tile))
+            if (registry.HasComponent<HealthComponent>(occupant))
+                return true;
+        return false;
+    }
 } // namespace
 
 std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction,
@@ -68,6 +79,24 @@ std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 
     }
     }
     return tiles;
+}
+
+std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction, int range,
+                                      bool pierces)
+{
+    std::vector<Vec2> path;
+    for (int i = 1; i <= range; ++i)
+    {
+        const Vec2 tile = origin + direction * i;
+        if (!grid.Contains(tile))
+            break;
+        if (IsWallTile(registry, grid, tile))
+            break;
+        path.push_back(tile);
+        if (!pierces && IsCreatureTile(registry, grid, tile))
+            break;
+    }
+    return path;
 }
 
 Vec2 SnapToCardinalDirection(Vec2 offset)

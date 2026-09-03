@@ -80,9 +80,12 @@ ActionResult AttackAction::Perform(Entity actor)
     const std::uint32_t status_effect_id = before_attack.status_effect_id;
     const int status_chance_percent = before_attack.status_chance_percent;
     const StatsComponent attacker_stats = before_attack.attacker_stats;
+    const std::uint32_t hit_effect_prefab_id = before_attack.hit_effect_prefab_id;
+    const float hit_effect_duration = before_attack.hit_effect_duration;
 
     auto apply_damage = [registry_ptr, affixes, rng, actor_handle, targets, hits_per_turn, race_bonuses,
-                         status_effect_id, status_chance_percent, attacker_stats]()
+                         status_effect_id, status_chance_percent, attacker_stats, hit_effect_prefab_id,
+                         hit_effect_duration]()
     {
         Registry& registry = *registry_ptr;
         Entity actor(registry, actor_handle);
@@ -123,7 +126,7 @@ ActionResult AttackAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                IncomingDamageEvent incoming{actor, damage, is_critical};
+                IncomingDamageEvent incoming{actor, damage, is_critical, hit_effect_prefab_id, hit_effect_duration};
                 target.Dispatch(incoming);
 
                 if (!target.IsValid())

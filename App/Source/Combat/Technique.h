@@ -56,6 +56,26 @@ struct Technique
                                         // Damage/Drain family: status_chance_percent roll on hit
     int status_chance_percent = 0;      // Damage/Drain family only
     std::vector<TechniqueTier> tiers;
+
+    // Projectile travel (see ProjectileComponent.h/ProjectileAdvanceAction.h):
+    // 0 (default) means the cast resolves instantly, same as before this
+    // field existed (zonde's shape); > 0 is tiles traveled per one normal
+    // actor's turn -- the cast spawns a projectile_prefab_id entity instead
+    // of resolving damage inline, only meaningful for range_shape
+    // SingleTarget/Line and targeting_mode != Self.
+    int projectile_speed = 0;
+    std::uint32_t projectile_prefab_id = 0; // NameId, ignored when projectile_speed == 0
+    // false: the projectile stops at the first creature or wall it reaches
+    // and resolves its hit only there; true: it always travels the full
+    // range_shape reach and then hits every tile along the way, same as an
+    // instant Line cast's existing piercing behavior.
+    bool projectile_pierces = false;
+
+    // Which VFX prefab (if any) to spawn at the hit location once this
+    // technique's damage lands -- instant or via a projectile, see
+    // OnHitEffectSystem.h. 0 = no effect.
+    std::uint32_t hit_effect_prefab_id = 0;
+    float hit_effect_duration = 0.3f;
 };
 
 } // namespace psr

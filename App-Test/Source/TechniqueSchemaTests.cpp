@@ -5,6 +5,7 @@
 #include "Engine/Persistence/JsonFile.h" // JsonFileError
 
 #include <catch2/catch_test_macros.hpp>
+#include <entt/core/hashed_string.hpp>
 
 #include <atomic>
 #include <fstream>
@@ -94,6 +95,26 @@ TEST_CASE("BuildTechniqueSchemaModel reflects fields with the expected field kin
     CHECK(tiers->kind == psr::FieldKind::Array);
     REQUIRE(tiers->children.size() == 1);
     CHECK(tiers->children.front().kind == psr::FieldKind::Object);
+
+    const psr::FieldSchema* projectile_speed = find("projectile_speed");
+    REQUIRE(projectile_speed != nullptr);
+    CHECK(projectile_speed->kind == psr::FieldKind::Integer);
+
+    const psr::FieldSchema* projectile_prefab_id = find("projectile_prefab_id");
+    REQUIRE(projectile_prefab_id != nullptr);
+    CHECK(projectile_prefab_id->kind == psr::FieldKind::NameId);
+
+    const psr::FieldSchema* projectile_pierces = find("projectile_pierces");
+    REQUIRE(projectile_pierces != nullptr);
+    CHECK(projectile_pierces->kind == psr::FieldKind::Boolean);
+
+    const psr::FieldSchema* hit_effect_prefab_id = find("hit_effect_prefab_id");
+    REQUIRE(hit_effect_prefab_id != nullptr);
+    CHECK(hit_effect_prefab_id->kind == psr::FieldKind::NameId);
+
+    const psr::FieldSchema* hit_effect_duration = find("hit_effect_duration");
+    REQUIRE(hit_effect_duration != nullptr);
+    CHECK(hit_effect_duration->kind == psr::FieldKind::Number);
 }
 
 TEST_CASE("SaveTechnique + LoadTechniqueLibrary round-trips every field", "[TechniqueSchema]")
@@ -108,6 +129,11 @@ TEST_CASE("SaveTechnique + LoadTechniqueLibrary round-trips every field", "[Tech
     technique.effect_family = psr::EffectFamily::Damage;
     technique.status_chance_percent = 25;
     technique.tiers.push_back(psr::TechniqueTier{3, 2.0f});
+    technique.projectile_speed = 5;
+    technique.projectile_prefab_id = entt::hashed_string::value("vfx.foie_projectile");
+    technique.projectile_pierces = true;
+    technique.hit_effect_prefab_id = entt::hashed_string::value("vfx.generic_hit");
+    technique.hit_effect_duration = 0.45f;
 
     TempDirectory temp;
     const std::filesystem::path path = temp.path / "foie.json";
@@ -129,6 +155,31 @@ TEST_CASE("SaveTechnique + LoadTechniqueLibrary round-trips every field", "[Tech
     REQUIRE(loaded.tiers.size() == 1);
     CHECK(loaded.tiers.front().tier == 3);
     CHECK(loaded.tiers.front().power_multiplier == 2.0f);
+    CHECK(loaded.projectile_speed == 5);
+    CHECK(loaded.projectile_prefab_id == entt::hashed_string::value("vfx.foie_projectile"));
+    CHECK(loaded.projectile_pierces == true);
+    CHECK(loaded.hit_effect_prefab_id == entt::hashed_string::value("vfx.generic_hit"));
+    CHECK(loaded.hit_effect_duration == 0.45f);
+}
+
+TEST_CASE("LoadTechniqueLibrary defaults the projectile/hit-effect fields when absent", "[TechniqueSchema]")
+{
+    // A technique file authored before these fields existed (zonde's
+    // original shape) must still load with instant-cast, no-effect
+    // defaults -- these fields are all optional, per TechniqueSchemaEmitter
+    // never marking them "required".
+    TempDirectory temp;
+    WriteText(temp.path / "zonde.json", R"json({ "schema_version": 1, "name": "Zonde" })json");
+
+    psr::TechniqueLibrary library = psr::LoadTechniqueLibrary(temp.path);
+    REQUIRE(library.All().size() == 1);
+    const psr::Technique& loaded = library.All().front();
+
+    CHECK(loaded.projectile_speed == 0);
+    CHECK(loaded.projectile_prefab_id == 0);
+    CHECK(loaded.projectile_pierces == false);
+    CHECK(loaded.hit_effect_prefab_id == 0);
+    CHECK(loaded.hit_effect_duration == 0.3f);
 }
 
 TEST_CASE("LoadTechniqueLibrary throws TechniqueError for an unknown range shape", "[TechniqueSchema]")

@@ -4,6 +4,7 @@
 #include "Combat/EffectiveStats.h"
 #include "Combat/PhotonArtCastEvent.h"
 #include "Combat/TechniqueCastEvent.h"
+#include "Components/OnHitEffectComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/EventHandlerComponent.h"
@@ -27,6 +28,14 @@ namespace {
         return actor.GetRegistry().TryGetComponent<WeaponComponent>(equipment->weapon);
     }
 
+    const OnHitEffectComponent* FindEquippedWeaponHitEffect(Entity actor)
+    {
+        const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
+        if (!equipment || equipment->weapon == entt::null)
+            return nullptr;
+        return actor.GetRegistry().TryGetComponent<OnHitEffectComponent>(equipment->weapon);
+    }
+
     void ContributeAttack(Entity actor, BeforeAttackEvent& event)
     {
         event.attacker_stats = ComputeEffectiveStats(actor, actor.GetRegistry().GetAffixLibrary());
@@ -43,6 +52,12 @@ namespace {
         event.element = weapon->element;
         event.status_effect_id = weapon->status_effect_id;
         event.status_chance_percent = weapon->status_chance_percent;
+
+        if (const OnHitEffectComponent* hit_effect = FindEquippedWeaponHitEffect(actor))
+        {
+            event.hit_effect_prefab_id = hit_effect->effect_prefab_id;
+            event.hit_effect_duration = hit_effect->duration;
+        }
     }
 
     void ContributeTechniqueCast(Entity actor, BeforeTechniqueCastEvent& event)
@@ -67,6 +82,12 @@ namespace {
         event.element = weapon->element;
         event.status_effect_id = weapon->status_effect_id;
         event.status_chance_percent = weapon->status_chance_percent;
+
+        if (const OnHitEffectComponent* hit_effect = FindEquippedWeaponHitEffect(actor))
+        {
+            event.hit_effect_prefab_id = hit_effect->effect_prefab_id;
+            event.hit_effect_duration = hit_effect->duration;
+        }
     }
 } // namespace
 

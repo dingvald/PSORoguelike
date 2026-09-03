@@ -47,6 +47,16 @@
                 <div id="field-status-chance" class="field-row"></div>
                 <h3>Tiers <span id="add-tier" class="btn action">Add Tier</span></h3>
                 <div id="tier-list" class="scroll-panel"></div>
+                <h3>Projectile Speed (0 = instant)</h3>
+                <div id="field-projectile-speed" class="field-row"></div>
+                <h3>Projectile Prefab</h3>
+                <div id="field-projectile-prefab" class="field-row"></div>
+                <h3>Projectile Pierces</h3>
+                <div id="field-projectile-pierces" class="field-row"></div>
+                <h3>Hit Effect Prefab</h3>
+                <div id="field-hit-effect-prefab" class="field-row"></div>
+                <h3>Hit Effect Duration</h3>
+                <div id="field-hit-effect-duration" class="field-row"></div>
             </div>
         </div>
     </body>

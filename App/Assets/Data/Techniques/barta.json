@@ -13,5 +13,10 @@
         { "tier": 1, "power_multiplier": 1.0 },
         { "tier": 2, "power_multiplier": 1.5 },
         { "tier": 3, "power_multiplier": 2.0 }
-    ]
+    ],
+    "projectile_speed": 4,
+    "projectile_prefab_id": "vfx.barta_projectile",
+    "projectile_pierces": false,
+    "hit_effect_prefab_id": "vfx.generic_hit",
+    "hit_effect_duration": 0.3
 }

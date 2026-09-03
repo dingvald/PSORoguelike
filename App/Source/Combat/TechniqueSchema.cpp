@@ -51,6 +51,12 @@ TechniqueSchemaModel BuildTechniqueSchemaModel()
     tiers.children.push_back(std::move(tier_item));
     model.fields.push_back(std::move(tiers));
 
+    model.fields.push_back(FieldSchema{"projectile_speed", FieldKind::Integer});
+    model.fields.push_back(FieldSchema{"projectile_prefab_id", FieldKind::NameId});
+    model.fields.push_back(FieldSchema{"projectile_pierces", FieldKind::Boolean});
+    model.fields.push_back(FieldSchema{"hit_effect_prefab_id", FieldKind::NameId});
+    model.fields.push_back(FieldSchema{"hit_effect_duration", FieldKind::Number});
+
     return model;
 }
 

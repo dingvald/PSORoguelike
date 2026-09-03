@@ -31,4 +31,19 @@ std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 
 // horizontal axis.
 Vec2 SnapToCardinalDirection(Vec2 offset);
 
+// The tile sequence a Line/SingleTarget-shaped projectile travels from origin
+// (exclusive) toward direction, one tile per turn -- see ProjectileComponent.h/
+// ProjectileAdvanceAction.h. Always stops at grid edge or a wall (a
+// BlocksMovementComponent occupant with no HealthComponent, same as
+// ResolveTargetTiles's own Line case). When pierces is false, additionally
+// stops right after including the first tile that has any HealthComponent-
+// bearing occupant (hostile or not -- the bolt physically collides with
+// whatever's there first; hostility is checked separately at impact, before
+// damage applies). When pierces is true, never stops early for a creature --
+// it always reaches the same tiles ResolveTargetTiles's Line case would for
+// an instant cast, just resolved once travel finishes rather than
+// immediately.
+std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction, int range,
+                                      bool pierces);
+
 } // namespace psr

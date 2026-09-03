@@ -417,6 +417,52 @@ void TechniqueEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-projectile-speed"))
+        keep(fieldwidgets::BuildIntField(*row, "projectile_speed", m_draft.projectile_speed,
+                                         [this](int v)
+                                         {
+                                             m_draft.projectile_speed = v;
+                                             MarkDirty();
+                                         }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-projectile-prefab"))
+        keep(fieldwidgets::BuildNameIdField(*row, "projectile_prefab_id", m_draft.projectile_prefab_id,
+                                            LabelFor(m_draft.projectile_prefab_id),
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_draft.projectile_prefab_id = id;
+                                                if (!name.empty())
+                                                    NameIdRegistry::Register(id, name);
+                                                MarkDirty();
+                                            }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-projectile-pierces"))
+        keep(fieldwidgets::BuildBoolField(*row, "projectile_pierces", m_draft.projectile_pierces,
+                                          [this](bool v)
+                                          {
+                                              m_draft.projectile_pierces = v;
+                                              MarkDirty();
+                                          }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-hit-effect-prefab"))
+        keep(fieldwidgets::BuildNameIdField(*row, "hit_effect_prefab_id", m_draft.hit_effect_prefab_id,
+                                            LabelFor(m_draft.hit_effect_prefab_id),
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_draft.hit_effect_prefab_id = id;
+                                                if (!name.empty())
+                                                    NameIdRegistry::Register(id, name);
+                                                MarkDirty();
+                                            }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-hit-effect-duration"))
+        keep(fieldwidgets::BuildFloatField(*row, "hit_effect_duration", m_draft.hit_effect_duration,
+                                           [this](float v)
+                                           {
+                                               m_draft.hit_effect_duration = v;
+                                               MarkDirty();
+                                           }));
+
     if (Rml::Element* add_tier = m_editor->GetElementById("add-tier"))
     {
         auto listener = std::make_unique<RmlClickListener>(

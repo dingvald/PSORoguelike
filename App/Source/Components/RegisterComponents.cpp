@@ -11,6 +11,7 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/OnHitEffectComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
@@ -50,6 +51,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     InnateWeaponComponent::Register(reg);
     ItemComponent::Register(reg);
     ModComponent::Register(reg);
+    OnHitEffectComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);

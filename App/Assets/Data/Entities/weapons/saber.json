@@ -22,6 +22,10 @@
             "dfp": 0,
             "evp": 0,
             "lck": 0
+        },
+        "on_hit_effect": {
+            "effect_prefab_id": "vfx.generic_hit",
+            "duration": 0.3
         }
     }
 }
