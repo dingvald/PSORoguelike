@@ -1,7 +1,9 @@
 #include "States/TargetSelectionState.h"
 
+#include "Combat/TargetResolution.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SelectedTargetComponent.h"
+#include "Components/TabTargetComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
@@ -65,15 +67,30 @@ void TargetSelectionState::OnEnter(GameplayContext& context)
     m_confirmed = false;
     m_cancelled = false;
 
+    // If the actor has a live tab-lock target (TabTargetComponent, see
+    // TabTargetSystem.h), start the cursor at/facing it instead of today's
+    // plain defaults below -- an out-of-range TargetSquare tile just renders
+    // greyed via the usual IsReachable/UpdateCursorVisual path, no special
+    // casing needed.
+    const TabTargetComponent* tab_target = context.registry.TryGetComponent<TabTargetComponent>(m_actor);
+    const Position* target_position = (tab_target && tab_target->target != entt::null)
+                                          ? context.registry.TryGetComponent<Position>(tab_target->target)
+                                          : nullptr;
+
     switch (m_request.mode)
     {
     case TargetingMode::SelfTarget:
-    case TargetingMode::TargetSquare:
         m_cursor = m_origin;
         break;
-    case TargetingMode::Directional:
-        m_cursor = m_origin + Vec2{0, -1}; // default facing: up
+    case TargetingMode::TargetSquare:
+        m_cursor = target_position ? target_position->tile : m_origin;
         break;
+    case TargetingMode::Directional:
+    {
+        const Vec2 snapped = target_position ? SnapToCardinalDirection(target_position->tile - m_origin) : Vec2{0, 0};
+        m_cursor = snapped == Vec2{0, 0} ? m_origin + Vec2{0, -1} : m_origin + snapped; // default facing: up
+        break;
+    }
     }
 
     m_cursor_entity = context.registry.CreateEntity(entt::hashed_string::value(kCursorPrefabId));

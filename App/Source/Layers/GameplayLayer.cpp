@@ -5,6 +5,7 @@
 #include "Actions/TechniqueAction.h"
 #include "Actions/UseItemAction.h"
 #include "ApplicationFilepaths.h"
+#include "Combat/DisplayName.h"
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibraryFile.h"
 #include "Combat/StatusEffectLibraryFile.h"
@@ -19,9 +20,11 @@
 #include "Components/InventoryComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
+#include "Components/RaceComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/TabTargetComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
@@ -54,6 +57,7 @@
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
+#include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
 #include "States/GameState.h"
 
@@ -275,6 +279,7 @@ void GameplayLayer::LoadNewGame()
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_rng);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
+    m_tab_target_system.emplace(m_registry, *m_grid);
     m_turn_coordinator->SetNpcDecision(
         [this](Entity actor) -> IAction*
         {
@@ -290,6 +295,7 @@ void GameplayLayer::LoadNewGame()
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
+    m_registry.Emplace<TabTargetComponent>(m_player);
     // Same "hardcoded until M10.3 character creation exists" deferral as
     // HealthComponent above -- there's no Section ID picker yet, and no drop
     // has happened yet to credit any Meseta.
@@ -392,6 +398,12 @@ void GameplayLayer::OnUpdate(float delta_time)
     m_visual_effects->Update(delta_time);
     m_animation_clock.Update(delta_time);
     PublishFloatingTextState();
+
+    if (m_registry.IsValid(m_player))
+    {
+        m_tab_target_system->Update(Entity(m_registry, m_player));
+        PublishTargetState();
+    }
 }
 
 void GameplayLayer::EnsureRenderResources(SDL_Renderer& renderer)
@@ -582,6 +594,29 @@ void GameplayLayer::PublishFloatingTextState()
     Publish(state);
 }
 
+void GameplayLayer::PublishTargetState()
+{
+    TargetStateMessage state;
+    if (m_registry.IsValid(m_player))
+    {
+        const TabTargetComponent* tab_target = m_registry.TryGetComponent<TabTargetComponent>(m_player);
+        if (tab_target && tab_target->target != entt::null && m_registry.IsValid(tab_target->target))
+        {
+            Entity target(m_registry, tab_target->target);
+            state.has_target = true;
+            state.name = DisplayName(m_registry, tab_target->target, m_player);
+            if (const RaceComponent* race = target.TryGet<RaceComponent>())
+                state.race_label = NameIdRegistry::Find(race->race_id).value_or("Unknown");
+            if (const HealthComponent* health = target.TryGet<HealthComponent>())
+            {
+                state.current_hp = health->current_hp;
+                state.max_hp = health->max_hp;
+            }
+        }
+    }
+    Publish(state);
+}
+
 void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
 {
     PublishHotbarState();
@@ -595,6 +630,7 @@ void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
         if (const CurrencyComponent* currency = m_registry.TryGetComponent<CurrencyComponent>(m_player))
             Publish(MesetaChangedMessage{currency->meseta, 0});
     }
+    PublishTargetState();
 }
 
 void GameplayLayer::PublishHotbarState()
@@ -686,6 +722,22 @@ void GameplayLayer::OnEvent(Event& event)
                 {
                     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
                     m_state_machine.Push(m_techniques_screen_state, context);
+                    return true;
+                }
+
+                if (key_event.GetKeyCode() == SDLK_TAB)
+                {
+                    m_tab_target_system->CycleTarget(Entity(m_registry, m_player));
+                    return true;
+                }
+
+                // Only claimed when there's a target to clear -- nothing else
+                // binds Escape while ExploringState is on top, but leaving it
+                // unhandled otherwise keeps room for that to change later.
+                if (key_event.GetKeyCode() == SDLK_ESCAPE &&
+                    m_registry.GetComponent<TabTargetComponent>(m_player).target != entt::null)
+                {
+                    m_tab_target_system->ClearTarget(Entity(m_registry, m_player));
                     return true;
                 }
 

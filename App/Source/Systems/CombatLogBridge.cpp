@@ -4,6 +4,7 @@
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
 
+#include "Combat/DisplayName.h"
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtCastEvent.h"
 #include "Combat/PhotonArtLibrary.h"
@@ -19,7 +20,6 @@
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
-#include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Items/ItemDropEvent.h"
 #include "Engine/Items/ItemPickupEvent.h"
@@ -161,15 +161,7 @@ void CombatLogBridge::OnStatusEffectsChanged(Entity actor, AfterStatusEffectsCha
 
 std::string CombatLogBridge::DisplayName(entt::entity entity) const
 {
-    if (entity == m_player)
-        return "Player";
-
-    if (const PrefabIdComponent* prefab_id = m_registry->TryGetComponent<PrefabIdComponent>(entity))
-    {
-        if (std::optional<std::string> label = NameIdRegistry::Find(prefab_id->value))
-            return *label;
-    }
-    return "something";
+    return psr::DisplayName(*m_registry, entity, m_player);
 }
 
 } // namespace psr
