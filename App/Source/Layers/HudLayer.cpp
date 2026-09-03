@@ -354,7 +354,13 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         {
             const std::string label =
                 message.equipment[i] ? EscapeRml(message.equipment[i]->display_name) : std::string("(empty)");
-            markup += std::string("<div class=\"equip-row\">") + kSlotLabels[i] + ": " + label + "</div>";
+            std::string mod_slots_markup;
+            if (message.equipment[i])
+                for (const std::string& mod_slot_label : message.equipment[i]->mod_slot_labels)
+                    mod_slots_markup +=
+                        "<div class=\"mod-slot-row\">\xE2\x80\xA2 " + EscapeRml(mod_slot_label) + "</div>";
+            markup +=
+                std::string("<div class=\"equip-row\">") + kSlotLabels[i] + ": " + label + "</div>" + mod_slots_markup;
         }
         equipment_list->SetInnerRML(markup);
 
