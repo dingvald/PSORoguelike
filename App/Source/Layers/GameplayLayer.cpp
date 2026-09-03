@@ -375,6 +375,7 @@ void GameplayLayer::OnUpdate(float delta_time)
 
     m_floating_text.Update(delta_time);
     m_visual_effects->Update(delta_time);
+    m_animation_clock.Update(delta_time);
     PublishFloatingTextState();
 }
 
@@ -386,7 +387,7 @@ void GameplayLayer::EnsureRenderResources(SDL_Renderer& renderer)
     m_atlas.emplace(renderer, ApplicationFilepaths::TexturesPath);
     m_gpu_pipeline.emplace(renderer, ApplicationFilepaths::ShadersPath / "TileSprite.vert.spv",
                            ApplicationFilepaths::ShadersPath / "TileSprite.frag.spv");
-    m_renderable_lookup.emplace(m_registry);
+    m_renderable_lookup.emplace(m_registry, m_animation_clock);
     m_fog_lookup.emplace(m_registry, *m_room_map, *m_room_visibility, *m_renderable_lookup);
     m_tile_renderer.emplace(*m_grid, *m_atlas, *m_gpu_pipeline, *m_fog_lookup, kTileWidth, kTileHeight);
 }

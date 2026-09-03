@@ -187,33 +187,6 @@ namespace {
         return StringValue(buffer, allocator);
     }
 
-    RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
-    {
-        RenderableComponent renderable;
-        renderable.texture_id = ReadNameId(body, "texture_id", 0);
-        renderable.texture_size = ReadVec2(body, "texture_size");
-        renderable.uv = ReadVec2(body, "uv");
-        renderable.color_1 = ReadColor(body, "color_1", Color{});
-        renderable.color_2 = ReadColor(body, "color_2", Color{});
-        auto layer = body.FindMember("render_layer");
-        if (layer != body.MemberEnd() && layer->value.IsInt())
-            renderable.render_layer = layer->value.GetInt();
-        return renderable;
-    }
-
-    rapidjson::Value WriteRenderableBody(const RenderableComponent& renderable,
-                                         rapidjson::Document::AllocatorType& allocator)
-    {
-        rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("texture_id", WriteNameId(renderable.texture_id, allocator), allocator);
-        object.AddMember("texture_size", WriteVec2(renderable.texture_size, allocator), allocator);
-        object.AddMember("uv", WriteVec2(renderable.uv, allocator), allocator);
-        object.AddMember("color_1", WriteColor(renderable.color_1, allocator), allocator);
-        object.AddMember("color_2", WriteColor(renderable.color_2, allocator), allocator);
-        object.AddMember("render_layer", renderable.render_layer, allocator);
-        return object;
-    }
-
     int ReadInt(const rapidjson::Value& object, const char* key, int fallback)
     {
         auto it = object.FindMember(key);
@@ -228,6 +201,37 @@ namespace {
         if (it == object.MemberEnd() || !it->value.IsNumber())
             return fallback;
         return it->value.GetFloat();
+    }
+
+    RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
+    {
+        RenderableComponent renderable;
+        renderable.texture_id = ReadNameId(body, "texture_id", 0);
+        renderable.texture_size = ReadVec2(body, "texture_size");
+        renderable.uv = ReadVec2(body, "uv");
+        renderable.color_1 = ReadColor(body, "color_1", Color{});
+        renderable.color_2 = ReadColor(body, "color_2", Color{});
+        auto layer = body.FindMember("render_layer");
+        if (layer != body.MemberEnd() && layer->value.IsInt())
+            renderable.render_layer = layer->value.GetInt();
+        renderable.frames = ReadInt(body, "frames", renderable.frames);
+        renderable.frame_time = ReadFloat(body, "frame_time", renderable.frame_time);
+        return renderable;
+    }
+
+    rapidjson::Value WriteRenderableBody(const RenderableComponent& renderable,
+                                         rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("texture_id", WriteNameId(renderable.texture_id, allocator), allocator);
+        object.AddMember("texture_size", WriteVec2(renderable.texture_size, allocator), allocator);
+        object.AddMember("uv", WriteVec2(renderable.uv, allocator), allocator);
+        object.AddMember("color_1", WriteColor(renderable.color_1, allocator), allocator);
+        object.AddMember("color_2", WriteColor(renderable.color_2, allocator), allocator);
+        object.AddMember("render_layer", renderable.render_layer, allocator);
+        object.AddMember("frames", renderable.frames, allocator);
+        object.AddMember("frame_time", renderable.frame_time, allocator);
+        return object;
     }
 
     StatsComponent ReadStatsBody(const rapidjson::Value& body)
@@ -567,7 +571,9 @@ namespace {
           "<div id=\"field-uv\" class=\"field-row\"></div>"
           "<div id=\"field-color-1\" class=\"field-row\"></div>"
           "<div id=\"field-color-2\" class=\"field-row\"></div>"
-          "<div id=\"field-render-layer\" class=\"field-row\"></div>"},
+          "<div id=\"field-render-layer\" class=\"field-row\"></div>"
+          "<div id=\"field-frames\" class=\"field-row\"></div>"
+          "<div id=\"field-frame-time\" class=\"field-row\"></div>"},
          {"stats", "Stats", "#e8a33d",
           "<div id=\"field-atp\" class=\"field-row\"></div>"
           "<div id=\"field-ata\" class=\"field-row\"></div>"
@@ -1204,6 +1210,20 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_renderable.render_layer = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-frames"))
+        keep(fieldwidgets::BuildIntField(*row, "frames", m_renderable.frames,
+                                         [this](int v)
+                                         {
+                                             m_renderable.frames = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-frame-time"))
+        keep(fieldwidgets::BuildFloatField(*row, "frame_time", m_renderable.frame_time,
+                                           [this](float v)
+                                           {
+                                               m_renderable.frame_time = v;
+                                               MarkDirty();
+                                           }));
     if (Rml::Element* row = m_editor->GetElementById("field-atp"))
         keep(fieldwidgets::BuildIntField(*row, "atp", m_stats.atp,
                                          [this](int v)

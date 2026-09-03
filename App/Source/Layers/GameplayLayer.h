@@ -9,6 +9,7 @@
 #include "Engine/Dungeon/SpawnWaveSystem.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
+#include "Engine/Render/AnimationClock.h"
 #include "Engine/Render/Camera.h"
 #include "Engine/Render/FloatingTextSystem.h"
 #include "Engine/Render/TextureAtlas.h"
@@ -288,6 +289,14 @@ private:
 
     std::optional<TextureAtlas> m_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
+
+    // Drives synced sprite-strip animation for every RenderableComponent
+    // with frames > 1 (see AnimationClock.h). Advanced from OnUpdate,
+    // same unconditional-every-frame reasoning as m_floating_text/
+    // m_visual_effects. Holds no pointers into m_registry/m_grid, so
+    // declaration order relative to them doesn't matter; must be
+    // constructed before m_renderable_lookup, which holds a reference to it.
+    AnimationClock m_animation_clock;
     std::optional<RegistryRenderableLookup> m_renderable_lookup;
     std::optional<FogOfWarRenderableLookup> m_fog_lookup;
     std::optional<TileRenderer> m_tile_renderer;

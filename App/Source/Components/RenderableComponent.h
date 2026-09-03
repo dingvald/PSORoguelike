@@ -16,6 +16,12 @@ namespace psr {
 // texel to color_1 (grey < 0.5) or color_2 (grey >= 0.5). render_layer
 // controls paint order relative to other renderables sharing a tile (e.g.
 // floor, then item, then actor).
+//
+// frames/frame_time optionally animate uv: when frames > 1, the renderer
+// cycles uv's column through a horizontal strip of frames cells (looping),
+// spending frame_time seconds on each. Entities sharing the same frame_time
+// change frame in lock-step (see AnimationClock). Defaults (frames = 1) mean
+// "not animated" -- uv is drawn as-is.
 struct RenderableComponent
 {
     std::uint32_t texture_id = 0;
@@ -24,6 +30,8 @@ struct RenderableComponent
     Color color_1;
     Color color_2;
     int render_layer = 0;
+    int frames = 1;
+    float frame_time = 0.0f;
 
     static void Register(ComponentSchemaRegistrar& reg)
     {
@@ -33,7 +41,9 @@ struct RenderableComponent
             .Data<&RenderableComponent::uv>("uv")
             .Data<&RenderableComponent::color_1>("color_1")
             .Data<&RenderableComponent::color_2>("color_2")
-            .Data<&RenderableComponent::render_layer>("render_layer");
+            .Data<&RenderableComponent::render_layer>("render_layer")
+            .Data<&RenderableComponent::frames>("frames")
+            .Data<&RenderableComponent::frame_time>("frame_time");
     }
 };
 
