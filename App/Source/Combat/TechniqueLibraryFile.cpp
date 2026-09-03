@@ -47,6 +47,16 @@ namespace {
         return it->value.GetFloat();
     }
 
+    bool ReadBool(const rapidjson::Value& object, const char* key, bool fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd())
+            return fallback;
+        if (!it->value.IsBool())
+            throw TechniqueError(std::string("technique file: '") + key + "' must be a bool");
+        return it->value.GetBool();
+    }
+
     // Mirrors PieceLibraryFile.cpp/DungeonLibraryFile.cpp's ReadNameId: a
     // hashed-string id authored as either a JSON number or a name string,
     // registering the source string into NameIdRegistry so WriteTechniqueBody
@@ -156,6 +166,11 @@ Technique ReadTechniqueBody(const rapidjson::Value& technique_def)
     technique.status_effect_id = ReadNameId(technique_def, "status_effect_id", technique.status_effect_id);
     technique.status_chance_percent = ReadInt(technique_def, "status_chance_percent", technique.status_chance_percent);
     technique.tiers = ReadTiers(technique_def);
+    technique.projectile_speed = ReadInt(technique_def, "projectile_speed", technique.projectile_speed);
+    technique.projectile_prefab_id = ReadNameId(technique_def, "projectile_prefab_id", technique.projectile_prefab_id);
+    technique.projectile_pierces = ReadBool(technique_def, "projectile_pierces", technique.projectile_pierces);
+    technique.hit_effect_prefab_id = ReadNameId(technique_def, "hit_effect_prefab_id", technique.hit_effect_prefab_id);
+    technique.hit_effect_duration = ReadFloat(technique_def, "hit_effect_duration", technique.hit_effect_duration);
     return technique;
 }
 
@@ -177,6 +192,17 @@ rapidjson::Value WriteTechniqueBody(const Technique& technique, rapidjson::Docum
         object.AddMember("status_effect_id", technique.status_effect_id, allocator);
     object.AddMember("status_chance_percent", technique.status_chance_percent, allocator);
     object.AddMember("tiers", WriteTiers(technique.tiers, allocator), allocator);
+    object.AddMember("projectile_speed", technique.projectile_speed, allocator);
+    if (std::optional<std::string> label = NameIdRegistry::Find(technique.projectile_prefab_id))
+        object.AddMember("projectile_prefab_id", StringValue(*label, allocator), allocator);
+    else
+        object.AddMember("projectile_prefab_id", technique.projectile_prefab_id, allocator);
+    object.AddMember("projectile_pierces", technique.projectile_pierces, allocator);
+    if (std::optional<std::string> label = NameIdRegistry::Find(technique.hit_effect_prefab_id))
+        object.AddMember("hit_effect_prefab_id", StringValue(*label, allocator), allocator);
+    else
+        object.AddMember("hit_effect_prefab_id", technique.hit_effect_prefab_id, allocator);
+    object.AddMember("hit_effect_duration", technique.hit_effect_duration, allocator);
     return object;
 }
 

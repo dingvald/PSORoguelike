@@ -9,7 +9,9 @@
 #include "Combat/Technique.h"
 #include "Combat/TechniqueCastEvent.h"
 #include "Components/ElementalResistanceComponent.h"
+#include "Components/EnergyComponent.h"
 #include "Components/KnownTechniquesComponent.h"
+#include "Components/ProjectileComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
@@ -18,6 +20,7 @@
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
+#include "Engine/Turns/TurnQueue.h"
 
 #include <algorithm>
 #include <cmath>
@@ -133,7 +136,8 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
 
-                IncomingDamageEvent incoming{actor, damage};
+                IncomingDamageEvent incoming{actor, damage, false, technique->hit_effect_prefab_id,
+                                             technique->hit_effect_duration};
                 actor.Dispatch(incoming);
             }
         }
@@ -161,6 +165,53 @@ ActionResult TechniqueAction::Perform(Entity actor)
         return ActionResult(kTechniqueCost);
 
     const Vec2 direction = SnapToCardinalDirection(offset);
+
+    // projectile_speed > 0 (foie/barta): spawn a real travelling entity
+    // instead of resolving damage inline -- see ProjectileComponent.h/
+    // ProjectileAdvanceAction.h. Only meaningful for SingleTarget/Line
+    // (BuildProjectilePath is a straight cardinal walk); any other
+    // range_shape falls through to the instant resolution below, same as
+    // projectile_speed == 0 (zonde).
+    if (technique->projectile_speed > 0 &&
+        (technique->range_shape == WeaponRangeShape::SingleTarget || technique->range_shape == WeaponRangeShape::Line))
+    {
+        if (registry.HasPrefab(technique->projectile_prefab_id))
+        {
+            const std::vector<Vec2> path = BuildProjectilePath(*m_grid, registry, origin, direction, technique->range,
+                                                               technique->projectile_pierces);
+            if (!path.empty())
+            {
+                // Spawned at origin (the caster's own tile), not path.front():
+                // ProjectileAdvanceAction's first hop moves it to path[0], so
+                // it visually launches from the caster rather than appearing
+                // one tile out already. Grid places no exclusivity on sharing
+                // a tile momentarily, and the projectile carries no
+                // BlocksMovementComponent, so this is harmless.
+                const entt::entity projectile = registry.CreateEntity(technique->projectile_prefab_id);
+                registry.Emplace<Position>(projectile, Position{origin});
+                m_grid->AddEntity(origin, projectile);
+
+                ProjectileComponent component;
+                component.path = path;
+                component.step_cost = std::max(1, TurnQueue::kDefaultActionThreshold / technique->projectile_speed);
+                component.source = actor.Handle();
+                component.pierces = technique->projectile_pierces;
+                component.attacker_stats = attacker_stats;
+                component.power_multiplier = multiplier;
+                component.effect_family = technique->effect_family;
+                component.element = technique->element;
+                component.status_effect_id = technique->status_effect_id;
+                component.status_chance_percent = technique->status_chance_percent;
+                component.hit_effect_prefab_id = technique->hit_effect_prefab_id;
+                component.hit_effect_duration = technique->hit_effect_duration;
+                registry.Emplace<ProjectileComponent>(projectile, std::move(component));
+
+                registry.Emplace<EnergyComponent>(projectile);
+            }
+        }
+        return ActionResult(kTechniqueCost);
+    }
+
     const std::vector<Vec2> target_tiles =
         ResolveTargetTiles(*m_grid, registry, origin, direction, technique->range_shape, technique->range);
 
@@ -209,7 +260,8 @@ ActionResult TechniqueAction::Perform(Entity actor)
             actor.Dispatch(before);
             damage = before.incoming_damage;
 
-            IncomingDamageEvent incoming{actor, damage};
+            IncomingDamageEvent incoming{actor, damage, false, technique->hit_effect_prefab_id,
+                                         technique->hit_effect_duration};
             target.Dispatch(incoming);
 
             if (!target.IsValid())

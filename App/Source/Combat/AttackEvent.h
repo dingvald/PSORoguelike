@@ -15,7 +15,8 @@ namespace psr {
 // touches any component itself. EquipmentComponent's own AttachHandlers-
 // registered handler resolves the equipped weapon (if any) and fills
 // has_weapon/range_shape/range/hits_per_turn/race_bonuses/attacker_stats/
-// element/status_effect_id/status_chance_percent -- AttackAction never reads
+// element/status_effect_id/status_chance_percent/hit_effect_prefab_id/
+// hit_effect_duration -- AttackAction never reads
 // EquipmentComponent/WeaponComponent directly. StatusEffectComponent's own
 // handler sets cancelled = true when the actor is Shocked (attack-type
 // actions no-op for zero cost while Shocked; movement still works).
@@ -28,9 +29,11 @@ struct BeforeAttackEvent
     int hits_per_turn = 0;
     std::vector<RaceBonusEntry> race_bonuses;
     StatsComponent attacker_stats;
-    Element element = Element::None;    // the equipped weapon's own elemental flavor, 0/None = non-elemental
-    std::uint32_t status_effect_id = 0; // weapon's on-hit ailment (NameId into StatusEffectLibrary), 0 = none
-    int status_chance_percent = 0;      // chance per hit to apply status_effect_id, when element != None
+    Element element = Element::None;        // the equipped weapon's own elemental flavor, 0/None = non-elemental
+    std::uint32_t status_effect_id = 0;     // weapon's on-hit ailment (NameId into StatusEffectLibrary), 0 = none
+    int status_chance_percent = 0;          // chance per hit to apply status_effect_id, when element != None
+    std::uint32_t hit_effect_prefab_id = 0; // weapon's OnHitEffectComponent, 0 = none
+    float hit_effect_duration = 0.3f;
     bool cancelled = false;
 };
 

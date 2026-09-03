@@ -530,6 +530,23 @@ namespace {
         return object;
     }
 
+    OnHitEffectComponent ReadOnHitEffectBody(const rapidjson::Value& body)
+    {
+        OnHitEffectComponent on_hit_effect;
+        on_hit_effect.effect_prefab_id = ReadNameId(body, "effect_prefab_id", 0);
+        on_hit_effect.duration = ReadFloat(body, "duration", on_hit_effect.duration);
+        return on_hit_effect;
+    }
+
+    rapidjson::Value WriteOnHitEffectBody(const OnHitEffectComponent& on_hit_effect,
+                                          rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("effect_prefab_id", WriteNameId(on_hit_effect.effect_prefab_id, allocator), allocator);
+        object.AddMember("duration", on_hit_effect.duration, allocator);
+        return object;
+    }
+
     ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
     {
         ConsumableComponent consumable;
@@ -564,7 +581,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 11> kComponentKinds = {
+    constexpr std::array<ComponentKind, 12> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -616,7 +633,10 @@ namespace {
           "<div id=\"field-meseta-min\" class=\"field-row\"></div>"
           "<div id=\"field-meseta-max\" class=\"field-row\"></div>"
           "<h3>Entries<span id=\"add-drop-entry\" class=\"btn\">Add Entry</span></h3>"
-          "<div id=\"drop-entry-list\" class=\"ref-scroll\"></div>"}}};
+          "<div id=\"drop-entry-list\" class=\"ref-scroll\"></div>"},
+         {"on_hit_effect", "On Hit Effect", "#e85dc1",
+          "<div id=\"field-on-hit-effect-prefab\" class=\"field-row\"></div>"
+          "<div id=\"field-on-hit-effect-duration\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -1006,7 +1026,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
             key == "armor" || key == "mod" || key == "item" || key == "rarity" || key == "consumable" ||
-            key == "drop_table")
+            key == "drop_table" || key == "on_hit_effect")
             m_component_order.emplace_back(key);
     }
 
@@ -1028,6 +1048,9 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         components.HasMember("consumable") ? ReadConsumableBody(components["consumable"]) : ConsumableComponent{};
     m_drop_table =
         components.HasMember("drop_table") ? ReadDropTableBody(components["drop_table"]) : DropTableComponent{};
+    m_on_hit_effect = components.HasMember("on_hit_effect") ? ReadOnHitEffectBody(components["on_hit_effect"])
+                                                            : OnHitEffectComponent{};
+    m_on_hit_effect_prefab_name = LabelFor(m_on_hit_effect.effect_prefab_id);
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1460,6 +1483,27 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-on-hit-effect-prefab"))
+        keep(fieldwidgets::BuildNameIdField(*row, "effect_prefab_id", m_on_hit_effect.effect_prefab_id,
+                                            m_on_hit_effect_prefab_name,
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_on_hit_effect.effect_prefab_id = id;
+                                                if (!name.empty())
+                                                {
+                                                    NameIdRegistry::Register(id, name);
+                                                    m_on_hit_effect_prefab_name = std::move(name);
+                                                }
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-on-hit-effect-duration"))
+        keep(fieldwidgets::BuildFloatField(*row, "duration", m_on_hit_effect.duration,
+                                           [this](float v)
+                                           {
+                                               m_on_hit_effect.duration = v;
+                                               MarkDirty();
+                                           }));
+
     if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1720,7 +1764,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // otherwise only affected by add/remove, never by in-place value
     // updates.
     for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
-                            "consumable", "drop_table"})
+                            "consumable", "drop_table", "on_hit_effect"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1749,6 +1793,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteConsumableBody(m_consumable, allocator);
         else if (key == "drop_table")
             body = WriteDropTableBody(m_drop_table, allocator);
+        else if (key == "on_hit_effect")
+            body = WriteOnHitEffectBody(m_on_hit_effect, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

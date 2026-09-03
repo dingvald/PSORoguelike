@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Actions/ProjectileAdvanceAction.h"
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
@@ -32,6 +33,7 @@
 #include "Systems/EnemyAiSystem.h"
 #include "Systems/LootDropSystem.h"
 #include "Systems/MissFlashEffectSystem.h"
+#include "Systems/OnHitEffectSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
 #include "Systems/TurnCoordinator.h"
 
@@ -213,6 +215,14 @@ private:
     // m_affixes/m_rng, so declaration order relative to them doesn't matter.
     std::optional<EnemyAiSystem> m_enemy_ai_system;
 
+    // Advances an in-flight technique projectile by one hop per turn --
+    // installed ahead of m_enemy_ai_system in the SetNpcDecision wrapper (see
+    // ProjectileAdvanceAction.h). Stateless aside from its Grid/AffixLibrary/
+    // rng pointers, so one instance serves every projectile actor; std::optional
+    // only because it needs *m_grid, re-created each LoadNewGame same as
+    // m_enemy_ai_system.
+    std::optional<ProjectileAdvanceAction> m_projectile_advance_action;
+
     // Gates piece-authored spawn waves past their first: holds pointers into
     // m_registry/m_grid only (declaration order relative to them doesn't
     // matter for construction safety), but binds a component-lifecycle
@@ -255,6 +265,15 @@ private:
     // constructed after m_visual_effects but declaration order relative to
     // m_registry/m_grid doesn't matter.
     std::optional<MissFlashEffectSystem> m_miss_flash_effect_system;
+
+    // Bridges AfterDamageEvent onto m_visual_effects for a placeholder VFX at
+    // whatever a hit's weapon/technique authored -- see OnHitEffectSystem.h.
+    // Not player-filtered, unlike m_miss_flash_effect_system: every actor's
+    // hit should show its effect, same breadth as m_damage_text_system's own
+    // wiring. Holds only a pointer into m_visual_effects (declared just
+    // above), so it must be constructed after it but declaration order
+    // relative to m_registry/m_grid doesn't matter.
+    std::optional<OnHitEffectSystem> m_on_hit_effect_system;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action

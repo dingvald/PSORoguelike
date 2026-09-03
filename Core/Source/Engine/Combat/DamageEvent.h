@@ -2,6 +2,8 @@
 
 #include "Engine/ECS/Entity.h"
 
+#include <cstdint>
+
 namespace psr {
 
 // Dispatched by AttackAction/TechniqueAction/PhotonArtAction to the acting
@@ -23,6 +25,10 @@ struct AfterDamageEvent
     int amount = 0;
     bool is_critical = false;
     bool target_defeated = false;
+    // Copied through from the IncomingDamageEvent that produced this hit --
+    // 0 (no effect) unless the source opted in. See OnHitEffectSystem.
+    std::uint32_t hit_effect_prefab_id = 0;
+    float hit_effect_duration = 0.3f;
 };
 
 // Dispatched by AttackAction/TechniqueAction/PhotonArtAction to the acting
@@ -50,6 +56,10 @@ struct IncomingDamageEvent
     Entity source; // who to dispatch AfterDamageEvent at once this is applied
     int amount = 0;
     bool is_critical = false;
+    // Forwarded verbatim into AfterDamageEvent -- which prefab (if any)
+    // OnHitEffectSystem should spawn at the target's tile once this lands.
+    std::uint32_t hit_effect_prefab_id = 0;
+    float hit_effect_duration = 0.3f;
 };
 
 // Dispatched by HealthSystem to an entity whose HealthComponent::current_hp

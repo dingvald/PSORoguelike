@@ -5,6 +5,7 @@
 #include "Combat/TechniqueLibrary.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/DropTableComponent.h"
+#include "Components/OnHitEffectComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Components/StatsComponent.h"
@@ -192,6 +193,8 @@ private:
     RarityComponent m_rarity;
     ConsumableComponent m_consumable;
     DropTableComponent m_drop_table;
+    OnHitEffectComponent m_on_hit_effect;
+    std::string m_on_hit_effect_prefab_name;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.

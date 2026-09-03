@@ -18,6 +18,7 @@
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InventoryComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/ProjectileComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
@@ -225,6 +226,8 @@ void GameplayLayer::LoadNewGame()
                              });
     m_miss_flash_effect_system.emplace(*m_visual_effects, m_player);
     m_miss_flash_effect_system->Subscribe(Entity(m_registry, m_player));
+    m_on_hit_effect_system.emplace(*m_visual_effects);
+    m_on_hit_effect_system->Subscribe(Entity(m_registry, m_player));
 
     // Must be constructed before any entity's EnergyComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
@@ -257,6 +260,7 @@ void GameplayLayer::LoadNewGame()
         m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
         m_damage_text_system.Subscribe(Entity(m_registry, entity));
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
+        m_on_hit_effect_system->Subscribe(Entity(m_registry, entity));
     };
 
     const DungeonInstantiation instantiation =
@@ -270,7 +274,18 @@ void GameplayLayer::LoadNewGame()
                                 instantiation.pending_spawn_waves, on_enemy_spawned);
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_rng);
-    m_turn_coordinator->SetNpcDecision([this](Entity actor) { return m_enemy_ai_system->Decide(actor); });
+    m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
+    m_turn_coordinator->SetNpcDecision(
+        [this](Entity actor) -> IAction*
+        {
+            // Projectiles aren't AI-driven actors -- route them to their own
+            // advance action first, same "check the tag, else fall through
+            // to the real decision" shape as TurnCoordinator's own Frozen
+            // check (see TurnCoordinator.cpp::Step).
+            if (actor.Has<ProjectileComponent>())
+                return &*m_projectile_advance_action;
+            return m_enemy_ai_system->Decide(actor);
+        });
 
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
