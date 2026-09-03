@@ -16,7 +16,8 @@
         },
         "drop_table": {
             "entries": [
-                { "item_prefab_id": "monomate", "weight": 3.0 }
+                { "item_prefab_id": "monomate", "weight": 3.0 },
+                { "item_prefab_id": "monofluid", "weight": 2.0 }
             ],
             "no_drop_weight": 2.0,
             "meseta_weight": 3.0,

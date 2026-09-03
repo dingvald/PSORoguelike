@@ -94,11 +94,9 @@ namespace {
 
     // The two starter Item hotbar slots' bound consumable prefabs -- ids only,
     // not authored data (see the "Default hotbar loadout" comment below).
-    // Content authoring (consumables/monomate.json, consumables/monofluid.json,
-    // through the Prefab Editor's new Consumable card) is the user's own work,
-    // per CLAUDE.md's division of labor -- until authored, these ids simply
-    // never match anything in the player's inventory, so the slots stay
-    // inert rather than erroring.
+    // Both prefabs (App/Assets/Data/Entities/monomate.json, monofluid.json)
+    // are authored; an unauthored id here would simply never match anything
+    // in the player's inventory, leaving that slot inert rather than erroring.
     constexpr const char* kMonomatePrefabId = "monomate";
     constexpr const char* kMonofluidPrefabId = "monofluid";
 
@@ -298,6 +296,11 @@ void GameplayLayer::LoadNewGame()
     m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
+    // Same "hardcoded until M10.3 character creation exists" deferral as
+    // HealthComponent above -- growth_curve.json's level-2 max_tp (24) is the
+    // first authored value, so this level-1 baseline is chosen below it the
+    // same way HealthComponent's 40 sits below level-2's max_hp of 48.
+    m_registry.Emplace<TPComponent>(m_player, TPComponent{20, 20});
     m_registry.Emplace<TabTargetComponent>(m_player);
     m_registry.Emplace<LevelComponent>(m_player);
     // Same "hardcoded until M10.3 character creation exists" deferral as

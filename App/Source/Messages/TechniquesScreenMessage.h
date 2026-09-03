@@ -21,6 +21,7 @@ struct TechniquesScreenMessage
         std::string display_name;
         std::uint32_t technique_id = 0;
         int tier = 1;
+        int tp_cost = 0;
 
         // Absolute filesystem path to a 16x16 icon PNG, or empty if none
         // exists on disk for this technique's id -- see
@@ -32,6 +33,7 @@ struct TechniquesScreenMessage
     {
         std::string display_name;
         std::uint32_t photon_art_id = 0;
+        int tp_cost = 0;
     };
 
     // Every Technique the player has learned (KnownTechniquesComponent).

@@ -49,6 +49,7 @@ TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::e
             if (const Technique* technique = techniques.Find(entry.technique_id))
             {
                 technique_entry.display_name = technique->name.empty() ? technique->id_string : technique->name;
+                technique_entry.tp_cost = technique->tp_cost;
                 technique_entry.icon_path = ResolveIconPath(technique->id_string);
             }
             message.techniques.push_back(std::move(technique_entry));
@@ -66,7 +67,10 @@ TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::e
                 TechniquesScreenMessage::PhotonArtEntry entry;
                 entry.photon_art_id = photon_art_id;
                 if (const PhotonArt* photon_art = photon_arts.Find(photon_art_id))
+                {
                     entry.display_name = photon_art->name.empty() ? photon_art->id_string : photon_art->name;
+                    entry.tp_cost = photon_art->tp_cost;
+                }
                 message.photon_arts.push_back(std::move(entry));
             }
         }

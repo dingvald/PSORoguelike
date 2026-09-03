@@ -43,6 +43,10 @@
                 {
                     "item_prefab_id": "monomate",
                     "weight": 1.0
+                },
+                {
+                    "item_prefab_id": "monofluid",
+                    "weight": 0.7
                 }
             ],
             "no_drop_weight": 3.0,
