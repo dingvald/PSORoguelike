@@ -16,6 +16,7 @@
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
+#include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenClosedMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
 
@@ -140,6 +141,7 @@ void HudLayer::OnAttach()
     Subscribe<TechniquesScreenMessage>(&HudLayer::OnTechniquesScreenState, this);
     Subscribe<TechniquesScreenClosedMessage>(&HudLayer::OnTechniquesScreenClosed, this);
     Subscribe<FloatingTextStateMessage>(&HudLayer::OnFloatingTextState, this);
+    Subscribe<TargetStateMessage>(&HudLayer::OnTargetState, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -212,6 +214,25 @@ void HudLayer::OnPlayerStatus(const PlayerStatusMessage& message)
     if (Rml::Element* text = m_document->GetElementById("secondary-text"))
         text->SetInnerRML(
             EscapeRml(std::to_string(message.current_secondary) + " / " + std::to_string(message.max_secondary)));
+}
+
+void HudLayer::OnTargetState(const TargetStateMessage& message)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* panel = m_document->GetElementById("target-panel"))
+        panel->SetProperty("display", message.has_target ? "block" : "none");
+
+    if (!message.has_target)
+        return;
+
+    if (Rml::Element* name = m_document->GetElementById("target-name"))
+        name->SetInnerRML(EscapeRml(message.name));
+    if (Rml::Element* race = m_document->GetElementById("target-race"))
+        race->SetInnerRML(EscapeRml(message.race_label));
+    if (Rml::Element* fill = m_document->GetElementById("target-hp-fill"))
+        fill->SetProperty("width", PercentWidth(message.current_hp, message.max_hp));
 }
 
 void HudLayer::OnHotbarState(const HotbarStateMessage& message)

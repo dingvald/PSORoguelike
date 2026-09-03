@@ -35,6 +35,7 @@
 #include "Systems/MissFlashEffectSystem.h"
 #include "Systems/OnHitEffectSystem.h"
 #include "Systems/StatusEffectWorldMarkers.h"
+#include "Systems/TabTargetSystem.h"
 #include "Systems/TurnCoordinator.h"
 
 #include <entt/entt.hpp>
@@ -158,6 +159,13 @@ private:
     // this can't just live inside TurnCoordinator::Step/ExploringState.
     void PublishFloatingTextState();
 
+    // Resolves the player's TabTargetComponent (name/race label/HP) into a
+    // TargetStateMessage for HudLayer's bottom-left target panel. Called
+    // from OnUpdate, right after m_tab_target_system->Update(), and once
+    // from OnHudReady for the same post-attach handshake reason
+    // PublishHotbarState/PublishPlayerStatus already need it for.
+    void PublishTargetState();
+
     Registry m_registry;
     PieceLibrary m_pieces;
     AffixLibrary m_affixes; // empty: no affix content authored yet (pending M8.2's drop-table work)
@@ -222,6 +230,13 @@ private:
     // only because it needs *m_grid, re-created each LoadNewGame same as
     // m_enemy_ai_system.
     std::optional<ProjectileAdvanceAction> m_projectile_advance_action;
+
+    // Drives the player's tab-lock target and its world marker -- see
+    // TabTargetSystem.h. Holds only pointers into m_registry/m_grid, so
+    // declaration order relative to them doesn't matter; std::optional only
+    // because it needs *m_grid, re-created each LoadNewGame same as
+    // m_enemy_ai_system.
+    std::optional<TabTargetSystem> m_tab_target_system;
 
     // Gates piece-authored spawn waves past their first: holds pointers into
     // m_registry/m_grid only (declaration order relative to them doesn't

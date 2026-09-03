@@ -35,6 +35,14 @@
             <div id="hotbar-slot-9" class="hotbar-slot"><span class="slot-key">0</span><span class="slot-name"></span></div>
         </div>
 
+        <div id="target-panel">
+            <span id="target-name" class="target-name"></span>
+            <span id="target-race" class="target-race"></span>
+            <div class="bar-row">
+                <div class="bar-track"><div id="target-hp-fill" class="bar-fill target"></div></div>
+            </div>
+        </div>
+
         <div id="event-log"></div>
 
         <div id="floating-text-layer"></div>

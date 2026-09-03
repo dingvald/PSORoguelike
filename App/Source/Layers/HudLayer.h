@@ -32,6 +32,7 @@ struct MesetaChangedMessage;
 struct CharacterScreenClosedMessage;
 struct TechniquesScreenClosedMessage;
 struct FloatingTextStateMessage;
+struct TargetStateMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -159,6 +160,11 @@ private:
     // FloatingTextSystem instance, left/top/color set inline since they're
     // per-instance, not shared CSS.
     void OnFloatingTextState(const FloatingTextStateMessage& message);
+
+    // Shows/hides #target-panel and, while shown, sets the target's name/
+    // race text and HP bar fill -- same PercentWidth/EscapeRml idioms as
+    // OnPlayerStatus's own bar update.
+    void OnTargetState(const TargetStateMessage& message);
 
     void AppendLogLine(const std::string& text);
 
