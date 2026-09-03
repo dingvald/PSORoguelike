@@ -79,6 +79,7 @@ namespace {
     constexpr int kEntitySchemaVersion = 1;
     constexpr int kTileWidth = 16;
     constexpr int kTileHeight = 24;
+    constexpr float kCameraZoomStep = 0.5f;
 
     // The dungeon this layer loads on attach. Hardcoded for now (no mission
     // select exists yet) -- revisit once a hub/mission-select flow needs to
@@ -443,7 +444,7 @@ void GameplayLayer::OnRender(SDL_Renderer* renderer)
     SDL_GetCurrentRenderOutputSize(renderer, &width, &height);
     m_last_render_width = width;
     m_last_render_height = height;
-    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, /*zoom=*/1.0f, m_camera.GetRenderOffset());
+    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, m_camera.GetZoom(), m_camera.GetRenderOffset());
 }
 
 bool GameplayLayer::TryActivateSlot(int slot_index)
@@ -595,9 +596,11 @@ void GameplayLayer::PublishFloatingTextState()
 
     for (const FloatingTextInstance& instance : m_floating_text.Active())
     {
-        const PixelPosition pixel = TileToPixel(
-            instance.origin_tile, instance.offset, m_camera.GetPosition(), m_last_render_width, m_last_render_height,
-            static_cast<float>(kTileWidth), static_cast<float>(kTileHeight), m_camera.GetRenderOffset());
+        const PixelPosition pixel = TileToPixel(instance.origin_tile, instance.offset, m_camera.GetPosition(),
+                                                 m_last_render_width, m_last_render_height,
+                                                 static_cast<float>(kTileWidth) * m_camera.GetZoom(),
+                                                 static_cast<float>(kTileHeight) * m_camera.GetZoom(),
+                                                 m_camera.GetRenderOffset());
         state.entries.push_back(FloatingTextStateMessage::Entry{pixel.x, pixel.y, instance.text, instance.color});
     }
 
@@ -702,6 +705,28 @@ void GameplayLayer::OnEvent(Event& event)
         {
             m_turn_coordinator->ReleaseKey(key_event.GetKeyCode());
             return true;
+        });
+    if (event.handled)
+        return;
+
+    // Camera zoom is a view control, not a turn action -- it's handled
+    // unconditionally (any GameState on top) rather than gated to
+    // ExploringState like the hotbar/character-screen keys below.
+    EventDispatcher zoom_dispatcher(event);
+    zoom_dispatcher.Dispatch<KeyPressedEvent>(
+        [this](KeyPressedEvent& key_event)
+        {
+            if (key_event.GetKeyCode() == SDLK_KP_PLUS)
+            {
+                m_camera.SetZoom(m_camera.GetZoom() + kCameraZoomStep);
+                return true;
+            }
+            if (key_event.GetKeyCode() == SDLK_KP_MINUS)
+            {
+                m_camera.SetZoom(m_camera.GetZoom() - kCameraZoomStep);
+                return true;
+            }
+            return false;
         });
     if (event.handled)
         return;
