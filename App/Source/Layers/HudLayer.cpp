@@ -446,7 +446,7 @@ void HudLayer::OnTechniquesScreenState(const TechniquesScreenMessage& message)
                 if (!entry.icon_path.empty())
                     markup += "<img class=\"tech-icon\" src=\"" + EscapeRml(entry.icon_path) + "\"/>";
                 markup += "<span class=\"tech-name\">" + EscapeRml(entry.display_name) + " (Tier " +
-                          std::to_string(entry.tier) + ")</span></div>";
+                          std::to_string(entry.tier) + ", " + std::to_string(entry.tp_cost) + " TP)</span></div>";
             }
         }
         list->SetInnerRML(markup);
@@ -478,7 +478,8 @@ void HudLayer::OnTechniquesScreenState(const TechniquesScreenMessage& message)
         else
         {
             for (const TechniquesScreenMessage::PhotonArtEntry& entry : message.photon_arts)
-                markup += "<div class=\"photon-art-row\">" + EscapeRml(entry.display_name) + "</div>";
+                markup += "<div class=\"photon-art-row\">" + EscapeRml(entry.display_name) + " (" +
+                          std::to_string(entry.tp_cost) + " TP)</div>";
         }
         list->SetInnerRML(markup);
 
