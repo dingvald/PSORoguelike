@@ -60,7 +60,7 @@ TEST_CASE("Weapon component registers as authorable with the expected field kind
     const psr::ComponentSchema& weapon = model.components[0];
     CHECK(weapon.id == "weapon");
     CHECK(weapon.authorable);
-    REQUIRE(weapon.fields.size() == 12);
+    REQUIRE(weapon.fields.size() == 11);
     CHECK(weapon.fields[0].name == "range_shape");
     CHECK(weapon.fields[0].kind == psr::FieldKind::Enum);
     CHECK(weapon.fields[0].enum_values ==
@@ -87,16 +87,13 @@ TEST_CASE("Weapon component registers as authorable with the expected field kind
     CHECK(weapon.fields[7].name == "photon_art_ids");
     CHECK(weapon.fields[7].kind == psr::FieldKind::Array);
     CHECK(weapon.fields[7].ElementSchema().kind == psr::FieldKind::NameId);
-    CHECK(weapon.fields[8].name == "technique_ids");
-    CHECK(weapon.fields[8].kind == psr::FieldKind::Array);
-    CHECK(weapon.fields[8].ElementSchema().kind == psr::FieldKind::NameId);
-    CHECK(weapon.fields[9].name == "element");
-    CHECK(weapon.fields[9].kind == psr::FieldKind::Enum);
-    CHECK(weapon.fields[9].enum_values == std::vector<std::string>{"none", "fire", "ice", "lightning", "light", "dark"});
-    CHECK(weapon.fields[10].name == "status_effect_id");
-    CHECK(weapon.fields[10].kind == psr::FieldKind::NameId);
-    CHECK(weapon.fields[11].name == "status_chance_percent");
-    CHECK(weapon.fields[11].kind == psr::FieldKind::Integer);
+    CHECK(weapon.fields[8].name == "element");
+    CHECK(weapon.fields[8].kind == psr::FieldKind::Enum);
+    CHECK(weapon.fields[8].enum_values == std::vector<std::string>{"none", "fire", "ice", "lightning", "light", "dark"});
+    CHECK(weapon.fields[9].name == "status_effect_id");
+    CHECK(weapon.fields[9].kind == psr::FieldKind::NameId);
+    CHECK(weapon.fields[10].name == "status_chance_percent");
+    CHECK(weapon.fields[10].kind == psr::FieldKind::Integer);
 }
 
 TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses and a non-default range_shape",

@@ -54,5 +54,14 @@
             <div id="character-screen-context-menu"></div>
             <div id="character-screen-hint">Numpad to navigate, Space to select, C / Esc to close</div>
         </div>
+
+        <div id="techniques-screen">
+            <div id="techniques-screen-title">Techniques &amp; Photon Arts</div>
+            <div id="techniques-screen-columns">
+                <div id="techniques-screen-techniques" class="character-screen-panel"></div>
+                <div id="techniques-screen-photon-arts" class="character-screen-panel"></div>
+            </div>
+            <div id="techniques-screen-hint">Numpad to navigate, Space to assign to hotbar, T / Esc to close</div>
+        </div>
     </body>
 </rml>

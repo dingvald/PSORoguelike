@@ -9,7 +9,8 @@ namespace psr {
 // HealthSystem's IncomingHealEvent, the same sole-writer pattern damage
 // already uses; RestoreTp mutates TPComponent directly instead, since no
 // TP-owning system exists yet to route through (see
-// ConsumableComponent.h/HealEvent.h) -- then destroys the item entity.
+// ConsumableComponent.h/HealEvent.h); TeachTechnique routes through
+// Items/TechniqueLearning.h's LearnTechnique -- then destroys the item entity.
 // Constructed per-invocation with the index to use, same precedent as
 // DropAction (a runtime hotbar/UI choice, not something fixed at key-bind
 // time). A missing InventoryComponent, an out-of-range index, or an item

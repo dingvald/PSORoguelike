@@ -25,6 +25,7 @@
 #include "States/GameOverState.h"
 #include "States/GameStateMachine.h"
 #include "States/TargetSelectionState.h"
+#include "States/TechniquesScreenState.h"
 #include "Systems/CombatLogBridge.h"
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
@@ -48,6 +49,7 @@ struct RestartRequestedMessage;
 struct InventoryItemActivatedMessage;
 struct EquipmentSlotActivatedMessage;
 struct HotbarSlotAssignedMessage;
+struct TechniquesScreenSlotAssignedMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -138,6 +140,12 @@ private:
     // and republishes HotbarStateMessage instead of the Character screen.
     void OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message);
     void PublishCharacterScreenState();
+
+    // Same "Assign to Hotbar" flow as OnHotbarSlotAssigned, but for the
+    // Techniques/Photon Arts screen's rows (see AssignAbilityToHotbarSlot) --
+    // gated on m_techniques_screen_state being on top instead of
+    // m_character_screen_state.
+    void OnTechniquesScreenSlotAssigned(const TechniquesScreenSlotAssignedMessage& message);
 
     // Converts every currently-active m_floating_text instance to a screen
     // pixel (via TileToPixel, using m_camera and the window size cached from
@@ -267,11 +275,14 @@ private:
     // GameplayLayer::OnEvent's own 'C'-key interception instead, not from
     // inside ExploringState::Update -- but it does need m_affixes (declared
     // well above this block) constructed first for its own constructor
-    // argument.
+    // argument. m_techniques_screen_state follows the same pattern, pushed on
+    // its own 'T'-key interception, needing m_techniques/m_photon_arts
+    // (declared well above this block) constructed first.
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
     CharacterScreenState m_character_screen_state{m_affixes};
+    TechniquesScreenState m_techniques_screen_state{m_techniques, m_photon_arts};
     ExploringState m_exploring_state{m_target_selection_state, m_game_over_state, m_animation_state};
     GameStateMachine m_state_machine;
 

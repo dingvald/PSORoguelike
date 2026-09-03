@@ -109,7 +109,6 @@ private:
     void RefreshAddComponentOptions();
     void RefreshRaceBonusRows();
     void RefreshPhotonArtIdRows();
-    void RefreshTechniqueIdRows();
     void RefreshDropEntryRows();
     void MarkDirty();
     void RefreshDirtyDisplay();
@@ -150,7 +149,6 @@ private:
     fieldwidgets::Listeners m_form_listeners;
     fieldwidgets::Listeners m_race_bonus_row_listeners;
     fieldwidgets::Listeners m_photon_art_row_listeners;
-    fieldwidgets::Listeners m_technique_row_listeners;
     fieldwidgets::Listeners m_drop_entry_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
 
@@ -200,8 +198,9 @@ private:
     AffixLibrary m_affixes;
 
     // Photon Art / Technique libraries, loaded once in OnAttach -- back the
-    // weapon card's photon_art_ids/technique_ids row-list BuildIdEnumField
-    // pickers (see RefreshPhotonArtIdRows/RefreshTechniqueIdRows).
+    // weapon card's photon_art_ids row-list BuildIdEnumField picker (see
+    // RefreshPhotonArtIdRows) and the consumable card's technique_id picker
+    // (see the field-consumable-technique field in RefreshEditForm).
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
 

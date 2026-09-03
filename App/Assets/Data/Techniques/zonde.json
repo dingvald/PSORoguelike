@@ -1,0 +1,17 @@
+{
+    "schema_version": 1,
+    "name": "Zonde",
+    "tp_cost": 4,
+    "element": "lightning",
+    "targeting_mode": "directional",
+    "range_shape": "line",
+    "range": 5,
+    "effect_family": "damage",
+    "status_effect_id": 0,
+    "status_chance_percent": 0,
+    "tiers": [
+        { "tier": 1, "power_multiplier": 1.0 },
+        { "tier": 2, "power_multiplier": 1.5 },
+        { "tier": 3, "power_multiplier": 2.0 }
+    ]
+}

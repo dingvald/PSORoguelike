@@ -53,6 +53,7 @@
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
+#include "Messages/TechniquesScreenSlotAssignedMessage.h"
 #include "States/GameState.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -119,6 +120,7 @@ void GameplayLayer::OnAttach()
     Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
     Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
+    Subscribe<TechniquesScreenSlotAssignedMessage>(&GameplayLayer::OnTechniquesScreenSlotAssigned, this);
 
     PushOverlay<HudLayer>();
 
@@ -298,28 +300,24 @@ void GameplayLayer::LoadNewGame()
         m_registry.Emplace<EquipmentComponent>(m_player, EquipmentComponent{weapon});
     }
 
-    // Default hotbar loadout: first 4 weapon-granted Techniques into slots
-    // 0-3, first 4 Photon Arts into slots 4-7 (mirrors the old placeholder
-    // cast trigger's fixed key ranges, now captured as data instead of
-    // re-derived by key range on every press). Slots 8-9 are Item slots bound
-    // to the two starter consumable prefab ids (see kMonomatePrefabId/
-    // kMonofluidPrefabId above) -- same "bind by prefab NameId, resolve to an
-    // inventory index at activation time" style Technique/PhotonArt slots
-    // already use, see TryActivateSlot's Item case.
+    // Default hotbar loadout: first 4 weapon-granted Photon Arts into slots
+    // 4-7 (mirrors the old placeholder cast trigger's fixed key ranges, now
+    // captured as data instead of re-derived by key range on every press).
+    // Technique slots (0-3) deliberately start Empty -- nothing is known at
+    // spawn (see KnownTechniquesComponent.h); the player assigns them
+    // manually via the Techniques/Photon Arts screen ('T') once something is
+    // learned, same manual-assign flow Item slots already use. Slots 8-9 are
+    // Item slots bound to the two starter consumable prefab ids (see
+    // kMonomatePrefabId/kMonofluidPrefabId above) -- same "bind by prefab
+    // NameId, resolve to an inventory index at activation time" style
+    // PhotonArt slots already use, see TryActivateSlot's Item case.
     HotbarComponent hotbar;
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
         equipment && equipment->weapon != entt::null)
     {
         if (const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon))
         {
-            std::size_t slot = 0;
-            for (std::uint32_t technique_id : weapon->technique_ids)
-            {
-                if (slot >= 4)
-                    break;
-                hotbar.slots[slot++] = HotbarSlot{HotbarSlotType::Technique, technique_id};
-            }
-            slot = 4;
+            std::size_t slot = 4;
             for (std::uint32_t photon_art_id : weapon->photon_art_ids)
             {
                 if (slot >= 8)
@@ -535,6 +533,15 @@ void GameplayLayer::OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& messag
         PublishHotbarState();
 }
 
+void GameplayLayer::OnTechniquesScreenSlotAssigned(const TechniquesScreenSlotAssignedMessage& message)
+{
+    if (m_state_machine.Top() != &m_techniques_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (AssignAbilityToHotbarSlot(Entity(m_registry, m_player), message.type, message.id, message.hotbar_slot))
+        PublishHotbarState();
+}
+
 void GameplayLayer::PublishCharacterScreenState()
 {
     if (!m_registry.IsValid(m_player))
@@ -656,6 +663,13 @@ void GameplayLayer::OnEvent(Event& event)
                 {
                     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
                     m_state_machine.Push(m_character_screen_state, context);
+                    return true;
+                }
+
+                if (key_event.GetKeyCode() == SDLK_T)
+                {
+                    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+                    m_state_machine.Push(m_techniques_screen_state, context);
                     return true;
                 }
 

@@ -418,7 +418,7 @@ namespace {
         return array;
     }
 
-    // A flat NameId array field (photon_art_ids/technique_ids), each entry
+    // A flat NameId array field (photon_art_ids), each entry
     // either an authored string (hashed + captured into NameIdRegistry, same
     // as ReadNameId) or a raw numeric id.
     std::vector<std::uint32_t> ReadNameIdArray(const rapidjson::Value& object, const char* key)
@@ -463,7 +463,6 @@ namespace {
         weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
         weapon.photon_art_ids = ReadNameIdArray(body, "photon_art_ids");
-        weapon.technique_ids = ReadNameIdArray(body, "technique_ids");
         weapon.element = ReadEnum<Element>(body, "element", weapon.element);
         weapon.status_effect_id = ReadNameId(body, "status_effect_id", 0);
         weapon.status_chance_percent = ReadInt(body, "status_chance_percent", weapon.status_chance_percent);
@@ -481,7 +480,6 @@ namespace {
         object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
         object.AddMember("photon_art_ids", WriteNameIdArray(weapon.photon_art_ids, allocator), allocator);
-        object.AddMember("technique_ids", WriteNameIdArray(weapon.technique_ids, allocator), allocator);
         object.AddMember("element", StringValue(std::string{EnumName(weapon.element)}, allocator), allocator);
         object.AddMember("status_effect_id", WriteNameId(weapon.status_effect_id, allocator), allocator);
         object.AddMember("status_chance_percent", weapon.status_chance_percent, allocator);
@@ -533,6 +531,7 @@ namespace {
         ConsumableComponent consumable;
         consumable.effect = ReadEnum<ConsumableEffect>(body, "effect", consumable.effect);
         consumable.amount = ReadInt(body, "amount", consumable.amount);
+        consumable.technique_id = ReadNameId(body, "technique_id", 0);
         return consumable;
     }
 
@@ -542,6 +541,7 @@ namespace {
         rapidjson::Value object(rapidjson::kObjectType);
         object.AddMember("effect", StringValue(std::string{EnumName(consumable.effect)}, allocator), allocator);
         object.AddMember("amount", consumable.amount, allocator);
+        object.AddMember("technique_id", WriteNameId(consumable.technique_id, allocator), allocator);
         return object;
     }
 
@@ -592,9 +592,7 @@ namespace {
           "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
           "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
           "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
-          "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"
-          "<h3>Techniques<span id=\"add-technique\" class=\"btn\">Add Technique</span></h3>"
-          "<div id=\"technique-id-list\" class=\"ref-scroll\"></div>"},
+          "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"},
          {"armor", "Armor", "#6f9de8",
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
@@ -604,7 +602,8 @@ namespace {
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
-          "<div id=\"field-consumable-amount\" class=\"field-row\"></div>"},
+          "<div id=\"field-consumable-amount\" class=\"field-row\"></div>"
+          "<div id=\"field-consumable-technique\" class=\"field-row\"></div>"},
          {"drop_table", "Drop Table", "#e89c5d",
           "<div id=\"field-no-drop-weight\" class=\"field-row\"></div>"
           "<div id=\"field-meseta-weight\" class=\"field-row\"></div>"
@@ -686,7 +685,6 @@ void PrefabEditorLayer::OnAttach()
 
 void PrefabEditorLayer::OnDetach()
 {
-    m_technique_row_listeners.clear();
     m_photon_art_row_listeners.clear();
     m_race_bonus_row_listeners.clear();
     m_drop_entry_row_listeners.clear();
@@ -1396,6 +1394,22 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_consumable.amount = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-consumable-technique"))
+    {
+        // Only meaningful when effect == teach_technique (amount doubles as
+        // the tier taught for that case) -- shown unconditionally regardless
+        // of the selected effect, same "irrelevant fields stay visible"
+        // precedent the Weapon card's range/range_shape fields already set.
+        std::vector<std::pair<std::uint32_t, std::string>> technique_options = {{0, "-- Select Technique --"}};
+        for (const Technique& technique : m_techniques.All())
+            technique_options.emplace_back(technique.id, technique.name.empty() ? technique.id_string : technique.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "technique_id", technique_options, m_consumable.technique_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_consumable.technique_id = id;
+                                                MarkDirty();
+                                            }));
+    }
 
     if (Rml::Element* row = m_editor->GetElementById("field-no-drop-weight"))
         keep(fieldwidgets::BuildFloatField(*row, "no_drop_weight", m_drop_table.no_drop_weight,
@@ -1463,22 +1477,8 @@ void PrefabEditorLayer::RefreshEditForm()
         listener->Attach(*add_photon_art);
         m_form_listeners.push_back(std::move(listener));
     }
-    if (Rml::Element* add_technique = m_editor->GetElementById("add-technique"))
-    {
-        auto listener = std::make_unique<RmlClickListener>(
-            [this]
-            {
-                m_weapon.technique_ids.push_back(0);
-                MarkDirty();
-                RefreshTechniqueIdRows();
-            });
-        listener->Attach(*add_technique);
-        m_form_listeners.push_back(std::move(listener));
-    }
-
     RefreshRaceBonusRows();
     RefreshPhotonArtIdRows();
-    RefreshTechniqueIdRows();
     RefreshDropEntryRows();
     RefreshDirtyDisplay();
 }
@@ -1620,59 +1620,6 @@ void PrefabEditorLayer::RefreshPhotonArtIdRows()
     }
     for (auto& listener : result.listeners)
         m_photon_art_row_listeners.push_back(std::move(listener));
-}
-
-void PrefabEditorLayer::RefreshTechniqueIdRows()
-{
-    if (!m_editor)
-        return;
-    m_technique_row_listeners.clear();
-
-    Rml::Element* list = m_editor->GetElementById("technique-id-list");
-    if (!list)
-        return;
-
-    const std::vector<std::string> content(m_weapon.technique_ids.size(), "<div class=\"tech-id field-row\"></div>");
-
-    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
-        *list, content, "<div class=\"list-empty\">No Techniques granted.</div>",
-        [this](std::size_t index)
-        {
-            if (index < m_weapon.technique_ids.size())
-                m_weapon.technique_ids.erase(m_weapon.technique_ids.begin() + static_cast<std::ptrdiff_t>(index));
-            MarkDirty();
-            RefreshTechniqueIdRows();
-        },
-        [this](std::size_t from, std::size_t to)
-        {
-            m_pending_action = [this, from, to]
-            {
-                fieldwidgets::MoveElement(m_weapon.technique_ids, from, to);
-                MarkDirty();
-                RefreshTechniqueIdRows();
-            };
-        });
-
-    std::vector<std::pair<std::uint32_t, std::string>> options = {{0, "-- Select Technique --"}};
-    for (const Technique& technique : m_techniques.All())
-        options.emplace_back(technique.id, technique.name.empty() ? technique.id_string : technique.name);
-
-    for (std::size_t i = 0; i < result.rows.size() && i < m_weapon.technique_ids.size(); ++i)
-    {
-        const std::size_t index = i;
-        if (Rml::Element* row = result.rows[i]->QuerySelector(".tech-id"))
-            for (auto& listener :
-                 fieldwidgets::BuildIdEnumField(*row, "technique_id", options, m_weapon.technique_ids[i],
-                                                [this, index](std::uint32_t id)
-                                                {
-                                                    if (index < m_weapon.technique_ids.size())
-                                                        m_weapon.technique_ids[index] = id;
-                                                    MarkDirty();
-                                                }))
-                m_technique_row_listeners.push_back(std::move(listener));
-    }
-    for (auto& listener : result.listeners)
-        m_technique_row_listeners.push_back(std::move(listener));
 }
 
 void PrefabEditorLayer::RefreshDropEntryRows()

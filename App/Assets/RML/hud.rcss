@@ -322,3 +322,70 @@ body {
     color: #f6470a;
     font-weight: bold;
 }
+
+#techniques-screen {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(10, 8, 12, 230);
+    flex-direction: column;
+    align-items: center;
+}
+
+#techniques-screen-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #3aa0ff;
+    margin-bottom: 0.6em;
+}
+
+#techniques-screen-columns {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 900px;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.technique-row,
+.photon-art-row {
+    display: block;
+    padding: 0.3em 0.2em;
+    font-size: 0.85em;
+    color: #ddd;
+}
+
+.technique-row:hover,
+.photon-art-row:hover {
+    color: #fff;
+    background-color: rgba(58, 160, 255, 80);
+}
+
+.technique-row.focused,
+.photon-art-row.focused {
+    color: #fff;
+    border-left: 3px #3aa0ff;
+}
+
+.tech-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 0.4em;
+    vertical-align: middle;
+}
+
+#techniques-screen-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
+
+#techniques-screen-hint.awaiting-hotbar-slot {
+    color: #3aa0ff;
+    font-weight: bold;
+}

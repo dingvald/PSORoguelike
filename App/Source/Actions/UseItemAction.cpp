@@ -7,6 +7,7 @@
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Items/ItemUseEvent.h"
+#include "Items/TechniqueLearning.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -42,6 +43,9 @@ ActionResult UseItemAction::Perform(Entity actor)
             tp->current_tp = std::min(tp->max_tp, tp->current_tp + consumable->amount);
         break;
     }
+    case ConsumableEffect::TeachTechnique:
+        LearnTechnique(actor, consumable->technique_id, consumable->amount);
+        break;
     }
 
     std::uint32_t item_prefab_id = 0;

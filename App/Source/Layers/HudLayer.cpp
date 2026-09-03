@@ -16,6 +16,8 @@
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
 #include "Messages/StatusEffectsMessage.h"
+#include "Messages/TechniquesScreenClosedMessage.h"
+#include "Messages/TechniquesScreenSlotAssignedMessage.h"
 
 #include "ApplicationFilepaths.h"
 #include "Engine/Events/Event.h"
@@ -50,6 +52,10 @@ namespace {
     // reasoning as kContextMenuWidth/kContextMenuMaxHeight above.
     constexpr const char* kDefaultCharacterScreenHint = "Numpad to navigate, Space to select, C / Esc to close";
     constexpr const char* kAwaitingHotbarSlotHint = "Press 0-9 to assign to a hotbar slot (Esc to cancel)";
+
+    // Must match #techniques-screen-hint's initial text in hud.rml -- same
+    // "must match markup" reasoning as kDefaultCharacterScreenHint.
+    constexpr const char* kDefaultTechniquesScreenHint = "Numpad to navigate, Space to assign to hotbar, T / Esc to close";
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9. Mirrors
     // GameplayLayer.cpp's own KeyCodeToHotbarSlot -- duplicated rather than
@@ -131,6 +137,8 @@ void HudLayer::OnAttach()
     Subscribe<MesetaChangedMessage>(&HudLayer::OnMesetaChanged, this);
     Subscribe<CharacterScreenMessage>(&HudLayer::OnCharacterScreenState, this);
     Subscribe<CharacterScreenClosedMessage>(&HudLayer::OnCharacterScreenClosed, this);
+    Subscribe<TechniquesScreenMessage>(&HudLayer::OnTechniquesScreenState, this);
+    Subscribe<TechniquesScreenClosedMessage>(&HudLayer::OnTechniquesScreenClosed, this);
     Subscribe<FloatingTextStateMessage>(&HudLayer::OnFloatingTextState, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
@@ -143,6 +151,7 @@ void HudLayer::OnDetach()
 {
     m_hotbar_listeners.clear();
     m_character_screen_listeners.clear();
+    m_techniques_screen_listeners.clear();
     m_context_menu_listeners.clear();
     if (m_document)
     {
@@ -395,6 +404,190 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
     m_focused_row = 0;
 }
 
+void HudLayer::OnTechniquesScreenState(const TechniquesScreenMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_techniques_screen_cache.has_value();
+    m_techniques_screen_cache = message;
+    CancelAwaitingHotbarSlot();
+
+    if (Rml::Element* overlay = m_document->GetElementById("techniques-screen"))
+        overlay->SetProperty("display", "flex");
+
+    m_techniques_screen_listeners.clear();
+
+    if (Rml::Element* list = m_document->GetElementById("techniques-screen-techniques"))
+    {
+        std::string markup;
+        if (message.techniques.empty())
+        {
+            markup = "<div class=\"list-empty\">No Techniques learned yet.</div>";
+        }
+        else
+        {
+            for (const TechniquesScreenMessage::TechniqueEntry& entry : message.techniques)
+            {
+                markup += "<div class=\"technique-row\">";
+                if (!entry.icon_path.empty())
+                    markup += "<img class=\"tech-icon\" src=\"" + EscapeRml(entry.icon_path) + "\"/>";
+                markup += "<span class=\"tech-name\">" + EscapeRml(entry.display_name) + " (Tier " +
+                          std::to_string(entry.tier) + ")</span></div>";
+            }
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".technique-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_tech_focused_panel = TechniquesScreenPanel::Techniques;
+                    m_tech_focused_row = index;
+                    ActivateFocusedTechRow();
+                });
+            listener->Attach(*rows[i]);
+            m_techniques_screen_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (Rml::Element* list = m_document->GetElementById("techniques-screen-photon-arts"))
+    {
+        std::string markup;
+        if (message.photon_arts.empty())
+        {
+            markup = "<div class=\"list-empty\">No Photon Arts granted by the equipped weapon.</div>";
+        }
+        else
+        {
+            for (const TechniquesScreenMessage::PhotonArtEntry& entry : message.photon_arts)
+                markup += "<div class=\"photon-art-row\">" + EscapeRml(entry.display_name) + "</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".photon-art-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_tech_focused_panel = TechniquesScreenPanel::PhotonArts;
+                    m_tech_focused_row = index;
+                    ActivateFocusedTechRow();
+                });
+            listener->Attach(*rows[i]);
+            m_techniques_screen_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (fresh_open)
+    {
+        m_tech_focused_panel = TechniquesScreenPanel::Techniques;
+        m_tech_focused_row = 0;
+    }
+    else
+    {
+        m_tech_focused_row = std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
+    }
+    RenderTechniquesFocusHighlights();
+}
+
+void HudLayer::OnTechniquesScreenClosed(const TechniquesScreenClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("techniques-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_techniques_screen_listeners.clear();
+    CancelAwaitingHotbarSlot();
+    m_techniques_screen_cache.reset();
+    m_tech_focused_panel = TechniquesScreenPanel::Techniques;
+    m_tech_focused_row = 0;
+}
+
+int HudLayer::TechniquesScreenRowCount(TechniquesScreenPanel panel) const
+{
+    if (!m_techniques_screen_cache)
+        return 0;
+
+    return panel == TechniquesScreenPanel::Techniques
+               ? static_cast<int>(m_techniques_screen_cache->techniques.size())
+               : static_cast<int>(m_techniques_screen_cache->photon_arts.size());
+}
+
+void HudLayer::MoveTechPanelFocus(int direction)
+{
+    constexpr int kPanelCount = 2;
+    const int next = std::clamp(static_cast<int>(m_tech_focused_panel) + direction, 0, kPanelCount - 1);
+    m_tech_focused_panel = static_cast<TechniquesScreenPanel>(next);
+    m_tech_focused_row = std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
+    RenderTechniquesFocusHighlights();
+}
+
+void HudLayer::MoveTechRowFocus(int direction)
+{
+    const int count = TechniquesScreenRowCount(m_tech_focused_panel);
+    if (count <= 0)
+        return;
+
+    m_tech_focused_row = std::clamp(m_tech_focused_row + direction, 0, count - 1);
+    RenderTechniquesFocusHighlights();
+}
+
+void HudLayer::ActivateFocusedTechRow()
+{
+    if (!m_techniques_screen_cache)
+        return;
+
+    if (m_tech_focused_panel == TechniquesScreenPanel::Techniques)
+    {
+        if (m_tech_focused_row < 0 || m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->techniques.size()))
+            return;
+        const TechniquesScreenMessage::TechniqueEntry& entry =
+            m_techniques_screen_cache->techniques[static_cast<std::size_t>(m_tech_focused_row)];
+        BeginAwaitingAbilityHotbarSlot(HotbarSlotType::Technique, entry.technique_id);
+    }
+    else
+    {
+        if (m_tech_focused_row < 0 || m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->photon_arts.size()))
+            return;
+        const TechniquesScreenMessage::PhotonArtEntry& entry =
+            m_techniques_screen_cache->photon_arts[static_cast<std::size_t>(m_tech_focused_row)];
+        BeginAwaitingAbilityHotbarSlot(HotbarSlotType::PhotonArt, entry.photon_art_id);
+    }
+}
+
+void HudLayer::RenderTechniquesFocusHighlights()
+{
+    if (!m_document)
+        return;
+
+    RenderTechRowFocus("techniques-screen-techniques", ".technique-row", TechniquesScreenPanel::Techniques);
+    RenderTechRowFocus("techniques-screen-photon-arts", ".photon-art-row", TechniquesScreenPanel::PhotonArts);
+}
+
+void HudLayer::RenderTechRowFocus(const char* container_id, const char* row_class, TechniquesScreenPanel panel)
+{
+    Rml::Element* container = m_document->GetElementById(container_id);
+    if (!container)
+        return;
+
+    container->SetClass("focused", panel == m_tech_focused_panel);
+
+    Rml::ElementList rows;
+    container->QuerySelectorAll(rows, row_class);
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", panel == m_tech_focused_panel && static_cast<int>(i) == m_tech_focused_row);
+}
+
 void HudLayer::RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stats)
 {
     Rml::Element* panel = m_document->GetElementById("character-screen-stats");
@@ -547,16 +740,33 @@ void HudLayer::ChooseHighlightedMenuOption()
 void HudLayer::BeginAwaitingHotbarSlot(int inventory_index)
 {
     CloseContextMenu();
-    m_awaiting_hotbar_slot = true;
+    m_awaiting_hotbar_assign_source = HotbarAssignSource::CharacterScreenItem;
     m_awaiting_hotbar_inventory_index = inventory_index;
     SetCharacterScreenHint(kAwaitingHotbarSlotHint, /*awaiting=*/true);
 }
 
+void HudLayer::BeginAwaitingAbilityHotbarSlot(HotbarSlotType type, std::uint32_t id)
+{
+    m_awaiting_hotbar_assign_source = HotbarAssignSource::TechniquesScreenAbility;
+    m_awaiting_hotbar_ability_type = type;
+    m_awaiting_hotbar_ability_id = id;
+    SetTechniquesScreenHint(kAwaitingHotbarSlotHint, /*awaiting=*/true);
+}
+
 void HudLayer::CancelAwaitingHotbarSlot()
 {
-    m_awaiting_hotbar_slot = false;
+    m_awaiting_hotbar_assign_source = HotbarAssignSource::None;
     m_awaiting_hotbar_inventory_index = -1;
-    SetCharacterScreenHint(kDefaultCharacterScreenHint, /*awaiting=*/false);
+    m_awaiting_hotbar_ability_type = HotbarSlotType::Empty;
+    m_awaiting_hotbar_ability_id = 0;
+    // Both guarded rather than switched on source -- CancelAwaitingHotbarSlot
+    // is also called unconditionally from screen open/close paths where
+    // nothing was actually awaiting, so this just restores whichever
+    // screen's hint is currently in the DOM (the other is hidden/inert).
+    if (m_character_screen_cache)
+        SetCharacterScreenHint(kDefaultCharacterScreenHint, /*awaiting=*/false);
+    if (m_techniques_screen_cache)
+        SetTechniquesScreenHint(kDefaultTechniquesScreenHint, /*awaiting=*/false);
 }
 
 void HudLayer::SetCharacterScreenHint(const char* text, bool awaiting)
@@ -565,6 +775,19 @@ void HudLayer::SetCharacterScreenHint(const char* text, bool awaiting)
         return;
 
     Rml::Element* hint = m_document->GetElementById("character-screen-hint");
+    if (!hint)
+        return;
+
+    hint->SetInnerRML(EscapeRml(text));
+    hint->SetClass("awaiting-hotbar-slot", awaiting);
+}
+
+void HudLayer::SetTechniquesScreenHint(const char* text, bool awaiting)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* hint = m_document->GetElementById("techniques-screen-hint");
     if (!hint)
         return;
 
@@ -738,7 +961,7 @@ Rml::Element* HudLayer::CharacterScreenRowElement(CharacterScreenPanel panel, in
 
 void HudLayer::OnEvent(Event& event)
 {
-    if (!m_document || !m_character_screen_cache)
+    if (!m_document || (!m_character_screen_cache && !m_techniques_screen_cache))
         return;
 
     EventDispatcher dispatcher(event);
@@ -747,7 +970,7 @@ void HudLayer::OnEvent(Event& event)
         {
             const int key = key_event.GetKeyCode();
 
-            if (m_awaiting_hotbar_slot)
+            if (m_awaiting_hotbar_assign_source != HotbarAssignSource::None)
             {
                 if (key == SDLK_ESCAPE)
                 {
@@ -756,12 +979,47 @@ void HudLayer::OnEvent(Event& event)
                 }
                 if (const std::optional<int> slot = KeyCodeToHotbarSlot(key))
                 {
-                    const int inventory_index = m_awaiting_hotbar_inventory_index;
-                    CancelAwaitingHotbarSlot();
-                    Publish(HotbarSlotAssignedMessage{inventory_index, *slot});
+                    if (m_awaiting_hotbar_assign_source == HotbarAssignSource::CharacterScreenItem)
+                    {
+                        const int inventory_index = m_awaiting_hotbar_inventory_index;
+                        CancelAwaitingHotbarSlot();
+                        Publish(HotbarSlotAssignedMessage{inventory_index, *slot});
+                    }
+                    else
+                    {
+                        const HotbarSlotType type = m_awaiting_hotbar_ability_type;
+                        const std::uint32_t id = m_awaiting_hotbar_ability_id;
+                        CancelAwaitingHotbarSlot();
+                        Publish(TechniquesScreenSlotAssignedMessage{type, id, *slot});
+                    }
                     return true;
                 }
                 return true; // swallow all other keys while awaiting
+            }
+
+            if (m_techniques_screen_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_4:
+                    MoveTechPanelFocus(-1);
+                    return true;
+                case SDLK_KP_6:
+                    MoveTechPanelFocus(1);
+                    return true;
+                case SDLK_KP_8:
+                    MoveTechRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveTechRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedTechRow();
+                    return true;
+                default:
+                    return false;
+                }
             }
 
             if (m_menu_open)

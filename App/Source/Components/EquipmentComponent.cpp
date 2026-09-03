@@ -47,14 +47,10 @@ namespace {
 
     void ContributeTechniqueCast(Entity actor, BeforeTechniqueCastEvent& event)
     {
+        // Technique casting no longer depends on the equipped weapon (see
+        // Technique.h's own doc comment) -- only the effective stats it
+        // contributes to damage/heal magnitude still matter here.
         event.attacker_stats = ComputeEffectiveStats(actor, actor.GetRegistry().GetAffixLibrary());
-
-        const WeaponComponent* weapon = FindEquippedWeapon(actor);
-        if (!weapon)
-            return;
-
-        event.has_weapon = true;
-        event.weapon_grants_id = Grants(weapon->technique_ids, event.technique_id);
     }
 
     void ContributePhotonArtCast(Entity actor, BeforePhotonArtCastEvent& event)

@@ -9,23 +9,53 @@
 #include "Combat/Technique.h"
 #include "Combat/TechniqueCastEvent.h"
 #include "Components/ElementalResistanceComponent.h"
+#include "Components/KnownTechniquesComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/HealEvent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
 namespace psr {
 
 namespace {
-    float TierMultiplier(const std::vector<TechniqueTier>& tiers)
+    // Finds the actor's known tier for technique_id, if any -- nullptr if the
+    // technique was never learned (see Items/TechniqueLearning.h's
+    // LearnTechnique, the only writer of KnownTechniquesComponent).
+    const KnownTechniqueEntry* FindKnownEntry(Entity actor, std::uint32_t technique_id)
     {
-        return tiers.empty() ? 1.0f : tiers.front().power_multiplier;
+        const KnownTechniquesComponent* known = actor.TryGet<KnownTechniquesComponent>();
+        if (!known)
+            return nullptr;
+        auto it = std::find_if(known->known.begin(), known->known.end(),
+                               [technique_id](const KnownTechniqueEntry& entry)
+                               { return entry.technique_id == technique_id; });
+        return it == known->known.end() ? nullptr : &*it;
+    }
+
+    // The tier entry matching known_tier exactly, falling back to the
+    // highest authored tier <= known_tier, falling back to a flat 1.0x if
+    // none qualifies (including an empty tiers list) -- so a technique disk's
+    // authored level actually changes cast power once tiers exist, rather
+    // than always resolving tiers[0] regardless of what was learned.
+    float TierMultiplierForLevel(const std::vector<TechniqueTier>& tiers, int known_tier)
+    {
+        const TechniqueTier* best = nullptr;
+        for (const TechniqueTier& tier : tiers)
+        {
+            if (tier.tier > known_tier)
+                continue;
+            if (!best || tier.tier > best->tier)
+                best = &tier;
+        }
+        return best ? best->power_multiplier : 1.0f;
     }
 } // namespace
 
@@ -37,16 +67,22 @@ TechniqueAction::TechniqueAction(Grid& grid, const TechniqueLibrary& techniques,
 
 ActionResult TechniqueAction::Perform(Entity actor)
 {
-    // EquipmentComponent's own handler resolves the equipped weapon (if any)
-    // and fills has_weapon/weapon_grants_id/attacker_stats; TPComponent's own
-    // handler fills current_tp/has_tp_component -- this action never reads
-    // EquipmentComponent/WeaponComponent directly, and only touches
+    // EquipmentComponent's own handler fills attacker_stats; TPComponent's
+    // own handler fills current_tp/has_tp_component -- this action never
+    // reads EquipmentComponent/TPComponent directly, and only touches
     // TPComponent for the deduction below, once the gate has already passed.
     BeforeTechniqueCastEvent before_cast{m_technique_id};
     actor.Dispatch(before_cast);
     if (before_cast.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
         return ActionResult(0);
-    if (!before_cast.has_weapon || !before_cast.weapon_grants_id)
+
+    // Casting is gated purely on learned knowledge (see
+    // KnownTechniquesComponent.h/Items/TechniqueLearning.h) -- not on the
+    // equipped weapon, per the user's explicit "replace weapon-granting"
+    // choice. An unknown technique_id is a free no-op, same shape the old
+    // weapon-grant check had.
+    const KnownTechniqueEntry* known_entry = FindKnownEntry(actor, m_technique_id);
+    if (!known_entry)
         return ActionResult(0);
 
     const Technique* technique = m_techniques->Find(m_technique_id);
@@ -69,19 +105,20 @@ ActionResult TechniqueAction::Perform(Entity actor)
     const Vec2 selected_tile =
         actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
     const Vec2 offset = selected_tile - origin;
-    const float multiplier = TierMultiplier(technique->tiers);
+    const float multiplier = TierMultiplierForLevel(technique->tiers, known_entry->tier);
 
     const StatsComponent& attacker_stats = before_cast.attacker_stats;
     std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
 
     if (offset == Vec2{0, 0})
     {
-        // SelfTarget: no attacker-vs-defender roll against yourself. Only
-        // Damage has an immediate effect here -- Drain has no drain_percent
-        // to size a heal by on Technique, and self-target status application
-        // stays out of scope this pass (no buff-shaped use case exists yet
-        // to justify it) -- see the directional branch below for the
-        // target-facing Status implementation.
+        // SelfTarget: no attacker-vs-defender roll against yourself. Damage
+        // and Heal are the only effect families with an immediate effect
+        // here -- Drain has no drain_percent to size a heal by on Technique,
+        // and self-target status application stays out of scope this pass
+        // (no buff-shaped use case exists yet to justify it) -- see the
+        // directional branch below for the target-facing Status
+        // implementation.
         if (technique->effect_family == EffectFamily::Damage)
         {
             if (actor.Has<HealthComponent>())
@@ -100,8 +137,28 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 actor.Dispatch(incoming);
             }
         }
+        else if (technique->effect_family == EffectFamily::Heal)
+        {
+            // No target's-own-resistance concept for a heal (there is no
+            // ElementalResistanceComponent-analogous mitigation on the
+            // caster's own restore) -- reuses ComputeTechniqueDamage's mst/5
+            // shape with resistance_percent=0, same magnitude formula,
+            // different event.
+            const int amount =
+                static_cast<int>(std::lround(ComputeTechniqueDamage(attacker_stats.mst, 0) * multiplier));
+            IncomingHealEvent heal{actor, amount};
+            actor.Dispatch(heal);
+        }
         return ActionResult(kTechniqueCost);
     }
+
+    // A directional Heal cast has nothing to resolve against -- there is no
+    // ally-targeting concept in this codebase (Hostility.h's IsHostile is
+    // player-vs-everyone), so Heal only ever applies on the self-target
+    // branch above. The turn is still spent, matching every other directional
+    // cast's "cost is charged once a cast executes" convention.
+    if (technique->effect_family == EffectFamily::Heal)
+        return ActionResult(kTechniqueCost);
 
     const Vec2 direction = SnapToCardinalDirection(offset);
     const std::vector<Vec2> target_tiles =

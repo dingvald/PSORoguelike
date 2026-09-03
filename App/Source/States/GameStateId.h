@@ -15,6 +15,7 @@ enum class GameStateId
     GameOver,
     CharacterScreen,
     Animation,
+    TechniquesScreen,
 };
 
 } // namespace psr

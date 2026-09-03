@@ -72,14 +72,13 @@ struct WeaponComponent
     std::uint32_t suffix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::vector<RaceBonusEntry> race_bonuses;
 
-    // Which Photon Arts/Techniques this weapon grants (NameIds into
-    // PhotonArtLibrary/TechniqueLibrary respectively) -- weapon-attached, not
-    // character-learned, per PhotonArt.h/Technique.h's own doc comments. A
-    // Saber/Handgun would list photon_art_ids; a Wand/Cane would list
-    // technique_ids -- the engine doesn't enforce which weapon category may
-    // carry which list, that's a content-authoring convention.
+    // Which Photon Arts this weapon grants (NameIds into PhotonArtLibrary) --
+    // weapon-attached, not character-learned, per PhotonArt.h's own doc
+    // comment. A Saber/Handgun would list photon_art_ids -- the engine
+    // doesn't enforce which weapon category may carry it, that's a
+    // content-authoring convention. Techniques, unlike Photon Arts, are no
+    // longer weapon-granted at all -- see Technique.h/KnownTechniquesComponent.h.
     std::vector<std::uint32_t> photon_art_ids;
-    std::vector<std::uint32_t> technique_ids;
 
     // The weapon's own elemental flavor (e.g. a "Fire Saber"): inherited by
     // both its plain attacks (AttackAction, via BeforeAttackEvent) and its
@@ -106,7 +105,6 @@ struct WeaponComponent
             .Data<&WeaponComponent::suffix_affix_id>("suffix_affix_id")
             .Data<&WeaponComponent::race_bonuses>("race_bonuses")
             .Data<&WeaponComponent::photon_art_ids>("photon_art_ids")
-            .Data<&WeaponComponent::technique_ids>("technique_ids")
             .Data<&WeaponComponent::element>("element")
             .Data<&WeaponComponent::status_effect_id>("status_effect_id")
             .Data<&WeaponComponent::status_chance_percent>("status_chance_percent");

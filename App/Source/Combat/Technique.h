@@ -27,11 +27,11 @@ struct TechniqueTier
 };
 
 // One authored Technique: Force's TP-costed elemental spell (docs/GDD.md's
-// "Elemental Techniques" section) -- granted by whichever weapon(s) list its
-// id in WeaponComponent::technique_ids (a Wand/Cane, per the GDD's "Wand is
-// the channel Techniques are cast through"), not learned independently of
-// equipment -- the GDD never commits to a separate learning mechanism, so
-// this avoids inventing one. element is spell-authored (independent of the
+// "Elemental Techniques" section) -- learned independently of the equipped
+// weapon by consuming a teach_technique ConsumableComponent item (see
+// KnownTechniquesComponent.h/Items/TechniqueLearning.h), not weapon-granted
+// (unlike PhotonArt, which stays purely weapon-granted via
+// WeaponComponent::photon_art_ids). element is spell-authored (independent of the
 // wielding weapon's own WeaponComponent::element, unlike Photon Arts, which
 // inherit theirs from the weapon) -- M7.3 commits to a fixed five-element
 // roster (see Element.h), superseding this field's earlier free-form NameId

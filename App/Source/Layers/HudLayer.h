@@ -1,9 +1,12 @@
 #pragma once
 
+#include "Components/HotbarComponent.h"
 #include "Engine/Layer.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Messages/TechniquesScreenMessage.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <optional>
@@ -27,6 +30,7 @@ struct GameRestartedMessage;
 struct LootDropMessage;
 struct MesetaChangedMessage;
 struct CharacterScreenClosedMessage;
+struct TechniquesScreenClosedMessage;
 struct FloatingTextStateMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
@@ -58,16 +62,17 @@ public:
     void OnDetach() override;
     void OnUpdate(float delta_time) override;
 
-    // Intercepts numpad/space/escape navigation for the Character screen
-    // while it's open (Application::OnEvent gives overlays first crack at
-    // every event, before GameplayLayer -- see its own doc comment). Pure
-    // local UI state (focus, open menu, or -- after "Assign to Hotbar" --
-    // awaiting a 0-9 slot keypress); only publishes a message back onto the
-    // bus when a choice actually mutates game state (Equip/Use/Drop/Remove/
-    // AssignToHotbar). Does nothing while the screen is closed or Escape is
-    // pressed with no menu open and no slot pick awaited, so
-    // CharacterScreenState::HandleEvent still closes the whole screen in
-    // that case.
+    // Intercepts numpad/space/escape navigation for the Character screen and
+    // the Techniques/Photon Arts screen while either is open
+    // (Application::OnEvent gives overlays first crack at every event,
+    // before GameplayLayer -- see its own doc comment). Pure local UI state
+    // (focus, open menu, or -- after "Assign to Hotbar" -- awaiting a 0-9
+    // slot keypress); only publishes a message back onto the bus when a
+    // choice actually mutates game state (Equip/Use/Drop/Remove/
+    // AssignToHotbar). Does nothing while both screens are closed, or Escape
+    // is pressed with no menu open and no slot pick awaited, so
+    // CharacterScreenState/TechniquesScreenState's own HandleEvent still
+    // closes the screen in that case.
     void OnEvent(Event& event) override;
 
 private:
@@ -79,6 +84,26 @@ private:
         Stats,
         Equipment,
         Inventory
+    };
+
+    // Which of the Techniques/Photon Arts screen's two panels currently has
+    // keyboard focus.
+    enum class TechniquesScreenPanel
+    {
+        Techniques,
+        PhotonArts
+    };
+
+    // Which screen the pending "awaiting a 0-9 hotbar slot" sub-state (see
+    // BeginAwaitingHotbarSlot/BeginAwaitingAbilityHotbarSlot) started from --
+    // determines which message OnEvent publishes once a slot key is pressed,
+    // and which screen's hint element CancelAwaitingHotbarSlot restores.
+    // Replaces a plain bool now that two screens share this sub-state.
+    enum class HotbarAssignSource
+    {
+        None,
+        CharacterScreenItem,
+        TechniquesScreenAbility
     };
 
     // One row of the open context menu -- action is what ChooseHighlightedMenuOption
@@ -122,6 +147,13 @@ private:
     void OnCharacterScreenState(const CharacterScreenMessage& message);
     void OnCharacterScreenClosed(const CharacterScreenClosedMessage& message);
 
+    // Same shape as OnCharacterScreenState/OnCharacterScreenClosed, for the
+    // Techniques/Photon Arts screen -- two panels, no Stats-equivalent, no
+    // context menu (a row's only action is "assign to hotbar", so Space goes
+    // straight into the awaiting-slot sub-state via ActivateFocusedTechRow).
+    void OnTechniquesScreenState(const TechniquesScreenMessage& message);
+    void OnTechniquesScreenClosed(const TechniquesScreenClosedMessage& message);
+
     // Rebuilds #floating-text-layer every call (published every frame by
     // GameplayLayer) -- one positioned, non-interactive span per active
     // FloatingTextSystem instance, left/top/color set inline since they're
@@ -144,12 +176,26 @@ private:
     void ChooseHighlightedMenuOption();
     void JumpToMatchingInventoryItem(EquipmentSlot slot);
 
+    // Techniques-screen navigation helpers -- same split-out-of-OnEvent
+    // reasoning as the Character-screen helpers above, just without a
+    // context-menu layer (a row has exactly one action).
+    int TechniquesScreenRowCount(TechniquesScreenPanel panel) const;
+    void MoveTechPanelFocus(int direction);
+    void MoveTechRowFocus(int direction);
+    void ActivateFocusedTechRow();
+    void RenderTechniquesFocusHighlights();
+    void RenderTechRowFocus(const char* container_id, const char* row_class, TechniquesScreenPanel panel);
+
     // "Assign to Hotbar" sub-state: menu closes, hint text changes, and
     // OnEvent waits for a 0-9 keypress (or Escape to cancel) instead of the
-    // usual numpad navigation -- see OnEvent's doc comment.
+    // usual numpad navigation -- see OnEvent's doc comment. Shared between
+    // the Character screen's inventory-item flow and the Techniques screen's
+    // ability flow (see HotbarAssignSource).
     void BeginAwaitingHotbarSlot(int inventory_index);
+    void BeginAwaitingAbilityHotbarSlot(HotbarSlotType type, std::uint32_t id);
     void CancelAwaitingHotbarSlot();
     void SetCharacterScreenHint(const char* text, bool awaiting);
+    void SetTechniquesScreenHint(const char* text, bool awaiting);
     std::vector<ContextMenuOption> BuildMenuOptions(CharacterScreenPanel panel, int index) const;
     void RenderContextMenu();
     void UpdateMenuHighlightClasses();
@@ -183,10 +229,26 @@ private:
     std::vector<ContextMenuOption> m_menu_options;
     std::vector<std::unique_ptr<RmlClickListener>> m_context_menu_listeners;
 
-    // Set by BeginAwaitingHotbarSlot ("Assign to Hotbar" chosen, waiting on a
-    // 0-9 keypress); mutually exclusive with m_menu_open.
-    bool m_awaiting_hotbar_slot = false;
-    int m_awaiting_hotbar_inventory_index = -1;
+    // Rebuilt on every OnTechniquesScreenState call -- same reasoning as
+    // m_character_screen_listeners (row count isn't fixed).
+    std::vector<std::unique_ptr<RmlClickListener>> m_techniques_screen_listeners;
+
+    // Same "cache drives OnEvent interception, empty means closed" contract
+    // as m_character_screen_cache. Set in OnTechniquesScreenState, cleared in
+    // OnTechniquesScreenClosed.
+    std::optional<TechniquesScreenMessage> m_techniques_screen_cache;
+
+    TechniquesScreenPanel m_tech_focused_panel = TechniquesScreenPanel::Techniques;
+    int m_tech_focused_row = 0;
+
+    // Set by BeginAwaitingHotbarSlot/BeginAwaitingAbilityHotbarSlot ("Assign
+    // to Hotbar" chosen, waiting on a 0-9 keypress); mutually exclusive with
+    // m_menu_open. Which of the two payload fields below is meaningful
+    // depends on the source.
+    HotbarAssignSource m_awaiting_hotbar_assign_source = HotbarAssignSource::None;
+    int m_awaiting_hotbar_inventory_index = -1;                          // CharacterScreenItem
+    HotbarSlotType m_awaiting_hotbar_ability_type = HotbarSlotType::Empty; // TechniquesScreenAbility
+    std::uint32_t m_awaiting_hotbar_ability_id = 0;                       // TechniquesScreenAbility
 
     static constexpr std::size_t kMaxLogLines = 50;
     std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage/LootDropMessage
