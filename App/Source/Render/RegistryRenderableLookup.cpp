@@ -8,7 +8,10 @@
 
 namespace psr {
 
-RegistryRenderableLookup::RegistryRenderableLookup(Registry& registry) : m_registry(&registry) {}
+RegistryRenderableLookup::RegistryRenderableLookup(Registry& registry, const AnimationClock& animation_clock)
+    : m_registry(&registry), m_animation_clock(&animation_clock)
+{
+}
 
 std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::entity entity) const
 {
@@ -16,7 +19,11 @@ std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::
     if (!component)
         return std::nullopt;
 
-    return RenderableTile{component->texture_id, component->texture_size, component->uv,
+    Vec2 uv = component->uv;
+    if (component->frames > 1)
+        uv.x += m_animation_clock->GetFrameIndex(component->frame_time, component->frames);
+
+    return RenderableTile{component->texture_id, component->texture_size, uv,
                           component->color_1,    component->color_2,      component->render_layer};
 }
 
