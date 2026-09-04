@@ -18,10 +18,12 @@
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/KnownTechniquesComponent.h"
 #include "Components/LevelComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
+#include "Components/RangedTechComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
@@ -263,6 +265,16 @@ void GameplayLayer::LoadNewGame()
             const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
             m_registry.Emplace<EquipmentComponent>(entity, EquipmentComponent{weapon});
         }
+        // Bridges AiBehavior::RangedTechAtDistance's authored RangedTechComponent
+        // (template data, same "bake it onto the concrete spawned instance"
+        // role InnateWeaponComponent plays above) into the real
+        // KnownTechniquesComponent TechniqueAction actually gates casting on --
+        // that component is deliberately player-oriented/non-authorable (see
+        // its own doc comment), so this is the only way an enemy prefab can
+        // "know" a technique.
+        if (const auto* ranged_tech = m_registry.TryGetComponent<RangedTechComponent>(entity))
+            m_registry.Emplace<KnownTechniquesComponent>(
+                entity, KnownTechniquesComponent{{KnownTechniqueEntry{ranged_tech->technique_id, 1}}});
         m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
         m_damage_text_system.Subscribe(Entity(m_registry, entity));
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
@@ -279,7 +291,7 @@ void GameplayLayer::LoadNewGame()
     m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
                                 instantiation.pending_spawn_waves, on_enemy_spawned);
 
-    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_rng);
+    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
     m_tab_target_system.emplace(m_registry, *m_grid);
     m_turn_coordinator->SetNpcDecision(

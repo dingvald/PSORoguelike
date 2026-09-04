@@ -1,0 +1,61 @@
+{
+    "schema_version": 1,
+    "components": {
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.booma_claws"
+        },
+        "blocks_movement": {},
+        "ai": {
+            "behavior": "chase_and_attack",
+            "detection_range": 8
+        },
+        "health": {
+            "current_hp": 70,
+            "max_hp": 70
+        },
+        "stats": {
+            "atp": 85,
+            "ata": 70,
+            "mst": 0,
+            "dfp": 10,
+            "evp": 50,
+            "lck": 12
+        },
+        "race": {
+            "race_id": "a_beast_wolf_pack_leader"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#3a3a3aff",
+            "color_2": "#8a8a8aff",
+            "render_layer": 1
+        },
+        "drop_table": {
+            "entries": [
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 1.0
+                },
+                {
+                    "item_prefab_id": "monofluid",
+                    "weight": 0.6
+                }
+            ],
+            "no_drop_weight": 2.0,
+            "meseta_weight": 3.0,
+            "meseta_min": 20,
+            "meseta_max": 50
+        },
+        "experience_value": {
+            "xp": 22
+        }
+    }
+}

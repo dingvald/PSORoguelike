@@ -3,12 +3,16 @@
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/AiComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/ExperienceValueComponent.h"
 #include "Components/OnHitEffectComponent.h"
+#include "Components/PackFollowerComponent.h"
 #include "Components/RaceComponent.h"
+#include "Components/RangedTechComponent.h"
 #include "Components/RenderableComponent.h"
+#include "Components/SpawnerAiComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
@@ -197,6 +201,12 @@ private:
     OnHitEffectComponent m_on_hit_effect;
     std::string m_on_hit_effect_prefab_name;
     ExperienceValueComponent m_experience_value;
+    AiComponent m_ai;
+    SpawnerAiComponent m_spawner_ai;
+    std::string m_spawner_ai_prefab_name;
+    PackFollowerComponent m_pack_follower;
+    std::string m_pack_follower_race_name;
+    RangedTechComponent m_ranged_tech;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.
