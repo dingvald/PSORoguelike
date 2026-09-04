@@ -1,0 +1,59 @@
+{
+    "schema_version": 1,
+    "components": {
+        "blocks_movement": {},
+        "ai": {
+            "behavior": "stationary_spawner",
+            "detection_range": 8
+        },
+        "spawner_ai": {
+            "spawn_prefab_id": "enemies.mothmant",
+            "cooldown_turns": 4,
+            "max_alive": 3
+        },
+        "health": {
+            "current_hp": 40,
+            "max_hp": 40
+        },
+        "stats": {
+            "atp": 0,
+            "ata": 0,
+            "mst": 0,
+            "dfp": 10,
+            "evp": 0,
+            "lck": 0
+        },
+        "race": {
+            "race_id": "native"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#8a7a3aff",
+            "color_2": "#c9b35aff",
+            "render_layer": 1
+        },
+        "drop_table": {
+            "entries": [
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 1.0
+                }
+            ],
+            "no_drop_weight": 2.0,
+            "meseta_weight": 3.0,
+            "meseta_min": 15,
+            "meseta_max": 40
+        },
+        "experience_value": {
+            "xp": 15
+        }
+    }
+}

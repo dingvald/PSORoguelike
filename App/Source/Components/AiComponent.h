@@ -9,15 +9,27 @@
 
 namespace psr {
 
+// FleeWhenHit/StationarySpawner/PackFollower/RangedTechAtDistance each read
+// one additional, behavior-specific authorable component (SpawnerAiComponent/
+// PackFollowerComponent/RangedTechComponent) when present -- see
+// EnemyAiSystem.h's own doc comment for what each behavior actually does.
 enum class AiBehavior
 {
-    ChaseAndAttack
+    ChaseAndAttack,
+    FleeWhenHit,
+    StationarySpawner,
+    PackFollower,
+    RangedTechAtDistance
 };
 
 template <> struct EnumNames<AiBehavior>
 {
-    static constexpr std::array<std::pair<std::string_view, AiBehavior>, 1> kValues{{
+    static constexpr std::array<std::pair<std::string_view, AiBehavior>, 5> kValues{{
         {"chase_and_attack", AiBehavior::ChaseAndAttack},
+        {"flee_when_hit", AiBehavior::FleeWhenHit},
+        {"stationary_spawner", AiBehavior::StationarySpawner},
+        {"pack_follower", AiBehavior::PackFollower},
+        {"ranged_tech_at_distance", AiBehavior::RangedTechAtDistance},
     }};
 };
 
