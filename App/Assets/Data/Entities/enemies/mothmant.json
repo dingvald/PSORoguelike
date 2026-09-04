@@ -1,0 +1,52 @@
+{
+    "schema_version": 1,
+    "components": {
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.mothmant_mandibles"
+        },
+        "blocks_movement": {},
+        "ai": {
+            "behavior": "chase_and_attack",
+            "detection_range": 8
+        },
+        "health": {
+            "current_hp": 8,
+            "max_hp": 8
+        },
+        "stats": {
+            "atp": 20,
+            "ata": 60,
+            "mst": 0,
+            "dfp": 0,
+            "evp": 55,
+            "lck": 5
+        },
+        "race": {
+            "race_id": "native"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#8a6a4aff",
+            "color_2": "#cbb389ff",
+            "render_layer": 1
+        },
+        "drop_table": {
+            "entries": [],
+            "no_drop_weight": 6.0,
+            "meseta_weight": 1.0,
+            "meseta_min": 2,
+            "meseta_max": 8
+        },
+        "experience_value": {
+            "xp": 4
+        }
+    }
+}

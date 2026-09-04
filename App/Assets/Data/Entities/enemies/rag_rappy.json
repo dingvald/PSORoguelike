@@ -1,0 +1,57 @@
+{
+    "schema_version": 1,
+    "components": {
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.rappy_beak"
+        },
+        "blocks_movement": {},
+        "ai": {
+            "behavior": "flee_when_hit",
+            "detection_range": 8
+        },
+        "health": {
+            "current_hp": 20,
+            "max_hp": 20
+        },
+        "stats": {
+            "atp": 35,
+            "ata": 55,
+            "mst": 0,
+            "dfp": 0,
+            "evp": 65,
+            "lck": 20
+        },
+        "race": {
+            "race_id": "native"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#d15a7aff",
+            "color_2": "#f2b8c9ff",
+            "render_layer": 1
+        },
+        "drop_table": {
+            "entries": [
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 1.0
+                }
+            ],
+            "no_drop_weight": 4.0,
+            "meseta_weight": 2.0,
+            "meseta_min": 5,
+            "meseta_max": 20
+        },
+        "experience_value": {
+            "xp": 8
+        }
+    }
+}

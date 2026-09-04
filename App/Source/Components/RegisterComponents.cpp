@@ -13,10 +13,13 @@
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/OnHitEffectComponent.h"
+#include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
+#include "Components/RangedTechComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/SpawnerAiComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/TPComponent.h"
@@ -54,13 +57,16 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     ItemComponent::Register(reg);
     ModComponent::Register(reg);
     OnHitEffectComponent::Register(reg);
+    PackFollowerComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);
+    RangedTechComponent::Register(reg);
     RarityComponent::Register(reg);
     RenderableComponent::Register(reg);
     SectionIdComponent::Register(reg);
+    SpawnerAiComponent::Register(reg);
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
     WeaponComponent::Register(reg);

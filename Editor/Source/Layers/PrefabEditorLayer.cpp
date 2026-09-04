@@ -562,6 +562,73 @@ namespace {
         return object;
     }
 
+    AiComponent ReadAiBody(const rapidjson::Value& body)
+    {
+        AiComponent ai;
+        ai.behavior = ReadEnum<AiBehavior>(body, "behavior", ai.behavior);
+        ai.detection_range = ReadInt(body, "detection_range", ai.detection_range);
+        return ai;
+    }
+
+    rapidjson::Value WriteAiBody(const AiComponent& ai, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("behavior", StringValue(std::string{EnumName(ai.behavior)}, allocator), allocator);
+        object.AddMember("detection_range", ai.detection_range, allocator);
+        return object;
+    }
+
+    SpawnerAiComponent ReadSpawnerAiBody(const rapidjson::Value& body)
+    {
+        SpawnerAiComponent spawner;
+        spawner.spawn_prefab_id = ReadNameId(body, "spawn_prefab_id", spawner.spawn_prefab_id);
+        spawner.cooldown_turns = ReadInt(body, "cooldown_turns", spawner.cooldown_turns);
+        spawner.max_alive = ReadInt(body, "max_alive", spawner.max_alive);
+        return spawner;
+    }
+
+    rapidjson::Value WriteSpawnerAiBody(const SpawnerAiComponent& spawner,
+                                        rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("spawn_prefab_id", WriteNameId(spawner.spawn_prefab_id, allocator), allocator);
+        object.AddMember("cooldown_turns", spawner.cooldown_turns, allocator);
+        object.AddMember("max_alive", spawner.max_alive, allocator);
+        return object;
+    }
+
+    PackFollowerComponent ReadPackFollowerBody(const rapidjson::Value& body)
+    {
+        PackFollowerComponent pack_follower;
+        pack_follower.pack_leader_race_id = ReadNameId(body, "pack_leader_race_id", pack_follower.pack_leader_race_id);
+        return pack_follower;
+    }
+
+    rapidjson::Value WritePackFollowerBody(const PackFollowerComponent& pack_follower,
+                                           rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("pack_leader_race_id", WriteNameId(pack_follower.pack_leader_race_id, allocator), allocator);
+        return object;
+    }
+
+    RangedTechComponent ReadRangedTechBody(const rapidjson::Value& body)
+    {
+        RangedTechComponent ranged_tech;
+        ranged_tech.technique_id = ReadNameId(body, "technique_id", ranged_tech.technique_id);
+        ranged_tech.range = ReadInt(body, "range", ranged_tech.range);
+        return ranged_tech;
+    }
+
+    rapidjson::Value WriteRangedTechBody(const RangedTechComponent& ranged_tech,
+                                         rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("technique_id", WriteNameId(ranged_tech.technique_id, allocator), allocator);
+        object.AddMember("range", ranged_tech.range, allocator);
+        return object;
+    }
+
     ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
     {
         ConsumableComponent consumable;
@@ -596,7 +663,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 13> kComponentKinds = {
+    constexpr std::array<ComponentKind, 17> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -653,7 +720,18 @@ namespace {
           "<div id=\"field-on-hit-effect-prefab\" class=\"field-row\"></div>"
           "<div id=\"field-on-hit-effect-duration\" class=\"field-row\"></div>"},
          {"experience_value", "Experience Value", "#a3e85d",
-          "<div id=\"field-experience-value-xp\" class=\"field-row\"></div>"}}};
+          "<div id=\"field-experience-value-xp\" class=\"field-row\"></div>"},
+         {"ai", "AI", "#5da3e8",
+          "<div id=\"field-ai-behavior\" class=\"field-row\"></div>"
+          "<div id=\"field-ai-detection-range\" class=\"field-row\"></div>"},
+         {"spawner_ai", "Spawner AI", "#e8815d",
+          "<div id=\"field-spawner-prefab\" class=\"field-row\"></div>"
+          "<div id=\"field-spawner-cooldown\" class=\"field-row\"></div>"
+          "<div id=\"field-spawner-max-alive\" class=\"field-row\"></div>"},
+         {"pack_follower", "Pack Follower", "#c15de8", "<div id=\"field-pack-leader-race\" class=\"field-row\"></div>"},
+         {"ranged_tech", "Ranged Tech", "#5de8a3",
+          "<div id=\"field-ranged-tech-id\" class=\"field-row\"></div>"
+          "<div id=\"field-ranged-tech-range\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -1043,7 +1121,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
         if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
             key == "armor" || key == "mod" || key == "item" || key == "rarity" || key == "consumable" ||
-            key == "drop_table" || key == "on_hit_effect" || key == "experience_value")
+            key == "drop_table" || key == "on_hit_effect" || key == "experience_value" || key == "ai" ||
+            key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech")
             m_component_order.emplace_back(key);
     }
 
@@ -1071,6 +1150,15 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_experience_value = components.HasMember("experience_value")
                              ? ReadExperienceValueBody(components["experience_value"])
                              : ExperienceValueComponent{};
+    m_ai = components.HasMember("ai") ? ReadAiBody(components["ai"]) : AiComponent{};
+    m_spawner_ai =
+        components.HasMember("spawner_ai") ? ReadSpawnerAiBody(components["spawner_ai"]) : SpawnerAiComponent{};
+    m_spawner_ai_prefab_name = LabelFor(m_spawner_ai.spawn_prefab_id);
+    m_pack_follower = components.HasMember("pack_follower") ? ReadPackFollowerBody(components["pack_follower"])
+                                                            : PackFollowerComponent{};
+    m_pack_follower_race_name = LabelFor(m_pack_follower.pack_leader_race_id);
+    m_ranged_tech =
+        components.HasMember("ranged_tech") ? ReadRangedTechBody(components["ranged_tech"]) : RangedTechComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1531,6 +1619,82 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-ai-behavior"))
+        keep(fieldwidgets::BuildEnumField(*row, "behavior", EnumOptions<AiBehavior>(),
+                                          std::string{EnumName(m_ai.behavior)},
+                                          [this](std::string v)
+                                          {
+                                              m_ai.behavior = EnumFromString(v, AiBehavior::ChaseAndAttack);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ai-detection-range"))
+        keep(fieldwidgets::BuildIntField(*row, "detection_range", m_ai.detection_range,
+                                         [this](int v)
+                                         {
+                                             m_ai.detection_range = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-spawner-prefab"))
+        keep(fieldwidgets::BuildNameIdField(*row, "spawn_prefab_id", m_spawner_ai.spawn_prefab_id,
+                                            m_spawner_ai_prefab_name,
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_spawner_ai.spawn_prefab_id = id;
+                                                if (!name.empty())
+                                                {
+                                                    NameIdRegistry::Register(id, name);
+                                                    m_spawner_ai_prefab_name = std::move(name);
+                                                }
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-spawner-cooldown"))
+        keep(fieldwidgets::BuildIntField(*row, "cooldown_turns", m_spawner_ai.cooldown_turns,
+                                         [this](int v)
+                                         {
+                                             m_spawner_ai.cooldown_turns = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-spawner-max-alive"))
+        keep(fieldwidgets::BuildIntField(*row, "max_alive", m_spawner_ai.max_alive,
+                                         [this](int v)
+                                         {
+                                             m_spawner_ai.max_alive = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pack-leader-race"))
+        keep(fieldwidgets::BuildNameIdField(*row, "pack_leader_race_id", m_pack_follower.pack_leader_race_id,
+                                            m_pack_follower_race_name,
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_pack_follower.pack_leader_race_id = id;
+                                                if (!name.empty())
+                                                {
+                                                    NameIdRegistry::Register(id, name);
+                                                    m_pack_follower_race_name = std::move(name);
+                                                }
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ranged-tech-id"))
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> ranged_technique_options = {{0, "-- Select Technique --"}};
+        for (const Technique& technique : m_techniques.All())
+            ranged_technique_options.emplace_back(technique.id,
+                                                  technique.name.empty() ? technique.id_string : technique.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "technique_id", ranged_technique_options, m_ranged_tech.technique_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_ranged_tech.technique_id = id;
+                                                MarkDirty();
+                                            }));
+    }
+    if (Rml::Element* row = m_editor->GetElementById("field-ranged-tech-range"))
+        keep(fieldwidgets::BuildIntField(*row, "range", m_ranged_tech.range,
+                                         [this](int v)
+                                         {
+                                             m_ranged_tech.range = v;
+                                             MarkDirty();
+                                         }));
+
     if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -1790,8 +1954,9 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
-                            "consumable", "drop_table", "on_hit_effect", "experience_value"})
+    for (const char* key :
+         {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity", "consumable",
+          "drop_table", "on_hit_effect", "experience_value", "ai", "spawner_ai", "pack_follower", "ranged_tech"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1824,6 +1989,14 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteOnHitEffectBody(m_on_hit_effect, allocator);
         else if (key == "experience_value")
             body = WriteExperienceValueBody(m_experience_value, allocator);
+        else if (key == "ai")
+            body = WriteAiBody(m_ai, allocator);
+        else if (key == "spawner_ai")
+            body = WriteSpawnerAiBody(m_spawner_ai, allocator);
+        else if (key == "pack_follower")
+            body = WritePackFollowerBody(m_pack_follower, allocator);
+        else if (key == "ranged_tech")
+            body = WriteRangedTechBody(m_ranged_tech, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);
