@@ -15,7 +15,6 @@
 namespace psr {
 
 namespace {
-    int ManhattanDistance(Vec2 a, Vec2 b) { return std::abs(a.x - b.x) + std::abs(a.y - b.y); }
 
     // Nearest PlayerControlledComponent entity's tile within detection_range,
     // by Manhattan distance -- mirrors Hostility.h's own player-vs-everyone-
