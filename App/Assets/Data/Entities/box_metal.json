@@ -18,7 +18,8 @@
             "entries": [
                 { "item_prefab_id": "monomate", "weight": 1.5 },
                 { "item_prefab_id": "monofluid", "weight": 1.0 },
-                { "item_prefab_id": "TechniqueDisks.foie_disk", "weight": 0.5 }
+                { "item_prefab_id": "TechniqueDisks.foie_disk", "weight": 0.5 },
+                { "item_prefab_id": "armor.frame", "weight": 0.4 }
             ],
             "no_drop_weight": 1.0,
             "meseta_weight": 3.0,

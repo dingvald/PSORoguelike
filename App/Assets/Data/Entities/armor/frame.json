@@ -1,0 +1,32 @@
+{
+    "schema_version": 1,
+    "components": {
+        "armor": {
+            "slot": "torso",
+            "mod_slot_count": 2
+        },
+        "stats": {
+            "atp": 0,
+            "ata": 0,
+            "mst": 0,
+            "dfp": 10,
+            "evp": 0,
+            "lck": 0
+        },
+        "renderable": {
+            "texture_id": "item_pickup",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#000000ff",
+            "color_2": "#8a8a8aff",
+            "render_layer": 0
+        },
+        "item": {}
+    }
+}

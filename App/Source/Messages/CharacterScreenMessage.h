@@ -31,6 +31,13 @@ struct CharacterScreenMessage
         // Whether this item carries a ConsumableComponent -- lets HudLayer's
         // context menu offer "Use" only when it applies.
         bool is_consumable = false;
+
+        // One "(empty)" placeholder per ArmorComponent::mod_slot_count on
+        // this item, empty for non-armor items or armor with no mod slots.
+        // Display-only for now -- there's no mechanic yet for inserting a
+        // mod into one of these slots (no Mod item content or effects are
+        // defined), so every entry reads "(empty)" until that lands.
+        std::vector<std::string> mod_slot_labels;
     };
 
     struct StatsSummary

@@ -314,6 +314,13 @@ body {
     background-color: rgba(246, 71, 10, 80);
 }
 
+.mod-slot-row {
+    display: block;
+    padding: 0.15em 0.2em 0.15em 1.2em;
+    font-size: 0.75em;
+    color: #999;
+}
+
 .equip-row.focused,
 .inventory-row.focused {
     color: #fff;
