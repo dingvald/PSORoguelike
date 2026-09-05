@@ -321,7 +321,7 @@ void GameplayLayer::LoadNewGame()
     m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
 
-    m_experience_system.emplace(GetMessageBus(), m_growth_curve);
+    m_experience_system.emplace(GetMessageBus(), m_growth_curve, m_floating_text);
     m_experience_system->Subscribe(Entity(m_registry, m_player));
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
