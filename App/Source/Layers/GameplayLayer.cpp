@@ -11,9 +11,9 @@
 #include "Combat/StatusEffectLibraryFile.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibraryFile.h"
+#include "Components/ActorComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
-#include "Components/ActorComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
@@ -25,8 +25,8 @@
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
-#include "Components/TabTargetComponent.h"
 #include "Components/TPComponent.h"
+#include "Components/TabTargetComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
@@ -447,7 +447,8 @@ void GameplayLayer::OnRender(SDL_Renderer* renderer)
     SDL_GetCurrentRenderOutputSize(renderer, &width, &height);
     m_last_render_width = width;
     m_last_render_height = height;
-    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, m_camera.GetZoom(), m_camera.GetRenderOffset());
+    m_tile_renderer->Draw(*renderer, m_camera.GetPosition(), width, height, m_camera.GetZoom(),
+                          m_camera.GetRenderOffset());
 }
 
 bool GameplayLayer::TryActivateSlot(int slot_index)
@@ -472,8 +473,17 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
             return false;
 
         m_pending_slot_action = std::make_unique<TechniqueAction>(*m_grid, m_techniques, m_affixes, slot.id, m_rng);
-        m_turn_coordinator->RequestTargeting(TargetRequest{m_pending_slot_action.get(), technique->targeting_mode,
-                                                           technique->range_shape, technique->range});
+        // Matches TechniqueAction::Perform's own projectile-spawn gate exactly,
+        // so TargetSelectionState's travel/area preview always shows what the
+        // cast will actually do.
+        const bool is_projectile =
+            technique->projectile_speed > 0 && (technique->range_shape == WeaponRangeShape::SingleTarget ||
+                                                technique->range_shape == WeaponRangeShape::Line);
+        TargetRequest request{m_pending_slot_action.get(), technique->targeting_mode, technique->range_shape,
+                              technique->range};
+        request.is_projectile = is_projectile;
+        request.projectile_pierces = technique->projectile_pierces;
+        m_turn_coordinator->RequestTargeting(request);
         return true;
     }
     case HotbarSlotType::PhotonArt:
