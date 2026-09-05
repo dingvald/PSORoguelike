@@ -24,7 +24,9 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Math/Color.h"
 #include "Items/Equip.h"
+#include "UI/LogMarkup.h"
 #include "UI/RmlClickListener.h"
+#include "UI/RmlScrollListener.h"
 #include "UI/RmlText.h"
 
 #include <RmlUi/Core.h>
@@ -60,7 +62,8 @@ namespace {
 
     // Must match #techniques-screen-hint's initial text in hud.rml -- same
     // "must match markup" reasoning as kDefaultCharacterScreenHint.
-    constexpr const char* kDefaultTechniquesScreenHint = "Numpad to navigate, Space to assign to hotbar, T / Esc to close";
+    constexpr const char* kDefaultTechniquesScreenHint =
+        "Numpad to navigate, Space to assign to hotbar, T / Esc to close";
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9. Mirrors
     // GameplayLayer.cpp's own KeyCodeToHotbarSlot -- duplicated rather than
@@ -131,6 +134,7 @@ void HudLayer::OnAttach()
         return;
 
     WireHotbarSlots();
+    WireEventLogScroll();
 
     Subscribe<PlayerStatusMessage>(&HudLayer::OnPlayerStatus, this);
     Subscribe<HotbarStateMessage>(&HudLayer::OnHotbarState, this);
@@ -158,6 +162,7 @@ void HudLayer::OnDetach()
     m_character_screen_listeners.clear();
     m_techniques_screen_listeners.clear();
     m_context_menu_listeners.clear();
+    m_log_scroll_listener.reset();
     if (m_document)
     {
         m_document->Close();
@@ -165,7 +170,20 @@ void HudLayer::OnDetach()
     }
 }
 
-void HudLayer::OnUpdate(float /*delta_time*/) { HandleQueuedMessages(); }
+void HudLayer::OnUpdate(float /*delta_time*/)
+{
+    if (m_log_scroll_pending && m_document)
+    {
+        if (Rml::Element* log = m_document->GetElementById("event-log"))
+        {
+            log->SetScrollTop(log->GetScrollHeight());
+            UpdateLogLineOpacities();
+        }
+        m_log_scroll_pending = false;
+    }
+
+    HandleQueuedMessages();
+}
 
 void HudLayer::LoadDocument()
 {
@@ -194,6 +212,16 @@ void HudLayer::WireHotbarSlots()
         listener->Attach(*element);
         m_hotbar_listeners.push_back(std::move(listener));
     }
+}
+
+void HudLayer::WireEventLogScroll()
+{
+    Rml::Element* log = m_document->GetElementById("event-log");
+    if (!log)
+        return;
+
+    m_log_scroll_listener = std::make_unique<RmlScrollListener>([this]() { UpdateLogLineOpacities(); });
+    m_log_scroll_listener->Attach(*log);
 }
 
 void HudLayer::OnPlayerStatus(const PlayerStatusMessage& message)
@@ -279,9 +307,71 @@ void HudLayer::AppendLogLine(const std::string& text)
 
     std::string markup;
     for (const std::string& line : m_log_lines)
-        markup += "<div class=\"log-line\">" + EscapeRml(line) + "</div>";
+        markup +=
+            "<div class=\"log-line\"><span class=\"log-prefix\">&gt; </span>" + ConvertLogMarkupToRml(line) + "</div>";
     log->SetInnerRML(markup);
-    log->SetScrollTop(log->GetScrollHeight());
+
+    // Scrolling to bottom and recomputing opacities both need this frame's
+    // layout to have caught up with the SetInnerRML above -- deferred to the
+    // top of the next OnUpdate, see m_log_scroll_pending's doc comment.
+    m_log_scroll_pending = true;
+}
+
+void HudLayer::UpdateLogLineOpacities()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* log = m_document->GetElementById("event-log");
+    if (!log)
+        return;
+
+    Rml::ElementList lines;
+    log->QuerySelectorAll(lines, ".log-line");
+    if (lines.empty())
+        return;
+
+    const float scroll_top = log->GetScrollTop();
+    const float client_height = log->GetClientHeight();
+
+    std::optional<std::size_t> first_visible;
+    std::optional<std::size_t> last_visible;
+    for (std::size_t i = 0; i < lines.size(); ++i)
+    {
+        const float top = lines[i]->GetOffsetTop();
+        const float bottom = top + lines[i]->GetOffsetHeight();
+        if (bottom <= scroll_top || top >= scroll_top + client_height)
+            continue;
+
+        if (!first_visible)
+            first_visible = i;
+        last_visible = i;
+    }
+
+    if (!first_visible || !last_visible)
+    {
+        first_visible = 0;
+        last_visible = lines.size() - 1;
+    }
+
+    for (std::size_t i = 0; i < lines.size(); ++i)
+    {
+        float opacity;
+        if (i < *first_visible)
+            opacity = 0.25f;
+        else if (i > *last_visible)
+            opacity = 1.0f;
+        else
+        {
+            const std::size_t visible_count = *last_visible - *first_visible + 1;
+            opacity =
+                visible_count > 1
+                    ? 0.25f + 0.75f * (static_cast<float>(i - *first_visible) / static_cast<float>(visible_count - 1))
+                    : 1.0f;
+        }
+
+        lines[i]->SetProperty("opacity", std::to_string(opacity));
+    }
 }
 
 void HudLayer::OnStatusEffects(const StatusEffectsMessage& message)
@@ -327,11 +417,15 @@ void HudLayer::OnGameRestarted(const GameRestartedMessage& /*message*/)
         overlay->SetProperty("display", "none");
 
     m_log_lines.clear();
+    m_log_scroll_pending = false;
     if (Rml::Element* log = m_document->GetElementById("event-log"))
         log->SetInnerRML("");
 }
 
-void HudLayer::OnLootDrop(const LootDropMessage& message) { AppendLogLine("Found " + message.item_name); }
+void HudLayer::OnLootDrop(const LootDropMessage& message)
+{
+    AppendLogLine("Found [c=#d4c93f]" + message.item_name + "[/c]");
+}
 
 void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
 {
@@ -518,7 +612,8 @@ void HudLayer::OnTechniquesScreenState(const TechniquesScreenMessage& message)
     }
     else
     {
-        m_tech_focused_row = std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
+        m_tech_focused_row =
+            std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
     }
     RenderTechniquesFocusHighlights();
 }
@@ -543,9 +638,8 @@ int HudLayer::TechniquesScreenRowCount(TechniquesScreenPanel panel) const
     if (!m_techniques_screen_cache)
         return 0;
 
-    return panel == TechniquesScreenPanel::Techniques
-               ? static_cast<int>(m_techniques_screen_cache->techniques.size())
-               : static_cast<int>(m_techniques_screen_cache->photon_arts.size());
+    return panel == TechniquesScreenPanel::Techniques ? static_cast<int>(m_techniques_screen_cache->techniques.size())
+                                                      : static_cast<int>(m_techniques_screen_cache->photon_arts.size());
 }
 
 void HudLayer::MoveTechPanelFocus(int direction)
@@ -553,7 +647,8 @@ void HudLayer::MoveTechPanelFocus(int direction)
     constexpr int kPanelCount = 2;
     const int next = std::clamp(static_cast<int>(m_tech_focused_panel) + direction, 0, kPanelCount - 1);
     m_tech_focused_panel = static_cast<TechniquesScreenPanel>(next);
-    m_tech_focused_row = std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
+    m_tech_focused_row =
+        std::clamp(m_tech_focused_row, 0, std::max(0, TechniquesScreenRowCount(m_tech_focused_panel) - 1));
     RenderTechniquesFocusHighlights();
 }
 
@@ -574,7 +669,8 @@ void HudLayer::ActivateFocusedTechRow()
 
     if (m_tech_focused_panel == TechniquesScreenPanel::Techniques)
     {
-        if (m_tech_focused_row < 0 || m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->techniques.size()))
+        if (m_tech_focused_row < 0 ||
+            m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->techniques.size()))
             return;
         const TechniquesScreenMessage::TechniqueEntry& entry =
             m_techniques_screen_cache->techniques[static_cast<std::size_t>(m_tech_focused_row)];
@@ -582,7 +678,8 @@ void HudLayer::ActivateFocusedTechRow()
     }
     else
     {
-        if (m_tech_focused_row < 0 || m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->photon_arts.size()))
+        if (m_tech_focused_row < 0 ||
+            m_tech_focused_row >= static_cast<int>(m_techniques_screen_cache->photon_arts.size()))
             return;
         const TechniquesScreenMessage::PhotonArtEntry& entry =
             m_techniques_screen_cache->photon_arts[static_cast<std::size_t>(m_tech_focused_row)];
@@ -620,8 +717,10 @@ void HudLayer::RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stat
         return;
 
     std::string markup;
-    markup += "<div class=\"stat-row\">HP: " + std::to_string(stats.hp) + " / " + std::to_string(stats.max_hp) + "</div>";
-    markup += "<div class=\"stat-row\">TP: " + std::to_string(stats.tp) + " / " + std::to_string(stats.max_tp) + "</div>";
+    markup +=
+        "<div class=\"stat-row\">HP: " + std::to_string(stats.hp) + " / " + std::to_string(stats.max_hp) + "</div>";
+    markup +=
+        "<div class=\"stat-row\">TP: " + std::to_string(stats.tp) + " / " + std::to_string(stats.max_tp) + "</div>";
     markup += "<div class=\"stat-row\">ATP: " + std::to_string(stats.atp) + "</div>";
     markup += "<div class=\"stat-row\">ATA: " + std::to_string(stats.ata) + "</div>";
     markup += "<div class=\"stat-row\">MST: " + std::to_string(stats.mst) + "</div>";

@@ -71,7 +71,7 @@ TEST_CASE("CombatLogBridge publishes a log entry and a fresh PlayerStatusMessage
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 1);
-    REQUIRE(log_lines[0] == "Player hit something for 7 damage");
+    REQUIRE(log_lines[0] == "Player hit something for [c=#d43f3f]7[/c] damage");
     REQUIRE(status_updates == 1); // actor is the player -> re-publish status
 }
 
@@ -104,8 +104,8 @@ TEST_CASE("CombatLogBridge publishes a defeat line when AfterDamageEvent reports
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 2);
-    REQUIRE(log_lines[0] == "Player hit something for 50 damage");
-    REQUIRE(log_lines[1] == "Player defeated something");
+    REQUIRE(log_lines[0] == "Player hit something for [c=#d43f3f]50[/c] damage");
+    REQUIRE(log_lines[1] == "[b][c=#d43f3f]Player defeated something[/c][/b]");
 }
 
 TEST_CASE("CombatLogBridge publishes a cast line on AfterTechniqueCastEvent, resolving the technique's name",
@@ -140,7 +140,7 @@ TEST_CASE("CombatLogBridge publishes a cast line on AfterTechniqueCastEvent, res
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 1);
-    REQUIRE(log_lines[0] == "Player cast Foie");
+    REQUIRE(log_lines[0] == "Player cast [c=#3aa0ff]Foie[/c]");
 }
 
 TEST_CASE("CombatLogBridge publishes a use line on AfterPhotonArtCastEvent, resolving the art's name",
@@ -175,7 +175,7 @@ TEST_CASE("CombatLogBridge publishes a use line on AfterPhotonArtCastEvent, reso
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 1);
-    REQUIRE(log_lines[0] == "Player used Rising Strike");
+    REQUIRE(log_lines[0] == "Player used [c=#3aa0ff]Rising Strike[/c]");
 }
 
 TEST_CASE("CombatLogBridge::PublishPlayerStatus reports TP as the player's secondary resource", "[CombatLogBridge]")
@@ -262,5 +262,5 @@ TEST_CASE("CombatLogBridge publishes a log entry when the player drops an item",
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 1);
-    REQUIRE(log_lines[0] == "Player dropped an item");
+    REQUIRE(log_lines[0] == "Player dropped [c=#d4c93f]an item[/c]");
 }

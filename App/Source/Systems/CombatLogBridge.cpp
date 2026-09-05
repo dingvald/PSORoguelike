@@ -64,10 +64,11 @@ void CombatLogBridge::OnDamage(Entity actor, AfterDamageEvent& event)
     const std::string actor_name = DisplayName(actor.Handle());
     const std::string target_name = DisplayName(target_handle);
 
-    m_message_bus->Publish(
-        CombatLogEntryMessage{actor_name + " hit " + target_name + " for " + std::to_string(event.amount) + " damage"});
+    m_message_bus->Publish(CombatLogEntryMessage{actor_name + " hit " + target_name + " for [c=#d43f3f]" +
+                                                 std::to_string(event.amount) + "[/c] damage"});
     if (event.target_defeated)
-        m_message_bus->Publish(CombatLogEntryMessage{actor_name + " defeated " + target_name});
+        m_message_bus->Publish(
+            CombatLogEntryMessage{"[b][c=#d43f3f]" + actor_name + " defeated " + target_name + "[/c][/b]"});
 
     if (actor.Handle() == m_player || target_handle == m_player)
         PublishPlayerStatus();
@@ -77,7 +78,8 @@ void CombatLogBridge::OnTechniqueCast(Entity actor, AfterTechniqueCastEvent& eve
 {
     const Technique* technique = m_techniques->Find(event.technique_id);
     const std::string ability_name = technique ? technique->name : std::string("something");
-    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " cast " + ability_name});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{DisplayName(actor.Handle()) + " cast [c=#3aa0ff]" + ability_name + "[/c]"});
 
     if (actor.Handle() == m_player)
         PublishPlayerStatus();
@@ -87,7 +89,8 @@ void CombatLogBridge::OnPhotonArtCast(Entity actor, AfterPhotonArtCastEvent& eve
 {
     const PhotonArt* art = m_photon_arts->Find(event.photon_art_id);
     const std::string ability_name = art ? art->name : std::string("something");
-    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " used " + ability_name});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{DisplayName(actor.Handle()) + " used [c=#3aa0ff]" + ability_name + "[/c]"});
 
     if (actor.Handle() == m_player)
         PublishPlayerStatus();
@@ -97,21 +100,24 @@ void CombatLogBridge::OnItemPickup(Entity actor, AfterItemPickupEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
     const std::string item_name = label ? *label : std::string("an item");
-    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " picked up " + item_name});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{DisplayName(actor.Handle()) + " picked up [c=#d4c93f]" + item_name + "[/c]"});
 }
 
 void CombatLogBridge::OnItemDrop(Entity actor, AfterItemDropEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
     const std::string item_name = label ? *label : std::string("an item");
-    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " dropped " + item_name});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{DisplayName(actor.Handle()) + " dropped [c=#d4c93f]" + item_name + "[/c]"});
 }
 
 void CombatLogBridge::OnItemUse(Entity actor, AfterItemUseEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
     const std::string item_name = label ? *label : std::string("an item");
-    m_message_bus->Publish(CombatLogEntryMessage{DisplayName(actor.Handle()) + " used " + item_name});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{DisplayName(actor.Handle()) + " used [c=#d4c93f]" + item_name + "[/c]"});
 
     if (actor.Handle() == m_player)
         PublishPlayerStatus();
