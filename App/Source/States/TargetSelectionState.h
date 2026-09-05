@@ -7,6 +7,10 @@
 
 #include <entt/entt.hpp>
 
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 namespace psr {
 
 // Modal target-select cursor, pushed by ExploringState on
@@ -53,12 +57,26 @@ private:
     void MoveCursor(GameplayContext& context, Vec2 direction);
     void UpdateCursorVisual(GameplayContext& context);
 
+    // Only for m_request.is_projectile requests: recomputes BuildProjectilePath
+    // from the current m_cursor and respawns the travel/area preview entities
+    // to match -- called alongside UpdateCursorVisual, from OnEnter and every
+    // MoveCursor, since the previewed tile set changes shape (not just
+    // position) as the cursor moves. No-op (after clearing any previous
+    // preview) for a non-projectile request or a zero offset (SelfTarget /
+    // cursor still at origin).
+    void UpdatePreview(GameplayContext& context);
+    void ClearPreviewEntities(GameplayContext& context, std::vector<std::pair<Vec2, entt::entity>>& entities);
+    void SpawnPreviewEntities(GameplayContext& context, std::uint32_t prefab_id, const std::vector<Vec2>& tiles,
+                              std::vector<std::pair<Vec2, entt::entity>>& out_entities);
+
     TargetRequest m_request;
     entt::entity m_actor = entt::null;
     Vec2 m_origin;
     Vec2 m_cursor;
     entt::entity m_cursor_entity = entt::null;
     Color m_base_color; // the cursor prefab's own authored color, cached at spawn so greying can be reversed
+    std::vector<std::pair<Vec2, entt::entity>> m_travel_preview_entities;
+    std::vector<std::pair<Vec2, entt::entity>> m_area_preview_entities;
     bool m_confirmed = false;
     bool m_cancelled = false;
 };

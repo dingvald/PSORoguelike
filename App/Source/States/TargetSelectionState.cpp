@@ -22,6 +22,8 @@ namespace psr {
 namespace {
 
     constexpr const char* kCursorPrefabId = "ui.target_select_cursor";
+    constexpr const char* kTravelPreviewPrefabId = "ui.target_travel_preview";
+    constexpr const char* kAreaPreviewPrefabId = "ui.target_area_preview";
 
     // Mirrors KeyBindings.cpp's arrow-key-to-offset mapping -- kept local
     // rather than shared, since MoveAction's own bindings are constructed
@@ -100,10 +102,14 @@ void TargetSelectionState::OnEnter(GameplayContext& context)
         m_base_color = renderable->color_1;
 
     UpdateCursorVisual(context);
+    UpdatePreview(context);
 }
 
 void TargetSelectionState::OnExit(GameplayContext& context)
 {
+    ClearPreviewEntities(context, m_travel_preview_entities);
+    ClearPreviewEntities(context, m_area_preview_entities);
+
     if (m_cursor_entity == entt::null)
         return;
     context.grid.RemoveEntity(m_cursor, m_cursor_entity);
@@ -185,6 +191,7 @@ void TargetSelectionState::MoveCursor(GameplayContext& context, Vec2 direction)
     m_cursor = new_cursor;
     context.grid.AddEntity(m_cursor, m_cursor_entity);
     UpdateCursorVisual(context);
+    UpdatePreview(context);
 }
 
 void TargetSelectionState::UpdateCursorVisual(GameplayContext& context)
@@ -196,6 +203,55 @@ void TargetSelectionState::UpdateCursorVisual(GameplayContext& context)
     const Color color = IsReachable(m_cursor) ? m_base_color : Greyed(m_base_color);
     renderable->color_1 = color;
     renderable->color_2 = color;
+}
+
+void TargetSelectionState::UpdatePreview(GameplayContext& context)
+{
+    ClearPreviewEntities(context, m_travel_preview_entities);
+    ClearPreviewEntities(context, m_area_preview_entities);
+
+    if (!m_request.is_projectile)
+        return;
+
+    const Vec2 offset = m_cursor - m_origin;
+    if (offset == Vec2{0, 0})
+        return;
+
+    const Vec2 direction = SnapToCardinalDirection(offset);
+    const std::vector<Vec2> path = BuildProjectilePath(context.grid, context.registry, m_origin, direction,
+                                                       m_request.range, m_request.projectile_pierces);
+    if (path.empty())
+        return;
+
+    SpawnPreviewEntities(context, entt::hashed_string::value(kTravelPreviewPrefabId), path, m_travel_preview_entities);
+
+    const std::vector<Vec2> impact_tiles = m_request.projectile_pierces ? path : std::vector<Vec2>{path.back()};
+    SpawnPreviewEntities(context, entt::hashed_string::value(kAreaPreviewPrefabId), impact_tiles,
+                         m_area_preview_entities);
+}
+
+void TargetSelectionState::ClearPreviewEntities(GameplayContext& context,
+                                                std::vector<std::pair<Vec2, entt::entity>>& entities)
+{
+    for (const auto& [tile, entity] : entities)
+    {
+        context.grid.RemoveEntity(tile, entity);
+        context.registry.DestroyEntity(entity);
+    }
+    entities.clear();
+}
+
+void TargetSelectionState::SpawnPreviewEntities(GameplayContext& context, std::uint32_t prefab_id,
+                                                const std::vector<Vec2>& tiles,
+                                                std::vector<std::pair<Vec2, entt::entity>>& out_entities)
+{
+    out_entities.reserve(tiles.size());
+    for (Vec2 tile : tiles)
+    {
+        const entt::entity entity = context.registry.CreateEntity(prefab_id);
+        context.grid.AddEntity(tile, entity);
+        out_entities.emplace_back(tile, entity);
+    }
 }
 
 } // namespace psr
