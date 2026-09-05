@@ -6,6 +6,7 @@
 #include "Engine/Render/RenderableTile.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
+#include "Engine/Render/AnimationClock.h"
 #include "UI/FieldWidgets.h"
 #include "UI/PreviewCanvas.h"
 #include "UI/PreviewWindowChrome.h"
@@ -60,6 +61,7 @@ public:
     void OnAttach() override;
     void OnDetach() override;
     void OnRender(SDL_Renderer* renderer) override;
+    void OnUpdate(float delta_time) override;
     void OnEvent(Event& event) override;
 
 private:
@@ -215,6 +217,8 @@ private:
     bool m_renderer_initialized = false;
     std::optional<TextureAtlas> m_tile_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
+
+    AnimationClock m_animation_clock;
 
     // Cached grid layout for hit-testing (recomputed each render from
     // #grid-panel). The edit canvas is a fixed, generous kEditCols x

@@ -13,7 +13,7 @@
 #include "Combat/TechniqueLibraryFile.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
-#include "Components/EnergyComponent.h"
+#include "Components/ActorComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
@@ -88,9 +88,12 @@ namespace {
 
     // The player's prefab -- appearance (and, later, base stats) lives in
     // App/Assets/Data/Entities/player.json like every other authored entity,
-    // not hand-built here. PlayerControlledComponent/Position/EnergyComponent
-    // are never authored on it (all three are engine-managed, authorable=false)
-    // and are emplaced onto the spawned instance separately below.
+    // not hand-built here. PlayerControlledComponent/Position are never
+    // authored on it (both are engine-managed, authorable=false) and are
+    // emplaced onto the spawned instance separately below. ActorComponent is
+    // technically authorable now (see its own doc comment) but is still
+    // emplaced separately below rather than authored, so TurnQueue membership
+    // timing stays under this constructor's explicit control.
     constexpr const char* kPlayerPrefabId = "player";
 
     // The two starter Item hotbar slots' bound consumable prefabs -- ids only,
@@ -184,7 +187,7 @@ void GameplayLayer::LoadNewGame()
     // Created before dungeon generation below so CombatLogBridge (constructed
     // right after) can Subscribe() every enemy on_enemy_spawned stamps,
     // including the ones InstantiateDungeon spawns immediately --
-    // Position/PlayerControlledComponent/HealthComponent/EnergyComponent are
+    // Position/PlayerControlledComponent/HealthComponent/ActorComponent are
     // still emplaced later, once instantiation.entrance_tile is known;
     // nothing this entity carries yet (innate_weapon/blocks_movement/
     // renderable, from player.json) needs the grid or dungeon to exist first.
@@ -235,10 +238,10 @@ void GameplayLayer::LoadNewGame()
     m_on_hit_effect_system.emplace(*m_visual_effects);
     m_on_hit_effect_system->Subscribe(Entity(m_registry, m_player));
 
-    // Must be constructed before any entity's EnergyComponent is emplaced --
+    // Must be constructed before any entity's ActorComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
-    // OnConstruct<EnergyComponent> listener, wired in its constructor. That
-    // includes enemies' EnergyComponent below (via on_enemy_spawned, run from
+    // OnConstruct<ActorComponent> listener, wired in its constructor. That
+    // includes enemies' ActorComponent below (via on_enemy_spawned, run from
     // InstantiateDungeon), not just the player's -- constructing this any
     // later left the dungeon's first enemy wave emplaced before the listener
     // existed, so they never joined the turn queue and never acted.
@@ -257,7 +260,7 @@ void GameplayLayer::LoadNewGame()
     // subscription).
     const auto on_enemy_spawned = [this](entt::entity entity)
     {
-        m_registry.Emplace<EnergyComponent>(entity);
+        m_registry.GetOrEmplace<ActorComponent>(entity);
         if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(entity))
         {
             const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
@@ -281,7 +284,7 @@ void GameplayLayer::LoadNewGame()
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_rng);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
-    m_tab_target_system.emplace(m_registry, *m_grid);
+    m_tab_target_system.emplace(m_registry, *m_grid, *m_room_map, *m_room_visibility);
     m_turn_coordinator->SetNpcDecision(
         [this](Entity actor) -> IAction*
         {
@@ -313,7 +316,7 @@ void GameplayLayer::LoadNewGame()
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
-    m_registry.Emplace<EnergyComponent>(m_player); // enqueues the player into the turn queue
+    m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
 
     m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
@@ -596,12 +599,17 @@ void GameplayLayer::PublishFloatingTextState()
 
     for (const FloatingTextInstance& instance : m_floating_text.Active())
     {
-        const PixelPosition pixel = TileToPixel(instance.origin_tile, instance.offset, m_camera.GetPosition(),
-                                                 m_last_render_width, m_last_render_height,
-                                                 static_cast<float>(kTileWidth) * m_camera.GetZoom(),
-                                                 static_cast<float>(kTileHeight) * m_camera.GetZoom(),
-                                                 m_camera.GetRenderOffset());
-        state.entries.push_back(FloatingTextStateMessage::Entry{pixel.x, pixel.y, instance.text, instance.color});
+        const float zoomed_tile_width = static_cast<float>(kTileWidth) * m_camera.GetZoom();
+        const float zoomed_tile_height = static_cast<float>(kTileHeight) * m_camera.GetZoom();
+        const PixelPosition pixel =
+            TileToPixel(instance.origin_tile, instance.offset, m_camera.GetPosition(), m_last_render_width,
+                        m_last_render_height, zoomed_tile_width, zoomed_tile_height, m_camera.GetRenderOffset());
+        // TileToPixel returns a tile's top-left corner (matches TileRenderer's
+        // own sprite-quad anchor) -- shift by half a zoomed tile to land on
+        // the tile's centre instead.
+        state.entries.push_back(FloatingTextStateMessage::Entry{pixel.x + zoomed_tile_width / 2.0f,
+                                                                pixel.y + zoomed_tile_height / 2.0f, m_camera.GetZoom(),
+                                                                instance.text, instance.color});
     }
 
     Publish(state);

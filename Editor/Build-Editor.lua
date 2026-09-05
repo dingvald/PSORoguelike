@@ -32,6 +32,10 @@ project "Editor"
       -- component definitions directly instead -- content editors need
       -- RegisterComponents/RenderableComponent to enumerate and preview real
       -- entity prefabs, mirrors UnnamedRoguelike's Editor/Build-Editor.lua.
+      -- TechniquesScreenSnapshot.cpp (pulled in via Items/ below) references
+      -- ApplicationFilepaths::TexturesPath, so it must be compiled too.
+      "../App/Source/ApplicationFilepaths.h",
+      "../App/Source/ApplicationFilepaths.cpp",
       "../App/Source/Components/**.h",
       "../App/Source/Components/**.cpp",
       -- EquipmentComponent::AttachHandlers calls ComputeEffectiveStats to

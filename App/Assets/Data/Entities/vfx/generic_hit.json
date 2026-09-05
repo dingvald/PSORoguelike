@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "renderable": {
-            "texture_id": "diamond",
+            "texture_id": "rectangle",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -11,9 +11,11 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#ffcf40cc",
-            "color_2": "#ffcf40cc",
-            "render_layer": 9
+            "color_1": "#0bff0ecc",
+            "color_2": "#29ff2ccc",
+            "render_layer": 9,
+            "frames": 1,
+            "frame_time": 0.0
         }
     }
 }

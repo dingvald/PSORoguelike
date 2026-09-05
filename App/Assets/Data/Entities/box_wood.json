@@ -7,17 +7,31 @@
             "max_hp": 15
         },
         "renderable": {
-            "texture_id": "geo_pile",
-            "texture_size": { "x": 16, "y": 24 },
-            "uv": { "x": 0, "y": 0 },
+            "texture_id": "box",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
             "color_1": "#8a5a2eff",
             "color_2": "#c99a5eff",
-            "render_layer": 1
+            "render_layer": 1,
+            "frames": 1,
+            "frame_time": 0.0
         },
         "drop_table": {
             "entries": [
-                { "item_prefab_id": "monomate", "weight": 3.0 },
-                { "item_prefab_id": "monofluid", "weight": 2.0 }
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 3.0
+                },
+                {
+                    "item_prefab_id": "monofluid",
+                    "weight": 2.0
+                }
             ],
             "no_drop_weight": 2.0,
             "meseta_weight": 3.0,

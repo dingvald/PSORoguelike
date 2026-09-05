@@ -36,7 +36,9 @@
             },
             "color_1": "#b2ada9ff",
             "color_2": "#c9a86aff",
-            "render_layer": 1
+            "render_layer": 1,
+            "frames": 1,
+            "frame_time": 0.0
         },
         "drop_table": {
             "entries": [
@@ -46,7 +48,7 @@
                 },
                 {
                     "item_prefab_id": "monofluid",
-                    "weight": 0.7
+                    "weight": 0.699999988079071
                 }
             ],
             "no_drop_weight": 3.0,
@@ -56,6 +58,11 @@
         },
         "experience_value": {
             "xp": 12
+        },
+        "actor": {
+            "ap": 0,
+            "movement_speed": 65,
+            "act_speed": 100
         }
     }
 }

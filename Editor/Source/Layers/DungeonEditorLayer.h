@@ -8,6 +8,7 @@
 #include "Engine/Render/RenderableTile.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
+#include "Engine/Render/AnimationClock.h"
 #include "UI/FieldWidgets.h"
 #include "UI/PreviewCanvas.h"
 #include "UI/PreviewWindowChrome.h"
@@ -60,6 +61,7 @@ public:
     void OnAttach() override;
     void OnDetach() override;
     void OnRender(SDL_Renderer* renderer) override;
+    void OnUpdate(float delta_time) override;
     void OnEvent(Event& event) override;
 
 private:
@@ -158,6 +160,8 @@ private:
     bool m_renderer_initialized = false;
     std::optional<TextureAtlas> m_tile_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
+
+    AnimationClock m_animation_clock;
 
     // World units for m_preview_canvas -- 1 generated-layout cell =
     // kBaseCellPx world-pixels at zoom 1.0.

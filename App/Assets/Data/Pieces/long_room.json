@@ -15,6 +15,9 @@
             "prefabs": [
                 {
                     "prefab_id": "test"
+                },
+                {
+                    "prefab_id": "box_wood"
                 }
             ]
         },
@@ -136,6 +139,9 @@
             "prefabs": [
                 {
                     "prefab_id": "test"
+                },
+                {
+                    "prefab_id": "box_wood"
                 }
             ]
         },
@@ -180,6 +186,9 @@
             "prefabs": [
                 {
                     "prefab_id": "test"
+                },
+                {
+                    "prefab_id": "box_wood"
                 }
             ]
         },
@@ -301,6 +310,9 @@
             "prefabs": [
                 {
                     "prefab_id": "test"
+                },
+                {
+                    "prefab_id": "box_wood"
                 }
             ]
         },

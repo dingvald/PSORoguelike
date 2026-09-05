@@ -47,6 +47,11 @@ namespace {
     constexpr float kContextMenuWidth = 180.0f;
     constexpr float kContextMenuMaxHeight = 200.0f;
 
+    // Baseline size floating text renders at when Camera::GetZoom() == 1 --
+    // multiplied by each entry's scale so text grows with zoom instead of
+    // staying a fixed screen size while the world underneath it magnifies.
+    constexpr float kFloatingTextBaseFontSizeEm = 0.9f;
+
     // Must match #character-screen-hint's initial text in hud.rml -- swapped
     // back in by CancelAwaitingHotbarSlot, same "must match markup"
     // reasoning as kContextMenuWidth/kContextMenuMaxHeight above.
@@ -1105,8 +1110,9 @@ void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)
     for (const FloatingTextStateMessage::Entry& entry : message.entries)
     {
         markup += "<span class=\"floating-text\" style=\"left:" + std::to_string(entry.screen_x) +
-                  "px; top:" + std::to_string(entry.screen_y) + "px; color:" + ColorToRgbaCss(entry.color) + ";\">" +
-                  EscapeRml(entry.text) + "</span>";
+                  "px; top:" + std::to_string(entry.screen_y) +
+                  "px; font-size:" + std::to_string(kFloatingTextBaseFontSizeEm * entry.scale) +
+                  "em; color:" + ColorToRgbaCss(entry.color) + ";\">" + EscapeRml(entry.text) + "</span>";
     }
     layer->SetInnerRML(markup);
 }

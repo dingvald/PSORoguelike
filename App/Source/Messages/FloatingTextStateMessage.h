@@ -18,6 +18,7 @@ struct FloatingTextStateMessage
     {
         float screen_x = 0.0f;
         float screen_y = 0.0f;
+        float scale = 1.0f; // camera zoom at publish time; 1.0 == Camera's un-zoomed baseline
         std::string text;
         Color color;
     };

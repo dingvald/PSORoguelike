@@ -220,7 +220,7 @@ void PieceEditorLayer::BuildPalette()
         loader.Load(EditorFilepaths::EntitiesPath);
         registry.RegisterPrefabs(loader);
 
-        RegistryRenderableLookup lookup{registry};
+        RegistryRenderableLookup lookup{registry, m_animation_clock};
         for (const JsonDirectoryEntry& entry : LoadJsonDirectory(EditorFilepaths::EntitiesPath, 1))
         {
             PaletteEntry palette_entry;
@@ -1538,6 +1538,9 @@ void PieceEditorLayer::OnRender(SDL_Renderer* renderer)
     if (m_mode == Mode::Edit)
         RenderEditContent(*renderer, output_w, output_h);
 }
+
+void PieceEditorLayer::OnUpdate(float delta_time) 
+{ m_animation_clock.Update(delta_time); }
 
 void PieceEditorLayer::WireGridInteraction()
 {

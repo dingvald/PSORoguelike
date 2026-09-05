@@ -121,7 +121,7 @@ void DungeonEditorLayer::BuildPrefabCaches()
         loader.Load(EditorFilepaths::EntitiesPath);
         registry.RegisterPrefabs(loader);
 
-        RegistryRenderableLookup lookup{registry};
+        RegistryRenderableLookup lookup{registry, m_animation_clock};
         for (const JsonDirectoryEntry& entry : LoadJsonDirectory(EditorFilepaths::EntitiesPath, 1))
         {
             const std::uint32_t prefab_id = entt::hashed_string::value(entry.id.c_str());
@@ -948,6 +948,11 @@ void DungeonEditorLayer::OnRender(SDL_Renderer* renderer)
 
     if (m_mode == Mode::Edit)
         RenderPreview(*renderer, output_w, output_h);
+}
+
+void DungeonEditorLayer::OnUpdate(float delta_time) 
+{ 
+    m_animation_clock.Update(delta_time); 
 }
 
 // -- Events -------------------------------------------------------------------

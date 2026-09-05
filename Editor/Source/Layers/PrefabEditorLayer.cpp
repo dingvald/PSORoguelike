@@ -261,7 +261,6 @@ namespace {
     ActorComponent ReadActorBody(const rapidjson::Value& body)
     {
         ActorComponent actor;
-        actor.ap = ReadInt(body, "ap", actor.ap);
         actor.movement_speed = ReadInt(body, "movement_speed", actor.movement_speed);
         actor.act_speed = ReadInt(body, "act_speed", actor.act_speed);
         return actor;
@@ -270,7 +269,6 @@ namespace {
     rapidjson::Value WriteActorBody(const ActorComponent& actor, rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("ap", actor.ap, allocator);
         object.AddMember("movement_speed", actor.movement_speed, allocator);
         object.AddMember("act_speed", actor.act_speed, allocator);
         return object;
@@ -632,7 +630,6 @@ namespace {
           "<div id=\"field-evp\" class=\"field-row\"></div>"
           "<div id=\"field-lck\" class=\"field-row\"></div>"},
          {"actor", "Actor", "#7ee8e0",
-          "<div id=\"field-ap\" class=\"field-row\"></div>"
           "<div id=\"field-movement-speed\" class=\"field-row\"></div>"
           "<div id=\"field-act-speed\" class=\"field-row\"></div>"},
          {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
@@ -1331,13 +1328,6 @@ void PrefabEditorLayer::RefreshEditForm()
                                          [this](int v)
                                          {
                                              m_stats.lck = v;
-                                             MarkDirty();
-                                         }));
-    if (Rml::Element* row = m_editor->GetElementById("field-ap"))
-        keep(fieldwidgets::BuildIntField(*row, "ap", m_actor.ap,
-                                         [this](int v)
-                                         {
-                                             m_actor.ap = v;
                                              MarkDirty();
                                          }));
     if (Rml::Element* row = m_editor->GetElementById("field-movement-speed"))

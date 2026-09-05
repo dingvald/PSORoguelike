@@ -3,7 +3,8 @@
     "components": {
         "consumable": {
             "effect": "restore_tp",
-            "amount": 15
+            "amount": 15,
+            "technique_id": 0
         },
         "renderable": {
             "texture_id": "item_pickup",
@@ -16,8 +17,10 @@
                 "y": 0
             },
             "color_1": "#000000ff",
-            "color_2": "#1a5fa8ff",
-            "render_layer": 0
+            "color_2": "#148700ff",
+            "render_layer": 0,
+            "frames": 1,
+            "frame_time": 0.0
         },
         "item": {}
     }

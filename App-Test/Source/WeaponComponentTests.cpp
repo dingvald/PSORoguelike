@@ -124,7 +124,6 @@ TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses 
                               { "race_id": "machine", "bonus_percent": 5 }
                           ],
                           "photon_art_ids": ["rising_strike"],
-                          "technique_ids": [],
                           "element": "fire",
                           "status_effect_id": "burn",
                           "status_chance_percent": 15
@@ -160,7 +159,6 @@ TEST_CASE("JsonEntityLoader round-trips a weapon entity, including race_bonuses 
     CHECK(weapon.race_bonuses[1].bonus_percent == 5);
     REQUIRE(weapon.photon_art_ids.size() == 1);
     CHECK(weapon.photon_art_ids[0] == entt::hashed_string::value("rising_strike"));
-    CHECK(weapon.technique_ids.empty());
     CHECK(weapon.element == psr::Element::Fire);
     CHECK(weapon.status_effect_id == entt::hashed_string::value("burn"));
     CHECK(weapon.status_chance_percent == 15);

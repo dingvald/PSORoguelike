@@ -12,11 +12,13 @@ project "App-Test"
       -- pure-logic sources directly instead, same trick Editor/Build-Editor.lua
       -- already uses for Components/Render. main.cpp and anything touching
       -- Layer/SDL/RmlUi (HelloWorldLayer, the GPU render pipeline) is out of scope.
+      "../App/Source/ApplicationFilepaths.h", "../App/Source/ApplicationFilepaths.cpp",
       "../App/Source/Actions/**.h", "../App/Source/Actions/**.cpp",
       "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",
       "../App/Source/Items/**.h", "../App/Source/Items/**.cpp",
+      "../App/Source/Progression/**.h", "../App/Source/Progression/**.cpp",
       "../App/Source/Systems/**.h", "../App/Source/Systems/**.cpp",
       -- States/ is SDL/RmlUi-free (TargetSelectionState.cpp's own SDL3/
       -- SDL_keycode.h include is just key-code constants, no windowing/

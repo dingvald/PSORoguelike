@@ -6,6 +6,7 @@
 #include "CombatRegistrySetup.h"
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/KnownTechniquesComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -31,18 +32,20 @@ struct TechniqueEventProbe
 {
 };
 
-entt::entity MakeWeapon(psr::Registry& registry, bool grants_technique = true)
+entt::entity MakeWeapon(psr::Registry& registry)
 {
     entt::entity weapon = registry.CreateEntity();
-    psr::WeaponComponent component;
-    if (grants_technique)
-        component.technique_ids.push_back(kTechniqueId);
-    registry.Emplace<psr::WeaponComponent>(weapon, component);
+    registry.Emplace<psr::WeaponComponent>(weapon);
     registry.Emplace<psr::StatsComponent>(weapon); // no weapon stat bonus needed for these tests
     return weapon;
 }
 
-psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, int mst, int ata, int tp)
+// knows_technique controls whether kTechniqueId is in the actor's own
+// KnownTechniquesComponent -- technique casting is gated purely on learned
+// knowledge now (see TechniqueAction.cpp/KnownTechniquesComponent.h), not on
+// the equipped weapon.
+psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, int mst, int ata, int tp,
+                      bool knows_technique = true)
 {
     entt::entity handle = registry.CreateEntity();
     psr::Entity actor(registry, handle);
@@ -57,6 +60,9 @@ psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, 
     tp_component.current_tp = tp;
     tp_component.max_tp = tp;
     actor.Emplace<psr::TPComponent>(tp_component);
+    if (knows_technique)
+        actor.Emplace<psr::KnownTechniquesComponent>(
+            psr::KnownTechniquesComponent{{psr::KnownTechniqueEntry{kTechniqueId, /*tier=*/1}}});
     return actor;
 }
 
@@ -87,7 +93,7 @@ psr::TechniqueLibrary MakeLibrary(psr::Technique technique)
 
 } // namespace
 
-TEST_CASE("TechniqueAction with no weapon equipped is a free no-op", "[TechniqueAction]")
+TEST_CASE("TechniqueAction for an unlearned technique is a free no-op", "[TechniqueAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -97,26 +103,9 @@ TEST_CASE("TechniqueAction with no weapon equipped is a free no-op", "[Technique
     psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
     std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/100);
-
-    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
-    psr::ActionResult result = action.Perform(actor);
-
-    REQUIRE(result.cost == 0);
-}
-
-TEST_CASE("TechniqueAction with a weapon that doesn't grant the id is a free no-op", "[TechniqueAction]")
-{
-    psr::Registry registry;
-    psr::Grid grid{5, 5};
-    psr::AffixLibrary affixes;
-    psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
-    psr::TechniqueLibrary techniques = MakeLibrary(psr::Technique{});
-    std::mt19937 rng{1};
-
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/100);
-    entt::entity weapon = MakeWeapon(registry, /*grants_technique=*/false);
+    psr::Entity actor =
+        MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/100, /*knows_technique=*/false);
+    entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
     psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
@@ -418,7 +407,7 @@ TEST_CASE("TechniqueAction dispatches AfterTechniqueCastEvent and AfterDamageEve
     REQUIRE(damage_events == 1);
 }
 
-TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPComponent's contributes current_tp, "
+TEST_CASE("EquipmentComponent's handler contributes attacker_stats, TPComponent's contributes current_tp, "
           "to BeforeTechniqueCastEvent",
           "[TechniqueAction][EquipmentComponent][TPComponent]")
 {
@@ -435,32 +424,10 @@ TEST_CASE("EquipmentComponent's handler contributes weapon-grants and stats, TPC
     psr::BeforeTechniqueCastEvent event{kTechniqueId};
     actor.Dispatch(event);
 
-    REQUIRE(event.has_weapon);
-    REQUIRE(event.weapon_grants_id);
     REQUIRE(event.has_tp_component);
     REQUIRE(event.current_tp == 33);
     REQUIRE(event.attacker_stats.mst == 70);
     REQUIRE(event.attacker_stats.ata == 40);
-}
-
-TEST_CASE("BeforeTechniqueCastEvent reports weapon_grants_id false for an id the weapon doesn't grant",
-          "[TechniqueAction][EquipmentComponent]")
-{
-    psr::Registry registry;
-    psr::Grid grid{5, 5};
-    psr::AffixLibrary affixes;
-    psr::StatusEffectLibrary status_effects;
-    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
-
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/50, /*ata=*/50, /*tp=*/10);
-    entt::entity weapon = MakeWeapon(registry, /*grants_technique=*/false);
-    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
-
-    psr::BeforeTechniqueCastEvent event{kTechniqueId};
-    actor.Dispatch(event);
-
-    REQUIRE(event.has_weapon);
-    REQUIRE_FALSE(event.weapon_grants_id);
 }
 
 TEST_CASE("TechniqueAction no-ops for zero cost when the caster is Shocked", "[TechniqueAction][StatusEffect]")

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Engine/Dungeon/RoomMap.h"
+#include "Engine/Dungeon/RoomVisibilityTracker.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Math/Vec2.h"
@@ -17,32 +19,37 @@ namespace psr {
 class TabTargetSystem
 {
 public:
-    TabTargetSystem(Registry& registry, Grid& grid);
+    TabTargetSystem(Registry& registry, Grid& grid, const RoomMap& room_map, const RoomVisibilityTracker& visibility);
 
     // Tab: a fresh Manhattan-distance-sorted scan of every hostile
     // HealthComponent entity from player's tile (Hostility.h's IsHostile --
     // excludes the player itself; projectiles never carry HealthComponent,
-    // so they're naturally excluded too). Finds the current target's index
-    // in that fresh list, if still present, and advances to the next,
-    // wrapping after the last; otherwise (no target yet, or it dropped out
-    // of the list) selects the nearest. Clears instead if the list is
-    // empty. Repositions the marker to the new target's tile.
+    // so they're naturally excluded too) whose room is RoomVisibility::Visible
+    // (matches FogOfWarRenderableLookup's own actor-hiding rule, so you can
+    // never lock onto something the fog isn't drawing). Finds the current
+    // target's index in that fresh list, if still present, and advances to
+    // the next, wrapping after the last; otherwise (no target yet, or it
+    // dropped out of the list) selects the nearest. Clears instead if the
+    // list is empty. Repositions the marker to the new target's tile.
     void CycleTarget(Entity player);
 
     // Escape: clears TabTargetComponent::target and removes the marker.
     void ClearTarget(Entity player);
 
-    // Call once per frame: if the current target died/was destroyed, clears
-    // it; otherwise repositions the marker if the target's tile changed
-    // since last call.
+    // Call once per frame: if the current target died, was destroyed, or its
+    // room fell out of RoomVisibility::Visible, clears it; otherwise
+    // repositions the marker if the target's tile changed since last call.
     void Update(Entity player);
 
 private:
+    bool IsVisible(entt::entity target) const;
     void RepositionMarker(Vec2 tile);
     void RemoveMarker();
 
     Registry* m_registry;
     Grid* m_grid;
+    const RoomMap* m_room_map;
+    const RoomVisibilityTracker* m_visibility;
     entt::entity m_marker_entity = entt::null;
     Vec2 m_marker_tile;
 };

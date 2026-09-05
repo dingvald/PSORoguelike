@@ -17,10 +17,12 @@ namespace {
     constexpr const char* kMarkerPrefabId = "ui.tab_target_marker";
 
     // Every hostile HealthComponent entity (excluding player) with a
-    // Position, sorted nearest-first from player's own tile. Mirrors
-    // EnemyAiSystem's FindNearestHostileTile shape, but collects every
-    // candidate rather than tracking only the single best.
-    std::vector<entt::entity> SortedHostilesByDistance(Registry& registry, Entity player)
+    // Position in a RoomVisibility::Visible room, sorted nearest-first from
+    // player's own tile. Mirrors EnemyAiSystem's FindNearestHostileTile
+    // shape, but collects every candidate rather than tracking only the
+    // single best.
+    std::vector<entt::entity> SortedHostilesByDistance(Registry& registry, Entity player, const RoomMap& room_map,
+                                                        const RoomVisibilityTracker& visibility)
     {
         const Vec2 origin = player.Get<Position>().tile;
         std::vector<std::pair<int, entt::entity>> candidates;
@@ -32,6 +34,8 @@ namespace {
                     return;
                 const Position* position = target.TryGet<Position>();
                 if (!position)
+                    return;
+                if (visibility.GetVisibility(room_map.GetRoom(position->tile)) != RoomVisibility::Visible)
                     return;
                 candidates.emplace_back(ManhattanDistance(origin, position->tile), candidate);
             });
@@ -46,11 +50,23 @@ namespace {
     }
 } // namespace
 
-TabTargetSystem::TabTargetSystem(Registry& registry, Grid& grid) : m_registry(&registry), m_grid(&grid) {}
+TabTargetSystem::TabTargetSystem(Registry& registry, Grid& grid, const RoomMap& room_map,
+                                 const RoomVisibilityTracker& visibility)
+    : m_registry(&registry), m_grid(&grid), m_room_map(&room_map), m_visibility(&visibility)
+{
+}
+
+bool TabTargetSystem::IsVisible(entt::entity target) const
+{
+    const Position* position = m_registry->TryGetComponent<Position>(target);
+    if (!position)
+        return false;
+    return m_visibility->GetVisibility(m_room_map->GetRoom(position->tile)) == RoomVisibility::Visible;
+}
 
 void TabTargetSystem::CycleTarget(Entity player)
 {
-    const std::vector<entt::entity> sorted = SortedHostilesByDistance(*m_registry, player);
+    const std::vector<entt::entity> sorted = SortedHostilesByDistance(*m_registry, player, *m_room_map, *m_visibility);
     if (sorted.empty())
     {
         ClearTarget(player);
@@ -83,7 +99,7 @@ void TabTargetSystem::Update(Entity player)
     if (!tab_target || tab_target->target == entt::null)
         return;
 
-    if (!m_registry->IsValid(tab_target->target))
+    if (!m_registry->IsValid(tab_target->target) || !IsVisible(tab_target->target))
     {
         tab_target->target = entt::null;
         RemoveMarker();

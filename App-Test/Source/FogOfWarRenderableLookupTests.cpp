@@ -4,6 +4,7 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Engine/ECS/Position.h"
+#include "Engine/Render/AnimationClock.h"
 #include "Render/RegistryRenderableLookup.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -29,7 +30,8 @@ entt::entity MakeRenderableEntity(Registry& registry, Vec2 tile)
 TEST_CASE("FogOfWarRenderableLookup hides geometry and actors in a never-visited room", "[FogOfWarRenderableLookup]")
 {
     Registry registry;
-    RegistryRenderableLookup inner(registry);
+    AnimationClock animation_clock;
+    RegistryRenderableLookup inner(registry, animation_clock);
     RoomMap room_map(1, 2);
     room_map.SetRoom(Vec2{0, 0}, 0);
     room_map.SetRoom(Vec2{0, 1}, 1);
@@ -50,7 +52,8 @@ TEST_CASE("FogOfWarRenderableLookup dims geometry and hides actors in an explore
           "[FogOfWarRenderableLookup]")
 {
     Registry registry;
-    RegistryRenderableLookup inner(registry);
+    AnimationClock animation_clock;
+    RegistryRenderableLookup inner(registry, animation_clock);
     RoomMap room_map(1, 2);
     room_map.SetRoom(Vec2{0, 0}, 0);
     room_map.SetRoom(Vec2{0, 1}, 1);
@@ -78,7 +81,8 @@ TEST_CASE("FogOfWarRenderableLookup dims geometry and hides actors in an explore
 TEST_CASE("FogOfWarRenderableLookup renders the current room unchanged", "[FogOfWarRenderableLookup]")
 {
     Registry registry;
-    RegistryRenderableLookup inner(registry);
+    AnimationClock animation_clock;
+    RegistryRenderableLookup inner(registry, animation_clock);
     RoomMap room_map(1, 1);
     room_map.SetRoom(Vec2{0, 0}, 0);
     RoomVisibilityTracker visibility(1);
@@ -98,7 +102,8 @@ TEST_CASE("FogOfWarRenderableLookup renders an adjacent, never-entered room unch
           "[FogOfWarRenderableLookup]")
 {
     Registry registry;
-    RegistryRenderableLookup inner(registry);
+    AnimationClock animation_clock;
+    RegistryRenderableLookup inner(registry, animation_clock);
     RoomMap room_map(1, 2);
     room_map.SetRoom(Vec2{0, 0}, 0);
     room_map.SetRoom(Vec2{0, 1}, 1);
@@ -123,7 +128,8 @@ TEST_CASE("FogOfWarRenderableLookup passes through entities with no Position reg
           "[FogOfWarRenderableLookup]")
 {
     Registry registry;
-    RegistryRenderableLookup inner(registry);
+    AnimationClock animation_clock;
+    RegistryRenderableLookup inner(registry, animation_clock);
     RoomMap room_map(1, 1); // (0,0) deliberately left untagged
     RoomVisibilityTracker visibility(1);
     // Never call Update -- every room stays Hidden.
