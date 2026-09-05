@@ -43,7 +43,8 @@ void ExperienceSystem::OnDamage(Entity player, AfterDamageEvent& event)
     LevelComponent& level = *level_ptr;
 
     level.xp += xp_value->xp;
-    m_message_bus->Publish(CombatLogEntryMessage{"Player gained " + std::to_string(xp_value->xp) + " XP"});
+    m_message_bus->Publish(
+        CombatLogEntryMessage{"Player gained [c=#f6470a]" + std::to_string(xp_value->xp) + "[/c] XP"});
 
     bool leveled_up = false;
     while (const GrowthCurveLevel* next = m_growth_curve->Find(level.level + 1))
@@ -56,7 +57,8 @@ void ExperienceSystem::OnDamage(Entity player, AfterDamageEvent& event)
         leveled_up = true;
 
         ApplyLevelUp(player, *next);
-        m_message_bus->Publish(CombatLogEntryMessage{"Player reached level " + std::to_string(level.level) + "!"});
+        m_message_bus->Publish(
+            CombatLogEntryMessage{"[b][c=#f6470a]Player reached level " + std::to_string(level.level) + "![/c][/b]"});
     }
 
     if (leveled_up)

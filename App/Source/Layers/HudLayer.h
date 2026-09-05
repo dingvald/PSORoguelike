@@ -21,6 +21,7 @@ class ElementDocument;
 namespace psr {
 
 class RmlClickListener;
+class RmlScrollListener;
 struct PlayerStatusMessage;
 struct HotbarStateMessage;
 struct CombatLogEntryMessage;
@@ -125,6 +126,7 @@ private:
 
     void LoadDocument();
     void WireHotbarSlots();
+    void WireEventLogScroll();
 
     void OnPlayerStatus(const PlayerStatusMessage& message);
     void OnHotbarState(const HotbarStateMessage& message);
@@ -165,6 +167,13 @@ private:
     void OnTargetState(const TargetStateMessage& message);
 
     void AppendLogLine(const std::string& text);
+
+    // Recomputes each visible .log-line's opacity from its position in the
+    // #event-log scroll viewport (newest visible = 1.0, oldest visible =
+    // 0.25, interpolated between). Run once layout has caught up with the
+    // latest SetInnerRML (see m_log_scroll_pending) and again on every
+    // manual scroll of the log, via m_log_scroll_listener.
+    void UpdateLogLineOpacities();
 
     // Character-screen navigation/context-menu helpers -- see OnEvent's doc
     // comment. Split out of OnEvent itself so both the keyboard path and the
@@ -250,12 +259,20 @@ private:
     // m_menu_open. Which of the two payload fields below is meaningful
     // depends on the source.
     HotbarAssignSource m_awaiting_hotbar_assign_source = HotbarAssignSource::None;
-    int m_awaiting_hotbar_inventory_index = -1;                          // CharacterScreenItem
+    int m_awaiting_hotbar_inventory_index = -1;                            // CharacterScreenItem
     HotbarSlotType m_awaiting_hotbar_ability_type = HotbarSlotType::Empty; // TechniquesScreenAbility
-    std::uint32_t m_awaiting_hotbar_ability_id = 0;                       // TechniquesScreenAbility
+    std::uint32_t m_awaiting_hotbar_ability_id = 0;                        // TechniquesScreenAbility
 
     static constexpr std::size_t kMaxLogLines = 50;
-    std::deque<std::string> m_log_lines; // already-formatted text from CombatLogEntryMessage/LootDropMessage
+    std::deque<std::string> m_log_lines; // markup text (see LogMarkup.h) from CombatLogEntryMessage/LootDropMessage
+
+    // Set by AppendLogLine after rebuilding #event-log's markup; consumed at
+    // the top of the next OnUpdate, once Application's frame loop has run
+    // Context::Update() and RmlUi's layout has actually caught up with that
+    // markup (GetScrollHeight() read synchronously in AppendLogLine would
+    // still reflect the previous frame's layout).
+    bool m_log_scroll_pending = false;
+    std::unique_ptr<RmlScrollListener> m_log_scroll_listener;
 };
 
 } // namespace psr

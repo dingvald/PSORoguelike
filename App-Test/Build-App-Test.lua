@@ -13,6 +13,10 @@ project "App-Test"
       -- already uses for Components/Render. main.cpp and anything touching
       -- Layer/SDL/RmlUi (HelloWorldLayer, the GPU render pipeline) is out of scope.
       "../App/Source/ApplicationFilepaths.h", "../App/Source/ApplicationFilepaths.cpp",
+      -- UI/ is otherwise RmlUi-dependent, but LogMarkup.h/.cpp is pure
+      -- std::string logic -- same cherry-pick-a-file trick as
+      -- ApplicationFilepaths above, not a whole-folder glob.
+      "../App/Source/UI/LogMarkup.h", "../App/Source/UI/LogMarkup.cpp",
       "../App/Source/Actions/**.h", "../App/Source/Actions/**.cpp",
       "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
