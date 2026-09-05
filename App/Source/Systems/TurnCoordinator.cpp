@@ -13,24 +13,24 @@ TurnCoordinator::TurnCoordinator(Registry& registry, int action_threshold)
     : m_registry(&registry), m_turn_queue(action_threshold),
       m_decide_npc_action([this](Entity) -> IAction* { return &m_default_npc_action; })
 {
-    registry.OnConstruct<EnergyComponent, &TurnCoordinator::OnEnergyConstructed>(*this);
-    registry.OnDestroy<EnergyComponent, &TurnCoordinator::OnEnergyDestroyed>(*this);
+    registry.OnConstruct<ActorComponent, &TurnCoordinator::OnActorConstructed>(*this);
+    registry.OnDestroy<ActorComponent, &TurnCoordinator::OnActorDestroyed>(*this);
     registry.OnConstruct<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledConstructed>(*this);
     registry.OnDestroy<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledDestroyed>(*this);
 }
 
 TurnCoordinator::~TurnCoordinator()
 {
-    m_registry->DisconnectComponentLifecycle<EnergyComponent>(*this);
+    m_registry->DisconnectComponentLifecycle<ActorComponent>(*this);
     m_registry->DisconnectComponentLifecycle<PlayerControlledComponent>(*this);
 }
 
-void TurnCoordinator::OnEnergyConstructed(entt::registry& registry, entt::entity entity)
+void TurnCoordinator::OnActorConstructed(entt::registry& registry, entt::entity entity)
 {
-    m_turn_queue.Enqueue(entity, registry.get<EnergyComponent>(entity).energy);
+    m_turn_queue.Enqueue(entity, registry.get<ActorComponent>(entity).ap);
 }
 
-void TurnCoordinator::OnEnergyDestroyed(entt::registry& /*registry*/, entt::entity entity)
+void TurnCoordinator::OnActorDestroyed(entt::registry& /*registry*/, entt::entity entity)
 {
     m_turn_queue.Remove(entity);
 }
@@ -124,7 +124,7 @@ TurnStep TurnCoordinator::Step(float delta_time)
 
         int energy = m_turn_queue.GetEnergy(actor_handle) - result.cost;
         m_turn_queue.Requeue(actor_handle, energy);
-        actor.Get<EnergyComponent>().energy = energy;
+        actor.Get<ActorComponent>().ap = energy;
 
         // Takes priority over the player-yield check below: an action that
         // just queued a Tween (Move/Attack) must block the whole turn queue

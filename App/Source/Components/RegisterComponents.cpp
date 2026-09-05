@@ -1,5 +1,6 @@
 #include "Components/RegisterComponents.h"
 
+#include "Components/ActorComponent.h"
 #include "Components/AiComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/ConsumableComponent.h"
@@ -7,7 +8,6 @@
 #include "Components/CurrencyPickupComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/ElementalResistanceComponent.h"
-#include "Components/EnergyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/ExperienceValueComponent.h"
 #include "Components/HotbarComponent.h"
@@ -38,6 +38,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
 {
     ComponentSchemaRegistrar reg{registry.GetMetaContext()};
 
+    ActorComponent::Register(reg);
     AiComponent::Register(reg);
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
@@ -46,7 +47,6 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     CurrencyPickupComponent::Register(reg);
     DropTableComponent::Register(reg);
     ElementalResistanceComponent::Register(reg);
-    EnergyComponent::Register(reg);
     ExperienceValueComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);

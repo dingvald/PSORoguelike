@@ -3,6 +3,7 @@
 
 #include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
+#include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -44,6 +45,23 @@ TEST_CASE("MoveAction moves an actor to an open tile", "[MoveAction]")
     REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{2, 1});
     REQUIRE(grid.GetEntities(psr::Vec2{1, 1}).empty());
     REQUIRE(grid.GetEntities(psr::Vec2{2, 1}) == std::vector<entt::entity>{handle});
+}
+
+TEST_CASE("MoveAction's cost is scaled by the actor's ActorComponent::movement_speed", "[MoveAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    actor.Emplace<psr::ActorComponent>(psr::ActorComponent{0, 200, 100});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    std::mt19937 rng{1};
+    psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::MoveAction::kMoveCost / 2);
 }
 
 TEST_CASE("MoveAction emplaces a TweenComponent starting at the pre-move offset", "[MoveAction]")

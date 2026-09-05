@@ -1,5 +1,6 @@
 #include "Actions/AttackAction.h"
 
+#include "Combat/ActionCost.h"
 #include "Combat/AttackEvent.h"
 #include "Combat/CombatMath.h"
 #include "Combat/EffectiveStats.h"
@@ -158,7 +159,7 @@ ActionResult AttackAction::Perform(Entity actor)
                 std::make_unique<AttackAction>(*m_grid, *m_affixes, m_direction, *m_rng, m_attack_number + 1);
     }
 
-    return ActionResult(kAttackCost, std::move(extra_attack));
+    return ActionResult(EffectiveActCost(actor, kAttackCost), std::move(extra_attack));
 }
 
 } // namespace psr

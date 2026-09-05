@@ -220,7 +220,7 @@ private:
 
     // Non-movable (binds registry component-lifecycle listeners to its own
     // address) -- must be constructed in place, after m_registry exists but
-    // before the player's EnergyComponent is spawned (TurnQueue membership
+    // before the player's ActorComponent is spawned (TurnQueue membership
     // is driven by that construction order, see TurnCoordinator.cpp).
     // Declared after m_registry so it's destroyed first.
     std::optional<TurnCoordinator> m_turn_coordinator;

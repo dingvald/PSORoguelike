@@ -1,5 +1,6 @@
 #include "Actions/TechniqueAction.h"
 
+#include "Combat/ActionCost.h"
 #include "Combat/CombatMath.h"
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
@@ -8,8 +9,8 @@
 #include "Combat/TargetResolution.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueCastEvent.h"
+#include "Components/ActorComponent.h"
 #include "Components/ElementalResistanceComponent.h"
-#include "Components/EnergyComponent.h"
 #include "Components/KnownTechniquesComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -153,7 +154,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
             IncomingHealEvent heal{actor, amount};
             actor.Dispatch(heal);
         }
-        return ActionResult(kTechniqueCost);
+        return ActionResult(EffectiveActCost(actor, kTechniqueCost));
     }
 
     // A directional Heal cast has nothing to resolve against -- there is no
@@ -162,7 +163,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
     // branch above. The turn is still spent, matching every other directional
     // cast's "cost is charged once a cast executes" convention.
     if (technique->effect_family == EffectFamily::Heal)
-        return ActionResult(kTechniqueCost);
+        return ActionResult(EffectiveActCost(actor, kTechniqueCost));
 
     const Vec2 direction = SnapToCardinalDirection(offset);
 
@@ -206,10 +207,10 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 component.hit_effect_duration = technique->hit_effect_duration;
                 registry.Emplace<ProjectileComponent>(projectile, std::move(component));
 
-                registry.Emplace<EnergyComponent>(projectile);
+                registry.Emplace<ActorComponent>(projectile);
             }
         }
-        return ActionResult(kTechniqueCost);
+        return ActionResult(EffectiveActCost(actor, kTechniqueCost));
     }
 
     const std::vector<Vec2> target_tiles =
@@ -276,7 +277,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
         }
     }
 
-    return ActionResult(kTechniqueCost);
+    return ActionResult(EffectiveActCost(actor, kTechniqueCost));
 }
 
 } // namespace psr

@@ -3,6 +3,7 @@
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/ActorComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/DropTableComponent.h"
 #include "Components/ExperienceValueComponent.h"
@@ -52,9 +53,9 @@ class RmlEventListener;
 // under App/Assets/Data/Entities/ that PieceEditorLayer's palette stamps into
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
-// (RenderableComponent, StatsComponent, RaceComponent, HealthComponent,
-// WeaponComponent, ArmorComponent, ModComponent, RarityComponent,
-// ConsumableComponent) -- not a
+// (RenderableComponent, StatsComponent, ActorComponent, RaceComponent,
+// HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
+// RarityComponent, ConsumableComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -174,7 +175,7 @@ private:
 
     // -- Edit state: known/editable components --
     // Presence AND display order of a prefab's components (a subset of
-    // {"renderable","stats","race","weapon","armor","mod","rarity"}) --
+    // {"renderable","stats","actor","race","weapon","armor","mod","rarity"}) --
     // rendered as one Inspector-style card per entry, in this order.
     // Populated from components' JSON member order on load (rapidjson
     // preserves insertion order) and rewritten back in this same order on
@@ -186,6 +187,7 @@ private:
     RenderableComponent m_renderable;
     std::string m_renderable_texture_name;
     StatsComponent m_stats;
+    ActorComponent m_actor;
     RaceComponent m_race;
     std::string m_race_name;
     HealthComponent m_health;

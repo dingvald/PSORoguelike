@@ -1,5 +1,6 @@
 #include "Actions/PhotonArtAction.h"
 
+#include "Combat/ActionCost.h"
 #include "Combat/CombatMath.h"
 #include "Combat/EffectiveStats.h"
 #include "Combat/Hostility.h"
@@ -109,7 +110,7 @@ ActionResult PhotonArtAction::Perform(Entity actor)
             if (HealthComponent* health = actor.TryGet<HealthComponent>())
                 health->current_hp = std::min(health->max_hp, health->current_hp + heal);
         }
-        return ActionResult(kPhotonArtCost);
+        return ActionResult(EffectiveActCost(actor, kPhotonArtCost));
     }
 
     const Vec2 direction = SnapToCardinalDirection(offset);
@@ -188,7 +189,7 @@ ActionResult PhotonArtAction::Perform(Entity actor)
         }
     }
 
-    return ActionResult(kPhotonArtCost);
+    return ActionResult(EffectiveActCost(actor, kPhotonArtCost));
 }
 
 } // namespace psr

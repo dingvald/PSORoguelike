@@ -2,7 +2,7 @@
 
 #include "Actions/ITargetRequestSink.h"
 #include "Actions/WaitAction.h"
-#include "Components/EnergyComponent.h"
+#include "Components/ActorComponent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Input/ActionMap.h"
@@ -25,7 +25,7 @@ enum class TurnStep
 };
 
 // Drives the turn loop: pulls the next-ready actor from a TurnQueue kept in
-// sync with every live EnergyComponent, resolves the player's pending input
+// sync with every live ActorComponent, resolves the player's pending input
 // or (for now) a placeholder Wait for every other actor, and requeues the
 // result. AI is out of scope this round -- SetNpcDecision is the seam a
 // future AI session plugs a real decision function into without touching
@@ -94,7 +94,7 @@ public:
     // never one here to advance.
     //
     // Requires at least one live PlayerControlledComponent-tagged actor with
-    // an EnergyComponent to be queued before this is called: TurnQueue's
+    // an ActorComponent to be queued before this is called: TurnQueue's
     // "time" is turns, not wall-clock seconds, so NextActor() always
     // fast-forwards to *someone* rather than reporting "no one is ready" --
     // left unchecked, a queue that's lost its only player mid-loop (the
@@ -102,15 +102,15 @@ public:
     // forever requeuing NPCs, since nothing but a player's turn or an empty
     // queue used to break out. m_live_player_count (tracked via
     // PlayerControlledComponent's own construct/destroy lifecycle, same
-    // mechanism as m_turn_queue's EnergyComponent tracking below) guards
+    // mechanism as m_turn_queue's ActorComponent tracking below) guards
     // both the loop condition and the post-loop return, so losing the last
     // player actor -- whichever actor's turn it happens during -- surfaces
     // as PlayerDefeated instead of hanging.
     TurnStep Step(float delta_time);
 
 private:
-    void OnEnergyConstructed(entt::registry& registry, entt::entity entity);
-    void OnEnergyDestroyed(entt::registry& registry, entt::entity entity);
+    void OnActorConstructed(entt::registry& registry, entt::entity entity);
+    void OnActorDestroyed(entt::registry& registry, entt::entity entity);
     void OnPlayerControlledConstructed(entt::registry& registry, entt::entity entity);
     void OnPlayerControlledDestroyed(entt::registry& registry, entt::entity entity);
 

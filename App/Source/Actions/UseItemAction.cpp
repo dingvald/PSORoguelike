@@ -1,5 +1,6 @@
 #include "Actions/UseItemAction.h"
 
+#include "Combat/ActionCost.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/InventoryComponent.h"
 #include "Components/TPComponent.h"
@@ -58,7 +59,7 @@ ActionResult UseItemAction::Perform(Entity actor)
     AfterItemUseEvent event{item_prefab_id};
     actor.Dispatch(event);
 
-    return ActionResult(kUseItemCost);
+    return ActionResult(EffectiveActCost(actor, kUseItemCost));
 }
 
 } // namespace psr

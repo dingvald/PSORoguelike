@@ -2,7 +2,7 @@
 
 #include "Actions/WaitAction.h"
 #include "Combat/StatusEffectLibrary.h"
-#include "Components/EnergyComponent.h"
+#include "Components/ActorComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -222,7 +222,7 @@ TEST_CASE("TargetSelectionState confirm hands the wrapped action to TurnCoordina
 {
     Fixture fixture;
     fixture.registry.Emplace<psr::PlayerControlledComponent>(fixture.actor);
-    fixture.registry.Emplace<psr::EnergyComponent>(fixture.actor);
+    fixture.registry.Emplace<psr::ActorComponent>(fixture.actor);
 
     psr::TargetSelectionState state;
     psr::TargetRequest request;
@@ -243,5 +243,5 @@ TEST_CASE("TargetSelectionState confirm hands the wrapped action to TurnCoordina
     // up to the action threshold before Step() resolves anything -- see
     // TurnCoordinatorTests.cpp's own "resolves a bound key" case, which
     // checks this same post-WaitAction value.
-    CHECK(fixture.registry.GetComponent<psr::EnergyComponent>(fixture.actor).energy == 0);
+    CHECK(fixture.registry.GetComponent<psr::ActorComponent>(fixture.actor).ap == 0);
 }

@@ -3,6 +3,7 @@
 #include "Combat/AttackEvent.h"
 #include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
+#include "Components/ActorComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
@@ -209,6 +210,29 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     // multiple hits landed in one Perform().
     const int damage_dealt = 10000 - enemy.Get<psr::HealthComponent>().current_hp;
     REQUIRE(damage_dealt > 15);
+}
+
+TEST_CASE("AttackAction's cost is scaled by the actor's ActorComponent::act_speed", "[AttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::ActorComponent>(psr::ActorComponent{0, 100, 50});
+
+    MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
+
+    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = action.Perform(actor);
+    DrainAttackTween(registry);
+
+    REQUIRE(result.cost == psr::AttackAction::kAttackCost * 2);
 }
 
 TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")

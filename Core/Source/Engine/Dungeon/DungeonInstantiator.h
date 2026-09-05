@@ -89,7 +89,7 @@ struct DungeonInstantiation
 // Not called for plain cell/dead-end-socket prefabs (static dungeon
 // furniture, not creatures). This is Core's only hook for App-level, per-
 // creature setup (e.g. joining the turn queue) that Core itself can't
-// perform, since the components involved (EnergyComponent, EquipmentComponent)
+// perform, since the components involved (ActorComponent, EquipmentComponent)
 // are App-level -- see GameplayLayer::OnAttach.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                         Registry& registry, Grid& grid,

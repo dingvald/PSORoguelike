@@ -258,6 +258,24 @@ namespace {
         return object;
     }
 
+    ActorComponent ReadActorBody(const rapidjson::Value& body)
+    {
+        ActorComponent actor;
+        actor.ap = ReadInt(body, "ap", actor.ap);
+        actor.movement_speed = ReadInt(body, "movement_speed", actor.movement_speed);
+        actor.act_speed = ReadInt(body, "act_speed", actor.act_speed);
+        return actor;
+    }
+
+    rapidjson::Value WriteActorBody(const ActorComponent& actor, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("ap", actor.ap, allocator);
+        object.AddMember("movement_speed", actor.movement_speed, allocator);
+        object.AddMember("act_speed", actor.act_speed, allocator);
+        return object;
+    }
+
     HealthComponent ReadHealthBody(const rapidjson::Value& body)
     {
         HealthComponent health;
@@ -596,7 +614,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 13> kComponentKinds = {
+    constexpr std::array<ComponentKind, 14> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -613,6 +631,10 @@ namespace {
           "<div id=\"field-dfp\" class=\"field-row\"></div>"
           "<div id=\"field-evp\" class=\"field-row\"></div>"
           "<div id=\"field-lck\" class=\"field-row\"></div>"},
+         {"actor", "Actor", "#7ee8e0",
+          "<div id=\"field-ap\" class=\"field-row\"></div>"
+          "<div id=\"field-movement-speed\" class=\"field-row\"></div>"
+          "<div id=\"field-act-speed\" class=\"field-row\"></div>"},
          {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
          {"health", "Health", "#5de88f",
           "<div id=\"field-current-hp\" class=\"field-row\"></div>"
@@ -1041,9 +1063,9 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "stats" || key == "race" || key == "health" || key == "weapon" ||
-            key == "armor" || key == "mod" || key == "item" || key == "rarity" || key == "consumable" ||
-            key == "drop_table" || key == "on_hit_effect" || key == "experience_value")
+        if (key == "renderable" || key == "stats" || key == "actor" || key == "race" || key == "health" ||
+            key == "weapon" || key == "armor" || key == "mod" || key == "item" || key == "rarity" ||
+            key == "consumable" || key == "drop_table" || key == "on_hit_effect" || key == "experience_value")
             m_component_order.emplace_back(key);
     }
 
@@ -1052,6 +1074,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_renderable_texture_name = LabelFor(m_renderable.texture_id);
 
     m_stats = components.HasMember("stats") ? ReadStatsBody(components["stats"]) : StatsComponent{};
+
+    m_actor = components.HasMember("actor") ? ReadActorBody(components["actor"]) : ActorComponent{};
 
     m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
     m_race_name = LabelFor(m_race.race_id);
@@ -1307,6 +1331,27 @@ void PrefabEditorLayer::RefreshEditForm()
                                          [this](int v)
                                          {
                                              m_stats.lck = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ap"))
+        keep(fieldwidgets::BuildIntField(*row, "ap", m_actor.ap,
+                                         [this](int v)
+                                         {
+                                             m_actor.ap = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-movement-speed"))
+        keep(fieldwidgets::BuildIntField(*row, "movement_speed", m_actor.movement_speed,
+                                         [this](int v)
+                                         {
+                                             m_actor.movement_speed = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-act-speed"))
+        keep(fieldwidgets::BuildIntField(*row, "act_speed", m_actor.act_speed,
+                                         [this](int v)
+                                         {
+                                             m_actor.act_speed = v;
                                              MarkDirty();
                                          }));
     if (Rml::Element* row = m_editor->GetElementById("field-race-id"))
@@ -1790,8 +1835,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key : {"renderable", "stats", "race", "health", "weapon", "armor", "mod", "item", "rarity",
-                            "consumable", "drop_table", "on_hit_effect", "experience_value"})
+    for (const char* key : {"renderable", "stats", "actor", "race", "health", "weapon", "armor", "mod", "item",
+                            "rarity", "consumable", "drop_table", "on_hit_effect", "experience_value"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -1802,6 +1847,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteRenderableBody(m_renderable, allocator);
         else if (key == "stats")
             body = WriteStatsBody(m_stats, allocator);
+        else if (key == "actor")
+            body = WriteActorBody(m_actor, allocator);
         else if (key == "race")
             body = WriteRaceBody(m_race, allocator);
         else if (key == "health")

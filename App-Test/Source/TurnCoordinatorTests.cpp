@@ -5,7 +5,7 @@
 #include "Combat/StatusEffect.h"
 #include "Combat/StatusEffectApplication.h"
 #include "Combat/StatusEffectLibrary.h"
-#include "Components/EnergyComponent.h"
+#include "Components/ActorComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Engine/Actions/TurnEvent.h"
@@ -72,12 +72,12 @@ TEST_CASE("TurnCoordinator yields AwaitingInput when the player has no pending k
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     psr::TurnStep step = coordinator.Step(0.016f);
 
     REQUIRE(step == psr::TurnStep::AwaitingInput);
-    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == 0);
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(player).ap == 0);
 }
 
 TEST_CASE("TurnCoordinator resolves a bound key for the player and returns Resolved", "[TurnCoordinator]")
@@ -90,7 +90,7 @@ TEST_CASE("TurnCoordinator resolves a bound key for the player and returns Resol
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     coordinator.KeyBindings().Bind(1, std::make_unique<psr::WaitAction>());
     coordinator.PressKey(1);
@@ -98,7 +98,7 @@ TEST_CASE("TurnCoordinator resolves a bound key for the player and returns Resol
     psr::TurnStep step = coordinator.Step(0.016f);
 
     REQUIRE(step == psr::TurnStep::Resolved);
-    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == 0);
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(player).ap == 0);
 }
 
 TEST_CASE("TurnCoordinator lets a non-player actor act before applying the player's pending key", "[TurnCoordinator]")
@@ -114,11 +114,11 @@ TEST_CASE("TurnCoordinator lets a non-player actor act before applying the playe
 
     // Inserted before the player, so it wins the initial energy tie.
     entt::entity npc = registry.CreateEntity();
-    registry.Emplace<psr::EnergyComponent>(npc);
+    registry.Emplace<psr::ActorComponent>(npc);
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     coordinator.KeyBindings().Bind(1, std::make_unique<psr::WaitAction>());
     coordinator.PressKey(1);
@@ -127,7 +127,7 @@ TEST_CASE("TurnCoordinator lets a non-player actor act before applying the playe
 
     REQUIRE(step == psr::TurnStep::Resolved);
     REQUIRE(npc_action.count == 1);
-    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == 0);
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(player).ap == 0);
 }
 
 TEST_CASE("TurnCoordinator lets every ready non-player actor act before yielding when the player has no input",
@@ -143,13 +143,13 @@ TEST_CASE("TurnCoordinator lets every ready non-player actor act before yielding
     coordinator.SetNpcDecision([&npc_action](psr::Entity) -> psr::IAction* { return &npc_action; });
 
     entt::entity npc_a = registry.CreateEntity();
-    registry.Emplace<psr::EnergyComponent>(npc_a);
+    registry.Emplace<psr::ActorComponent>(npc_a);
     entt::entity npc_b = registry.CreateEntity();
-    registry.Emplace<psr::EnergyComponent>(npc_b);
+    registry.Emplace<psr::ActorComponent>(npc_b);
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     psr::TurnStep step = coordinator.Step(0.016f);
 
@@ -157,7 +157,7 @@ TEST_CASE("TurnCoordinator lets every ready non-player actor act before yielding
     REQUIRE(npc_action.count == 2);
 }
 
-TEST_CASE("TurnCoordinator stops tracking an actor once its EnergyComponent is destroyed", "[TurnCoordinator]")
+TEST_CASE("TurnCoordinator stops tracking an actor once its ActorComponent is destroyed", "[TurnCoordinator]")
 {
     psr::Registry registry;
     psr::StatusEffectLibrary status_effects;
@@ -166,11 +166,11 @@ TEST_CASE("TurnCoordinator stops tracking an actor once its EnergyComponent is d
     psr::TurnCoordinator coordinator(registry);
 
     entt::entity npc = registry.CreateEntity();
-    registry.Emplace<psr::EnergyComponent>(npc);
+    registry.Emplace<psr::ActorComponent>(npc);
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     registry.DestroyEntity(npc);
 
@@ -193,7 +193,7 @@ TEST_CASE("TurnCoordinator surfaces TargetingRequested once RequestTargeting is 
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     CountingAction cast_action;
     coordinator.RequestTargeting(
@@ -226,7 +226,7 @@ TEST_CASE("TurnCoordinator TakePendingTargetRequest consumes and clears the pend
     // Consumed -- a second Step() no longer sees a pending request.
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
     psr::TurnStep step = coordinator.Step(0.016f);
     REQUIRE(step == psr::TurnStep::AwaitingInput);
 }
@@ -242,7 +242,7 @@ TEST_CASE("TurnCoordinator SetPendingAction resolves that action for the player,
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     // No key bound, no key pressed -- only SetPendingAction should let this
     // resolve.
@@ -270,7 +270,7 @@ TEST_CASE("TurnCoordinator forces a Wait at normal cost when the actor is Frozen
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
     psr::ApplyStatusEffect(psr::Entity(registry, player), status_effects, freeze.id);
 
     // Even a confirmed pending action must be pre-empted by Freeze -- it
@@ -286,7 +286,7 @@ TEST_CASE("TurnCoordinator forces a Wait at normal cost when the actor is Frozen
     // up to the action threshold before Step() resolves anything -- same
     // post-WaitAction value as "resolves a bound key"'s identical setup, not
     // a plain 0 - kWaitCost.
-    REQUIRE(registry.GetComponent<psr::EnergyComponent>(player).energy == 0);
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(player).ap == 0);
 }
 
 TEST_CASE("TurnCoordinator dispatches AfterTurnEvent exactly once per resolved turn", "[TurnCoordinator]")
@@ -299,7 +299,7 @@ TEST_CASE("TurnCoordinator dispatches AfterTurnEvent exactly once per resolved t
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
 
     struct TurnProbe
     {
@@ -334,7 +334,7 @@ TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting e
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
     psr::HealthComponent health;
     health.current_hp = 5;
     health.max_hp = 5;
@@ -371,11 +371,11 @@ TEST_CASE("TurnCoordinator returns PlayerDefeated instead of hanging when an NPC
     // the player's pending key" above, but here that first NPC turn is what
     // kills the player.
     entt::entity npc = registry.CreateEntity();
-    registry.Emplace<psr::EnergyComponent>(npc);
+    registry.Emplace<psr::ActorComponent>(npc);
 
     entt::entity player = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(player);
-    registry.Emplace<psr::EnergyComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
     registry.Emplace<psr::HealthComponent>(player, psr::HealthComponent{1, 1});
 
     LethalAction npc_action(registry, player);

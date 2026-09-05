@@ -1,6 +1,7 @@
 #include "Actions/MoveAction.h"
 
 #include "Actions/AttackAction.h"
+#include "Combat/ActionCost.h"
 #include "Combat/Hostility.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/TweenComponent.h"
@@ -68,7 +69,7 @@ ActionResult MoveAction::Perform(Entity actor)
     AfterMoveEvent after_move{tile, target};
     actor.Dispatch(after_move);
 
-    return ActionResult(kMoveCost);
+    return ActionResult(EffectiveMoveCost(actor, kMoveCost));
 }
 
 } // namespace psr

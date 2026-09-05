@@ -1,5 +1,6 @@
 #include "Actions/DropAction.h"
 
+#include "Combat/ActionCost.h"
 #include "Components/InventoryComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
@@ -33,7 +34,7 @@ ActionResult DropAction::Perform(Entity actor)
     AfterItemDropEvent event{item_prefab_id};
     actor.Dispatch(event);
 
-    return ActionResult(kDropCost);
+    return ActionResult(EffectiveActCost(actor, kDropCost));
 }
 
 } // namespace psr

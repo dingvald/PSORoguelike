@@ -21,7 +21,7 @@ namespace psr {
 // reacts to SpawnWaveComponent being destroyed via entt's own on_destroy
 // signal, which fires as a side effect of Registry::DestroyEntity regardless
 // of why the entity died -- the same pattern TurnCoordinator already uses to
-// react to EnergyComponent destruction rather than DeathEvent.
+// react to ActorComponent destruction rather than DeathEvent.
 class SpawnWaveSystem
 {
 public:
