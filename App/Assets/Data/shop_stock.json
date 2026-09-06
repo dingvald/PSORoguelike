@@ -1,0 +1,17 @@
+{
+    "schema_version": 1,
+    "entries": [
+        {
+            "prefab_id_string": "monomate",
+            "buy_price": 10
+        },
+        {
+            "prefab_id_string": "monofluid",
+            "buy_price": 12
+        },
+        {
+            "prefab_id_string": "weapons.saber",
+            "buy_price": 80
+        }
+    ]
+}

@@ -16,6 +16,9 @@ enum class GameStateId
     CharacterScreen,
     Animation,
     TechniquesScreen,
+    MissionSelect,
+    Shop,
+    Storage,
 };
 
 } // namespace psr

@@ -21,8 +21,14 @@ project "App-Test"
       "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",
+      -- Hub/Missions/Shop are pure-logic (no SDL/RmlUi dependency), same
+      -- bar as every other folder in this list -- Hub's own scene-swap
+      -- wiring lives in GameplayLayer instead, which stays out of scope here.
+      "../App/Source/Hub/**.h", "../App/Source/Hub/**.cpp",
       "../App/Source/Items/**.h", "../App/Source/Items/**.cpp",
+      "../App/Source/Missions/**.h", "../App/Source/Missions/**.cpp",
       "../App/Source/Progression/**.h", "../App/Source/Progression/**.cpp",
+      "../App/Source/Shop/**.h", "../App/Source/Shop/**.cpp",
       "../App/Source/Systems/**.h", "../App/Source/Systems/**.cpp",
       -- States/ is SDL/RmlUi-free (TargetSelectionState.cpp's own SDL3/
       -- SDL_keycode.h include is just key-code constants, no windowing/

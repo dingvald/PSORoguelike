@@ -22,6 +22,9 @@
             "frames": 1,
             "frame_time": 0.0
         },
-        "item": {}
+        "item": {},
+        "value": {
+            "base_price": 8
+        }
     }
 }

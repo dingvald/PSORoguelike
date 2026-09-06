@@ -1276,11 +1276,96 @@ of Equip being the only thing an inventory click could do.
 
 ## M10 — Hub, Missions & Difficulty
 
-**Status:** Not started
+**Status:** 10.1 implemented, **not yet build/manual-verified** (see its own note below) — this
+project builds Windows-only (MSVC + vcpkg x64-windows, per Setup-Windows.bat/vcpkg.json), and the
+session that wrote this milestone ran in a Linux sandbox with no Windows toolchain, no vcpkg, and
+no network access to fetch entt/rapidjson/Catch2 headers for even a syntax-only check — every
+other "Done" entry in this file states a real build/test/manual-run result; this one can't yet,
+so it's flagged instead of claimed. 10.2/10.3 not started.
 
 - **10.1 Persistent hub:** Engine: non-procedural hub scene, shop buy/sell, storage,
   mission-select gated by per-character unlocks. Editor: none new (consumes M4/M5.3 data). UI:
-  mission-select/shop/storage/character-sheet screens.
+  mission-select/shop/storage/character-sheet screens. **Implemented, pending your own Windows
+  build + manual verification:** `GameplayLayer::LoadNewGame()` is replaced by
+  `SpawnNewCharacter()` (one-time: registry/schema/content-library setup, creates the player and
+  its permanent components) + `TransitionToWorld(SceneKind, dungeon_id)` (rebuildable: destroys
+  every world entity except the player and everything reachable from its Inventory/Equipment/
+  Storage — see `DestroyWorldEntities`, keyed off every entity always carrying
+  `EventHandlerComponent` — then either hand-instantiates the hub's single authored
+  `DungeonPiece` directly, skipping `DungeonStitcher` entirely, or generates a Dungeon by id).
+  Content libraries (`m_pieces`/`m_dungeons`/`m_photon_arts`/`m_techniques`/`m_status_effects`/
+  `m_growth_curve`/`m_shop_stock`/`m_hub`) load once for the process lifetime instead of every
+  restart, since `m_registry` itself is no longer reset on a scene swap (only individual entities
+  are destroyed) — which in turn means every system holding just `Registry&`/`Grid&`/library
+  references (not per-dungeon cached data) needed to stop being rebuilt every swap too, to avoid
+  leaving a dangling player-`Subscribe()` handler bound to a destroyed instance
+  (`EventHandlerComponent` has no unsubscribe-by-instance, only by-owner-type — see
+  `TransitionToWorld`'s own doc comment): `CombatLogBridge`/`LootDropSystem`/`ExperienceSystem`/
+  `VisualEffectSystem`/`MissFlashEffectSystem`/`OnHitEffectSystem`/`StatusEffectWorldMarkers`/
+  `TurnCoordinator` are now lazy-once (built + player-`Subscribe`d exactly once, same idiom
+  `EnsureRenderResources` already used for GPU resources); `RoomMap`/`RoomVisibilityTracker`/
+  `SpawnWaveSystem`/`EnemyAiSystem`/`ProjectileAdvanceAction`/`TabTargetSystem` still rebuild every
+  swap (they hold genuinely per-dungeon data). Two small Core/App defensive fixes fell out of
+  this: `VisualEffectSystem::Update`/`StatusEffectWorldMarkers::ClearMarkers` now guard a cached
+  entity with `Registry::IsValid` before removing/destroying it, since a scene swap's
+  `DestroyWorldEntities` may already have destroyed it out from under them (an in-flight VFX or
+  status marker straddling a Hub<->Dungeon transition) — previously latent since a "restart" used
+  to wipe the whole registry at once rather than destroying entities individually.
+
+  Mission flow: reaching a Dungeon's `PieceCategory::Exit` piece (checked once per frame via
+  `RoomMap::GetRoom`) records the dungeon in a new `Missions::RunProgress` and returns to the hub;
+  a new `'H'` keybind abandons a mission without credit; **confirmed with the user:** dying now
+  returns to the hub with inventory/equipment/Meseta/level intact (full-heal, no reset) instead of
+  the old full-registry wipe, since a full wipe would erase exactly what the hub is supposed to
+  protect and real permadeath (M11.2) doesn't exist yet.
+
+  Hub interaction, **confirmed with the user:** Shop/Storage/Mission-Select are not plain
+  keybinds — each is a placed hub entity (shopkeeper/storage-terminal/teleprompter, via a new
+  `InteractableComponent{InteractionType}` schema-registered component, none carrying
+  `BlocksMovementComponent`) that the player walks onto (same tile) and opens with Space. New
+  `Hub/HubInteraction.h`'s `FindInteractableAt` (pure `Registry`+`Grid` lookup, unit-tested) backs
+  both a per-frame HUD prompt (`HubInteractionPromptMessage`, "Press SPACE to ...") and
+  `GameplayLayer::OnEvent`'s Space interception — Space still falls through to `ActionMap`'s
+  existing Wait binding everywhere else. `Hub/HubDefinition.h`/`HubDefinitionFile.h/.cpp` load a
+  single hand-authored `App/Assets/Data/hub.json` naming which `DungeonPiece` is the hub (no
+  dedicated editor, same "not worth one" precedent `growth_curve.json` already set); the hub
+  layout itself (`App/Assets/Data/Pieces/hub_main.json`, a 5x5 room) and the three interactable
+  entity prefabs (`App/Assets/Data/Entities/hub/{shopkeeper,storage_terminal,teleprompter}.json`)
+  are placeholder content authored directly as JSON in this session (not through the Piece/Prefab
+  Editor, which wasn't run) — left in place as minimal scaffolding for the user to replace/expand,
+  same "throwaway fixture, not real content" carve-out CLAUDE.md already allows.
+
+  Shop: new `Core/Source/Engine/ECS/ValueComponent.h` (an item's sell value, schema-registered —
+  gets a Prefab Editor Inspector card automatically) and `Shop/ShopStock.h`/`ShopStockFile.h/.cpp`
+  (the hub's fixed buy catalog, `App/Assets/Data/shop_stock.json`, seeded with a 3-entry
+  placeholder: Monomate/Monofluid/`weapons.saber`). `Items/Shop.h`'s `BuyItem`/`SellItem` follow
+  `Items/Equip.h`'s exact free/instant-mutation convention. New `Editor/Source/Layers/
+  ShopStockEditorLayer` (a single always-open screen, no List/browse mode — exactly one document —
+  reorderable rows via the existing `FieldWidgets::BuildRowList`, Add/Save/Back), wired into
+  `EditorMenuLayer` as a new "Shop Stock" row; `Editor/Build-Editor.lua` gained an
+  `App/Source/Shop/**` compile entry for it (mirrors the existing `Items/**` entry).
+
+  Storage: new `Components/StorageComponent.h` (uncapped, unlike `InventoryComponent`) +
+  `Items/Storage.h`'s `StoreItem`/`WithdrawItem`, same `Equip.h` convention.
+
+  UI: three new modal screens cloning `CharacterScreenState`/`TechniquesScreenState`'s exact
+  push/publish-on-enter/close-on-Escape shape (`MissionSelectState` — single flat list;
+  `ShopState`/`StorageState` — two-panel, no context menu) plus matching `HudLayer` overlay blocks
+  (row rendering, keyboard nav, `hud.rml`/`hud.rcss` markup) mirroring the existing Techniques
+  screen's two-panel-no-context-menu template throughout.
+
+  Unlock-gating seam: `Missions/RunProgress.h`'s `IsDungeonUnlocked` is unconditionally true this
+  round (placeholder policy, explicitly unit-tested as such) — M4.5 (fixed area unlock order,
+  still not started) extends its body with an area-predecessor check; M10.2 extends it with a
+  tier parameter once tiers exist.
+
+  Catch2 coverage (new, **not yet run** — see the status note above):
+  `App-Test/Source/{HubInteraction,HubDefinitionFile,RunProgress,MissionSelectSnapshot,
+  ShopStockFile,Shop,ShopSnapshot,Storage,StorageSnapshot}Tests.cpp`. `App-Test`/
+  `Editor`'s `.lua` build files gained `Hub/`/`Missions/`/`Shop/` compile entries. Content
+  authoring beyond the placeholder hub layout/shop catalog above (real hub geometry, real prices,
+  M4.5's area-order data) is the user's own work through the editors, per `CLAUDE.md`'s division
+  of labor.
 - **10.2 Difficulty tiers:** Engine: Normal→Hard→Very Hard→Ultimate data (stat/population/drop
   deltas + M5.3 roster substitutions), per-character clear-gating. Editor: difficulty-tier
   editor (per-area deltas, substitution table). UI: tier selector, clear/unlock indicators.

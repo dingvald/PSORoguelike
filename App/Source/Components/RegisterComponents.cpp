@@ -12,6 +12,7 @@
 #include "Components/ExperienceValueComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/InteractableComponent.h"
 #include "Components/OnHitEffectComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
@@ -31,6 +32,7 @@
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/RarityComponent.h"
+#include "Engine/ECS/ValueComponent.h"
 
 namespace psr {
 
@@ -51,6 +53,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
     InnateWeaponComponent::Register(reg);
+    InteractableComponent::Register(reg);
     ItemComponent::Register(reg);
     ModComponent::Register(reg);
     OnHitEffectComponent::Register(reg);
@@ -63,6 +66,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     SectionIdComponent::Register(reg);
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
+    ValueComponent::Register(reg);
     WeaponComponent::Register(reg);
 
     // EquipmentComponent/StatusEffectComponent are deliberately not

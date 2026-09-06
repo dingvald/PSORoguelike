@@ -18,4 +18,6 @@ public:
     static const std::filesystem::path TechniquesPath;
     static const std::filesystem::path StatusEffectsPath;
     static const std::filesystem::path GrowthCurvePath;
+    static const std::filesystem::path HubPath;
+    static const std::filesystem::path ShopStockPath;
 };

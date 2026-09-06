@@ -19,6 +19,9 @@
             "color_2": "#076e00ff",
             "render_layer": 0
         },
-        "item": {}
+        "item": {},
+        "value": {
+            "base_price": 6
+        }
     }
 }

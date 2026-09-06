@@ -44,8 +44,17 @@ void VisualEffectSystem::Update(float delta_time)
                   {
                       if (instance.elapsed < instance.duration)
                           return false;
-                      m_grid->RemoveEntity(instance.tile, instance.entity);
-                      m_registry->DestroyEntity(instance.entity);
+                      // Something outside this system (e.g. a scene swap
+                      // tearing down the previous world's entities) may
+                      // already have destroyed this instance's entity --
+                      // skip the redundant remove/destroy rather than
+                      // hitting entt's own validity assert on a
+                      // double-destroy.
+                      if (m_registry->IsValid(instance.entity))
+                      {
+                          m_grid->RemoveEntity(instance.tile, instance.entity);
+                          m_registry->DestroyEntity(instance.entity);
+                      }
                       return true;
                   });
 }

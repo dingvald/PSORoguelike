@@ -1,0 +1,22 @@
+{
+    "schema_version": 1,
+    "components": {
+        "interactable": {
+            "interaction_type": "mission_select"
+        },
+        "renderable": {
+            "texture_id": "stairs_down",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#e0a020ff",
+            "color_2": "#402800ff",
+            "render_layer": 1
+        }
+    }
+}

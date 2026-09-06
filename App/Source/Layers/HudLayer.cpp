@@ -9,12 +9,22 @@
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarSlotAssignedMessage.h"
 #include "Messages/HotbarStateMessage.h"
+#include "Messages/HubInteractionPromptMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/LootDropMessage.h"
+#include "Messages/MissionCompletedMessage.h"
+#include "Messages/MissionSelectClosedMessage.h"
+#include "Messages/MissionSelectedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
+#include "Messages/ShopBuyRequestedMessage.h"
+#include "Messages/ShopClosedMessage.h"
+#include "Messages/ShopSellRequestedMessage.h"
 #include "Messages/StatusEffectsMessage.h"
+#include "Messages/StorageClosedMessage.h"
+#include "Messages/StorageItemActivatedMessage.h"
+#include "Messages/StorageWithdrawRequestedMessage.h"
 #include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenClosedMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
@@ -149,6 +159,14 @@ void HudLayer::OnAttach()
     Subscribe<TechniquesScreenClosedMessage>(&HudLayer::OnTechniquesScreenClosed, this);
     Subscribe<FloatingTextStateMessage>(&HudLayer::OnFloatingTextState, this);
     Subscribe<TargetStateMessage>(&HudLayer::OnTargetState, this);
+    Subscribe<HubInteractionPromptMessage>(&HudLayer::OnHubInteractionPrompt, this);
+    Subscribe<MissionCompletedMessage>(&HudLayer::OnMissionCompleted, this);
+    Subscribe<MissionSelectMessage>(&HudLayer::OnMissionSelectState, this);
+    Subscribe<MissionSelectClosedMessage>(&HudLayer::OnMissionSelectClosed, this);
+    Subscribe<ShopMessage>(&HudLayer::OnShopScreenState, this);
+    Subscribe<ShopClosedMessage>(&HudLayer::OnShopScreenClosed, this);
+    Subscribe<StorageMessage>(&HudLayer::OnStorageScreenState, this);
+    Subscribe<StorageClosedMessage>(&HudLayer::OnStorageScreenClosed, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -161,6 +179,9 @@ void HudLayer::OnDetach()
     m_hotbar_listeners.clear();
     m_character_screen_listeners.clear();
     m_techniques_screen_listeners.clear();
+    m_mission_select_listeners.clear();
+    m_shop_listeners.clear();
+    m_storage_listeners.clear();
     m_context_menu_listeners.clear();
     m_log_scroll_listener.reset();
     if (m_document)
@@ -267,6 +288,38 @@ void HudLayer::OnTargetState(const TargetStateMessage& message)
         race->SetInnerRML(EscapeRml(message.race_label));
     if (Rml::Element* fill = m_document->GetElementById("target-hp-fill"))
         fill->SetProperty("width", PercentWidth(message.current_hp, message.max_hp));
+}
+
+void HudLayer::OnHubInteractionPrompt(const HubInteractionPromptMessage& message)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* prompt = m_document->GetElementById("hub-interaction-prompt");
+    if (!prompt)
+        return;
+
+    if (!message.interaction_type)
+    {
+        prompt->SetProperty("display", "none");
+        return;
+    }
+
+    const char* text = "Press SPACE to interact";
+    switch (*message.interaction_type)
+    {
+    case InteractionType::Shop:
+        text = "Press SPACE to shop";
+        break;
+    case InteractionType::Storage:
+        text = "Press SPACE to access storage";
+        break;
+    case InteractionType::MissionSelect:
+        text = "Press SPACE to select a mission";
+        break;
+    }
+    prompt->SetInnerRML(text);
+    prompt->SetProperty("display", "block");
 }
 
 void HudLayer::OnHotbarState(const HotbarStateMessage& message)
@@ -425,6 +478,11 @@ void HudLayer::OnGameRestarted(const GameRestartedMessage& /*message*/)
 void HudLayer::OnLootDrop(const LootDropMessage& message)
 {
     AppendLogLine("Found [c=#d4c93f]" + message.item_name + "[/c]");
+}
+
+void HudLayer::OnMissionCompleted(const MissionCompletedMessage& message)
+{
+    AppendLogLine("Mission complete: [c=#7ee787]" + EscapeRml(message.dungeon_id_string) + "[/c]");
 }
 
 void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
@@ -708,6 +766,462 @@ void HudLayer::RenderTechRowFocus(const char* container_id, const char* row_clas
     container->QuerySelectorAll(rows, row_class);
     for (std::size_t i = 0; i < rows.size(); ++i)
         rows[i]->SetClass("focused", panel == m_tech_focused_panel && static_cast<int>(i) == m_tech_focused_row);
+}
+
+void HudLayer::OnMissionSelectState(const MissionSelectMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_mission_select_cache.has_value();
+    m_mission_select_cache = message;
+
+    if (Rml::Element* overlay = m_document->GetElementById("mission-select-screen"))
+        overlay->SetProperty("display", "flex");
+
+    m_mission_select_listeners.clear();
+
+    if (Rml::Element* list = m_document->GetElementById("mission-select-list"))
+    {
+        std::string markup;
+        if (message.entries.empty())
+        {
+            markup = "<div class=\"list-empty\">No missions available.</div>";
+        }
+        else
+        {
+            for (const MissionSelectMessage::Entry& entry : message.entries)
+                markup += std::string("<div class=\"mission-row") + (entry.unlocked ? "" : " locked") + "\">" +
+                          EscapeRml(entry.name) + "</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".mission-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            if (i >= message.entries.size() || !message.entries[i].unlocked)
+                continue;
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_mission_select_focused_row = index;
+                    ActivateFocusedMissionSelectRow();
+                });
+            listener->Attach(*rows[i]);
+            m_mission_select_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (fresh_open)
+        m_mission_select_focused_row = 0;
+    else
+        m_mission_select_focused_row = std::clamp(m_mission_select_focused_row, 0, std::max(0, MissionSelectRowCount() - 1));
+    RenderMissionSelectFocusHighlight();
+}
+
+void HudLayer::OnMissionSelectClosed(const MissionSelectClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("mission-select-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_mission_select_listeners.clear();
+    m_mission_select_cache.reset();
+    m_mission_select_focused_row = 0;
+}
+
+int HudLayer::MissionSelectRowCount() const
+{
+    return m_mission_select_cache ? static_cast<int>(m_mission_select_cache->entries.size()) : 0;
+}
+
+void HudLayer::MoveMissionSelectRowFocus(int direction)
+{
+    const int count = MissionSelectRowCount();
+    if (count <= 0)
+        return;
+    m_mission_select_focused_row = std::clamp(m_mission_select_focused_row + direction, 0, count - 1);
+    RenderMissionSelectFocusHighlight();
+}
+
+void HudLayer::ActivateFocusedMissionSelectRow()
+{
+    if (!m_mission_select_cache || m_mission_select_focused_row < 0 ||
+        m_mission_select_focused_row >= static_cast<int>(m_mission_select_cache->entries.size()))
+        return;
+
+    const MissionSelectMessage::Entry& entry =
+        m_mission_select_cache->entries[static_cast<std::size_t>(m_mission_select_focused_row)];
+    if (!entry.unlocked)
+        return;
+    Publish(MissionSelectedMessage{entry.dungeon_id_string});
+}
+
+void HudLayer::RenderMissionSelectFocusHighlight()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* list = m_document->GetElementById("mission-select-list");
+    if (!list)
+        return;
+
+    Rml::ElementList rows;
+    list->QuerySelectorAll(rows, ".mission-row");
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", static_cast<int>(i) == m_mission_select_focused_row);
+}
+
+void HudLayer::OnShopScreenState(const ShopMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_shop_cache.has_value();
+    m_shop_cache = message;
+
+    if (Rml::Element* overlay = m_document->GetElementById("shop-screen"))
+        overlay->SetProperty("display", "flex");
+
+    m_shop_listeners.clear();
+
+    if (Rml::Element* meseta = m_document->GetElementById("shop-meseta"))
+        meseta->SetInnerRML("Meseta: " + std::to_string(message.current_meseta));
+
+    if (Rml::Element* list = m_document->GetElementById("shop-stock-list"))
+    {
+        std::string markup;
+        if (message.stock.empty())
+        {
+            markup = "<div class=\"list-empty\">No stock.</div>";
+        }
+        else
+        {
+            for (const ShopMessage::StockEntry& entry : message.stock)
+                markup += std::string("<div class=\"shop-stock-row") + (entry.affordable ? "" : " unaffordable") +
+                          "\">" + EscapeRml(entry.display_name) + " (" + std::to_string(entry.buy_price) +
+                          ")</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".shop-stock-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_shop_focused_panel = ShopScreenPanel::Stock;
+                    m_shop_focused_row = index;
+                    ActivateFocusedShopRow();
+                });
+            listener->Attach(*rows[i]);
+            m_shop_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (Rml::Element* list = m_document->GetElementById("shop-sellable-list"))
+    {
+        std::string markup;
+        if (message.sellable.empty())
+        {
+            markup = "<div class=\"list-empty\">Nothing to sell.</div>";
+        }
+        else
+        {
+            for (const ShopMessage::SellEntry& entry : message.sellable)
+                markup += "<div class=\"shop-sell-row\">" + EscapeRml(entry.display_name) + " (" +
+                          std::to_string(entry.sell_value) + ")</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".shop-sell-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_shop_focused_panel = ShopScreenPanel::Sellable;
+                    m_shop_focused_row = index;
+                    ActivateFocusedShopRow();
+                });
+            listener->Attach(*rows[i]);
+            m_shop_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (fresh_open)
+    {
+        m_shop_focused_panel = ShopScreenPanel::Stock;
+        m_shop_focused_row = 0;
+    }
+    else
+    {
+        m_shop_focused_row = std::clamp(m_shop_focused_row, 0, std::max(0, ShopScreenRowCount(m_shop_focused_panel) - 1));
+    }
+    RenderShopFocusHighlights();
+}
+
+void HudLayer::OnShopScreenClosed(const ShopClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("shop-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_shop_listeners.clear();
+    m_shop_cache.reset();
+    m_shop_focused_panel = ShopScreenPanel::Stock;
+    m_shop_focused_row = 0;
+}
+
+int HudLayer::ShopScreenRowCount(ShopScreenPanel panel) const
+{
+    if (!m_shop_cache)
+        return 0;
+    return panel == ShopScreenPanel::Stock ? static_cast<int>(m_shop_cache->stock.size())
+                                           : static_cast<int>(m_shop_cache->sellable.size());
+}
+
+void HudLayer::MoveShopPanelFocus(int direction)
+{
+    constexpr int kPanelCount = 2;
+    const int next = std::clamp(static_cast<int>(m_shop_focused_panel) + direction, 0, kPanelCount - 1);
+    m_shop_focused_panel = static_cast<ShopScreenPanel>(next);
+    m_shop_focused_row = std::clamp(m_shop_focused_row, 0, std::max(0, ShopScreenRowCount(m_shop_focused_panel) - 1));
+    RenderShopFocusHighlights();
+}
+
+void HudLayer::MoveShopRowFocus(int direction)
+{
+    const int count = ShopScreenRowCount(m_shop_focused_panel);
+    if (count <= 0)
+        return;
+    m_shop_focused_row = std::clamp(m_shop_focused_row + direction, 0, count - 1);
+    RenderShopFocusHighlights();
+}
+
+void HudLayer::ActivateFocusedShopRow()
+{
+    if (!m_shop_cache)
+        return;
+
+    if (m_shop_focused_panel == ShopScreenPanel::Stock)
+    {
+        if (m_shop_focused_row < 0 || m_shop_focused_row >= static_cast<int>(m_shop_cache->stock.size()))
+            return;
+        if (!m_shop_cache->stock[static_cast<std::size_t>(m_shop_focused_row)].affordable)
+            return;
+        Publish(ShopBuyRequestedMessage{m_shop_focused_row});
+    }
+    else
+    {
+        if (m_shop_focused_row < 0 || m_shop_focused_row >= static_cast<int>(m_shop_cache->sellable.size()))
+            return;
+        Publish(ShopSellRequestedMessage{m_shop_focused_row});
+    }
+}
+
+void HudLayer::RenderShopFocusHighlights()
+{
+    if (!m_document)
+        return;
+
+    RenderShopRowFocus("shop-stock-list", ".shop-stock-row", ShopScreenPanel::Stock);
+    RenderShopRowFocus("shop-sellable-list", ".shop-sell-row", ShopScreenPanel::Sellable);
+}
+
+void HudLayer::RenderShopRowFocus(const char* container_id, const char* row_class, ShopScreenPanel panel)
+{
+    Rml::Element* container = m_document->GetElementById(container_id);
+    if (!container)
+        return;
+
+    container->SetClass("focused", panel == m_shop_focused_panel);
+
+    Rml::ElementList rows;
+    container->QuerySelectorAll(rows, row_class);
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", panel == m_shop_focused_panel && static_cast<int>(i) == m_shop_focused_row);
+}
+
+void HudLayer::OnStorageScreenState(const StorageMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_storage_cache.has_value();
+    m_storage_cache = message;
+
+    if (Rml::Element* overlay = m_document->GetElementById("storage-screen"))
+        overlay->SetProperty("display", "flex");
+
+    m_storage_listeners.clear();
+
+    if (Rml::Element* list = m_document->GetElementById("storage-inventory-list"))
+    {
+        std::string markup;
+        if (message.inventory.empty())
+        {
+            markup = "<div class=\"list-empty\">Inventory empty.</div>";
+        }
+        else
+        {
+            for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
+                markup += "<div class=\"storage-inventory-row\">" + EscapeRml(entry.display_name) + "</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".storage-inventory-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_storage_focused_panel = StorageScreenPanel::Inventory;
+                    m_storage_focused_row = index;
+                    ActivateFocusedStorageRow();
+                });
+            listener->Attach(*rows[i]);
+            m_storage_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (Rml::Element* list = m_document->GetElementById("storage-storage-list"))
+    {
+        std::string markup;
+        if (message.storage.empty())
+        {
+            markup = "<div class=\"list-empty\">Storage empty.</div>";
+        }
+        else
+        {
+            for (const CharacterScreenMessage::ItemEntry& entry : message.storage)
+                markup += "<div class=\"storage-storage-row\">" + EscapeRml(entry.display_name) + "</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".storage-storage-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_storage_focused_panel = StorageScreenPanel::Storage;
+                    m_storage_focused_row = index;
+                    ActivateFocusedStorageRow();
+                });
+            listener->Attach(*rows[i]);
+            m_storage_listeners.push_back(std::move(listener));
+        }
+    }
+
+    if (fresh_open)
+    {
+        m_storage_focused_panel = StorageScreenPanel::Inventory;
+        m_storage_focused_row = 0;
+    }
+    else
+    {
+        m_storage_focused_row =
+            std::clamp(m_storage_focused_row, 0, std::max(0, StorageScreenRowCount(m_storage_focused_panel) - 1));
+    }
+    RenderStorageFocusHighlights();
+}
+
+void HudLayer::OnStorageScreenClosed(const StorageClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("storage-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_storage_listeners.clear();
+    m_storage_cache.reset();
+    m_storage_focused_panel = StorageScreenPanel::Inventory;
+    m_storage_focused_row = 0;
+}
+
+int HudLayer::StorageScreenRowCount(StorageScreenPanel panel) const
+{
+    if (!m_storage_cache)
+        return 0;
+    return panel == StorageScreenPanel::Inventory ? static_cast<int>(m_storage_cache->inventory.size())
+                                                  : static_cast<int>(m_storage_cache->storage.size());
+}
+
+void HudLayer::MoveStoragePanelFocus(int direction)
+{
+    constexpr int kPanelCount = 2;
+    const int next = std::clamp(static_cast<int>(m_storage_focused_panel) + direction, 0, kPanelCount - 1);
+    m_storage_focused_panel = static_cast<StorageScreenPanel>(next);
+    m_storage_focused_row =
+        std::clamp(m_storage_focused_row, 0, std::max(0, StorageScreenRowCount(m_storage_focused_panel) - 1));
+    RenderStorageFocusHighlights();
+}
+
+void HudLayer::MoveStorageRowFocus(int direction)
+{
+    const int count = StorageScreenRowCount(m_storage_focused_panel);
+    if (count <= 0)
+        return;
+    m_storage_focused_row = std::clamp(m_storage_focused_row + direction, 0, count - 1);
+    RenderStorageFocusHighlights();
+}
+
+void HudLayer::ActivateFocusedStorageRow()
+{
+    if (!m_storage_cache)
+        return;
+
+    if (m_storage_focused_panel == StorageScreenPanel::Inventory)
+    {
+        if (m_storage_focused_row < 0 || m_storage_focused_row >= static_cast<int>(m_storage_cache->inventory.size()))
+            return;
+        Publish(StorageItemActivatedMessage{m_storage_focused_row});
+    }
+    else
+    {
+        if (m_storage_focused_row < 0 || m_storage_focused_row >= static_cast<int>(m_storage_cache->storage.size()))
+            return;
+        Publish(StorageWithdrawRequestedMessage{m_storage_focused_row});
+    }
+}
+
+void HudLayer::RenderStorageFocusHighlights()
+{
+    if (!m_document)
+        return;
+
+    RenderStorageRowFocus("storage-inventory-list", ".storage-inventory-row", StorageScreenPanel::Inventory);
+    RenderStorageRowFocus("storage-storage-list", ".storage-storage-row", StorageScreenPanel::Storage);
+}
+
+void HudLayer::RenderStorageRowFocus(const char* container_id, const char* row_class, StorageScreenPanel panel)
+{
+    Rml::Element* container = m_document->GetElementById(container_id);
+    if (!container)
+        return;
+
+    container->SetClass("focused", panel == m_storage_focused_panel);
+
+    Rml::ElementList rows;
+    container->QuerySelectorAll(rows, row_class);
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", panel == m_storage_focused_panel && static_cast<int>(i) == m_storage_focused_row);
 }
 
 void HudLayer::RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stats)
@@ -1085,7 +1599,8 @@ Rml::Element* HudLayer::CharacterScreenRowElement(CharacterScreenPanel panel, in
 
 void HudLayer::OnEvent(Event& event)
 {
-    if (!m_document || (!m_character_screen_cache && !m_techniques_screen_cache))
+    if (!m_document || (!m_character_screen_cache && !m_techniques_screen_cache && !m_mission_select_cache &&
+                        !m_shop_cache && !m_storage_cache))
         return;
 
     EventDispatcher dispatcher(event);
@@ -1140,6 +1655,75 @@ void HudLayer::OnEvent(Event& event)
                 case SDLK_SPACE:
                 case SDLK_KP_5:
                     ActivateFocusedTechRow();
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            if (m_mission_select_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_8:
+                    MoveMissionSelectRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveMissionSelectRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedMissionSelectRow();
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            if (m_shop_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_4:
+                    MoveShopPanelFocus(-1);
+                    return true;
+                case SDLK_KP_6:
+                    MoveShopPanelFocus(1);
+                    return true;
+                case SDLK_KP_8:
+                    MoveShopRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveShopRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedShopRow();
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            if (m_storage_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_4:
+                    MoveStoragePanelFocus(-1);
+                    return true;
+                case SDLK_KP_6:
+                    MoveStoragePanelFocus(1);
+                    return true;
+                case SDLK_KP_8:
+                    MoveStorageRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveStorageRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedStorageRow();
                     return true;
                 default:
                     return false;

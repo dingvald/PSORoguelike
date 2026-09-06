@@ -445,3 +445,198 @@ body {
     color: #3aa0ff;
     font-weight: bold;
 }
+
+#hub-interaction-prompt {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    margin-left: -140px;
+    width: 280px;
+    text-align: center;
+    padding: 0.5em 0.8em;
+    background-color: rgba(10, 8, 12, 190);
+    border: 2px #7ee787;
+    color: #7ee787;
+    font-size: 0.9em;
+}
+
+.list-empty {
+    display: block;
+    padding: 0.3em 0.2em;
+    font-size: 0.85em;
+    color: #777;
+}
+
+#mission-select-screen {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(10, 8, 12, 230);
+    flex-direction: column;
+    align-items: center;
+}
+
+#mission-select-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #7ee787;
+    margin-bottom: 0.6em;
+}
+
+#mission-select-list {
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: 1em;
+}
+
+.mission-row {
+    display: block;
+    padding: 0.4em 0.5em;
+    font-size: 0.9em;
+    color: #ddd;
+}
+
+.mission-row:hover {
+    color: #fff;
+    background-color: rgba(126, 231, 135, 80);
+}
+
+.mission-row.focused {
+    color: #fff;
+    border-left: 3px #7ee787;
+}
+
+.mission-row.locked {
+    color: #666;
+}
+
+#mission-select-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
+
+#shop-screen {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(10, 8, 12, 230);
+    flex-direction: column;
+    align-items: center;
+}
+
+#shop-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #d4c93f;
+    margin-bottom: 0.2em;
+}
+
+#shop-meseta {
+    font-size: 0.9em;
+    color: #d4c93f;
+    margin-bottom: 0.6em;
+}
+
+#shop-columns {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 900px;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.shop-stock-row,
+.shop-sell-row {
+    display: block;
+    padding: 0.3em 0.2em;
+    font-size: 0.85em;
+    color: #ddd;
+}
+
+.shop-stock-row:hover,
+.shop-sell-row:hover {
+    color: #fff;
+    background-color: rgba(212, 201, 63, 80);
+}
+
+.shop-stock-row.focused,
+.shop-sell-row.focused {
+    color: #fff;
+    border-left: 3px #d4c93f;
+}
+
+.shop-stock-row.unaffordable {
+    color: #777;
+}
+
+#shop-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
+
+#storage-screen {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(10, 8, 12, 230);
+    flex-direction: column;
+    align-items: center;
+}
+
+#storage-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #3f9fd4;
+    margin-bottom: 0.6em;
+}
+
+#storage-columns {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 900px;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.storage-inventory-row,
+.storage-storage-row {
+    display: block;
+    padding: 0.3em 0.2em;
+    font-size: 0.85em;
+    color: #ddd;
+}
+
+.storage-inventory-row:hover,
+.storage-storage-row:hover {
+    color: #fff;
+    background-color: rgba(63, 159, 212, 80);
+}
+
+.storage-inventory-row.focused,
+.storage-storage-row.focused {
+    color: #fff;
+    border-left: 3px #3f9fd4;
+}
+
+#storage-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
