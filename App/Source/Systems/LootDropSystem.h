@@ -9,6 +9,7 @@ namespace psr {
 class Registry;
 class Grid;
 class MessageBus;
+class AffixLibrary;
 struct AfterDamageEvent;
 
 // Rolls loot when the player lands a killing blow: subscribed only on the
@@ -25,10 +26,16 @@ struct AfterDamageEvent;
 // CurrencyComponent at pickup time, not here. No-ops silently if the
 // defeated entity carries no DropTableComponent (most enemies drop
 // nothing).
+//
+// Also runs WeaponBuilder on every dropped item (a no-op for anything
+// without a WeaponComponent), so a dropped weapon has a chance at a rolled
+// prefix/grind/race bonus before the drop notification below is built --
+// see WeaponBuilder.h.
 class LootDropSystem
 {
 public:
-    LootDropSystem(Registry& registry, Grid& grid, MessageBus& message_bus, std::mt19937& rng);
+    LootDropSystem(Registry& registry, Grid& grid, MessageBus& message_bus, const AffixLibrary& affixes,
+                   std::mt19937& rng);
 
     // Subscribed handler captures this instance's address -- neither copying
     // nor moving would keep it valid, same rationale as CombatLogBridge's
@@ -48,6 +55,7 @@ private:
     Registry* m_registry;
     Grid* m_grid;
     MessageBus* m_message_bus;
+    const AffixLibrary* m_affixes;
     std::mt19937* m_rng;
 };
 

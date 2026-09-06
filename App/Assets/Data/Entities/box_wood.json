@@ -31,6 +31,10 @@
                 {
                     "item_prefab_id": "monofluid",
                     "weight": 2.0
+                },
+                {
+                    "item_prefab_id": "weapons.saber",
+                    "weight": 0.3
                 }
             ],
             "no_drop_weight": 2.0,

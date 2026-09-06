@@ -3,6 +3,7 @@
 #include "Components/CurrencyComponent.h"
 #include "Components/CurrencyPickupComponent.h"
 #include "Components/DropTableComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/ComponentMeta.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
@@ -13,6 +14,8 @@
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/Messages/MessageQueue.h"
 #include "Engine/World/Grid.h"
+#include "Items/AffixLibrary.h"
+#include "Items/ItemDisplayName.h"
 #include "Messages/LootDropMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 
@@ -40,6 +43,7 @@ struct ItemMarker
 };
 
 constexpr std::uint32_t kItemPrefab = 1;
+constexpr std::uint32_t kWeaponPrefab = 2;
 const std::uint32_t kMesetaPrefab = entt::hashed_string::value("meseta");
 
 class TestEntityLoader : public IEntityLoader
@@ -53,6 +57,11 @@ public:
         entt::entity item = prefab_registry.create();
         prefab_registry.emplace<ItemMarker>(item);
         out_prefab_ids.emplace(kItemPrefab, item);
+
+        entt::entity weapon = prefab_registry.create();
+        prefab_registry.emplace<ItemMarker>(weapon);
+        prefab_registry.emplace<WeaponComponent>(weapon);
+        out_prefab_ids.emplace(kWeaponPrefab, weapon);
 
         entt::entity meseta = prefab_registry.create();
         prefab_registry.emplace<CurrencyPickupComponent>(meseta, CurrencyPickupComponent{0});
@@ -70,14 +79,17 @@ Entity MakeActorAt(Registry& registry, Grid& grid, Vec2 tile)
 }
 
 // Registers ItemMarker (a manual clone func, same as the existing precedent)
-// and CurrencyPickupComponent (via the real ComponentSchemaRegistrar, since
-// LootDropSystem needs to Registry::GetComponent<CurrencyPickupComponent> on
-// a freshly-cloned "meseta" entity to overwrite its rolled amount).
+// and CurrencyPickupComponent/WeaponComponent (via the real
+// ComponentSchemaRegistrar, since LootDropSystem needs to
+// Registry::GetComponent<CurrencyPickupComponent> on a freshly-cloned
+// "meseta" entity to overwrite its rolled amount, and RunWeaponBuilder needs
+// the clone binding to actually copy WeaponComponent onto a dropped weapon).
 void RegisterTestPrefabTypes(Registry& registry)
 {
     ItemMarker::Register(registry.GetMetaContext());
     ComponentSchemaRegistrar reg{registry.GetMetaContext()};
     CurrencyPickupComponent::Register(reg);
+    WeaponComponent::Register(reg);
 }
 
 } // namespace
@@ -91,6 +103,7 @@ TEST_CASE("LootDropSystem no-ops when the hit did not defeat the target", "[Loot
 
     Grid grid{4, 4};
     MessageBus bus;
+    AffixLibrary affixes;
     std::mt19937 rng{1};
 
     Entity player = MakeActorAt(registry, grid, {0, 0});
@@ -99,7 +112,7 @@ TEST_CASE("LootDropSystem no-ops when the hit did not defeat the target", "[Loot
     table.entries = {LootEntry{kItemPrefab, 1.0f}};
     target.Emplace<DropTableComponent>(table);
 
-    LootDropSystem system(registry, grid, bus, rng);
+    LootDropSystem system(registry, grid, bus, affixes, rng);
     system.Subscribe(player);
 
     AfterDamageEvent event{target, /*amount=*/5, /*is_critical=*/false, /*target_defeated=*/false};
@@ -113,12 +126,13 @@ TEST_CASE("LootDropSystem no-ops when the defeated target has no DropTableCompon
     Registry registry;
     Grid grid{4, 4};
     MessageBus bus;
+    AffixLibrary affixes;
     std::mt19937 rng{1};
 
     Entity player = MakeActorAt(registry, grid, {0, 0});
     Entity target = MakeActorAt(registry, grid, {1, 1});
 
-    LootDropSystem system(registry, grid, bus, rng);
+    LootDropSystem system(registry, grid, bus, affixes, rng);
     system.Subscribe(player);
 
     AfterDamageEvent event{target, /*amount=*/5, /*is_critical=*/false, /*target_defeated=*/true};
@@ -139,6 +153,7 @@ TEST_CASE("LootDropSystem spawns a ground item and publishes LootDropMessage on 
     Grid grid{4, 4};
     MessageBus bus;
     MessageQueue hud_queue;
+    AffixLibrary affixes;
     std::mt19937 rng{1};
 
     std::vector<std::string> loot_names;
@@ -151,7 +166,7 @@ TEST_CASE("LootDropSystem spawns a ground item and publishes LootDropMessage on 
     table.entries = {LootEntry{kItemPrefab, 1.0f}};
     target.Emplace<DropTableComponent>(table);
 
-    LootDropSystem system(registry, grid, bus, rng);
+    LootDropSystem system(registry, grid, bus, affixes, rng);
     system.Subscribe(player);
 
     AfterDamageEvent event{target, /*amount=*/999, /*is_critical=*/false, /*target_defeated=*/true};
@@ -173,6 +188,7 @@ TEST_CASE("LootDropSystem spawns a Meseta pickup entity instead of crediting the
 
     Grid grid{4, 4};
     MessageBus bus;
+    AffixLibrary affixes;
     std::mt19937 rng{1};
 
     Entity player = MakeActorAt(registry, grid, {0, 0});
@@ -183,7 +199,7 @@ TEST_CASE("LootDropSystem spawns a Meseta pickup entity instead of crediting the
     table.meseta_max = 10;
     target.Emplace<DropTableComponent>(table);
 
-    LootDropSystem system(registry, grid, bus, rng);
+    LootDropSystem system(registry, grid, bus, affixes, rng);
     system.Subscribe(player);
 
     AfterDamageEvent event{target, /*amount=*/999, /*is_critical=*/false, /*target_defeated=*/true};
@@ -209,6 +225,7 @@ TEST_CASE("LootDropSystem drops nothing when the roll deterministically favors n
 
     Grid grid{4, 4};
     MessageBus bus;
+    AffixLibrary affixes;
     std::mt19937 rng{1};
 
     Entity player = MakeActorAt(registry, grid, {0, 0});
@@ -217,11 +234,55 @@ TEST_CASE("LootDropSystem drops nothing when the roll deterministically favors n
     table.no_drop_weight = 1.0f; // the only nonzero weight in the pool
     target.Emplace<DropTableComponent>(table);
 
-    LootDropSystem system(registry, grid, bus, rng);
+    LootDropSystem system(registry, grid, bus, affixes, rng);
     system.Subscribe(player);
 
     AfterDamageEvent event{target, /*amount=*/999, /*is_critical=*/false, /*target_defeated=*/true};
     player.Dispatch(event);
 
     CHECK(grid.GetEntities(Vec2{1, 1}).size() == 1); // nothing spawned
+}
+
+TEST_CASE("LootDropSystem runs the weapon builder on a dropped weapon and publishes its post-roll name",
+          "[LootDropSystem]")
+{
+    Registry registry;
+    RegisterTestPrefabTypes(registry);
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    Grid grid{4, 4};
+    MessageBus bus;
+    MessageQueue hud_queue;
+    AffixLibrary affixes; // empty is fine -- this only proves the pipeline ran, not a specific roll outcome
+    std::mt19937 rng{1};
+
+    std::vector<std::string> loot_names;
+    hud_queue.RegisterHandler<LootDropMessage>([&](const LootDropMessage& m) { loot_names.push_back(m.item_name); });
+    bus.Subscribe<LootDropMessage>(hud_queue);
+
+    Entity player = MakeActorAt(registry, grid, {0, 0});
+    Entity target = MakeActorAt(registry, grid, {1, 1});
+    DropTableComponent table;
+    table.entries = {LootEntry{kWeaponPrefab, 1.0f}};
+    target.Emplace<DropTableComponent>(table);
+
+    LootDropSystem system(registry, grid, bus, affixes, rng);
+    system.Subscribe(player);
+
+    AfterDamageEvent event{target, /*amount=*/999, /*is_critical=*/false, /*target_defeated=*/true};
+    player.Dispatch(event);
+
+    const std::vector<entt::entity> occupants = grid.GetEntities(Vec2{1, 1});
+    REQUIRE(occupants.size() == 2); // target plus the spawned weapon
+    entt::entity dropped = occupants[0] == target.Handle() ? occupants[1] : occupants[0];
+    REQUIRE(registry.HasComponent<WeaponComponent>(dropped));
+
+    hud_queue.HandleQueuedMessages();
+    REQUIRE(loot_names.size() == 1);
+    // Proves the published name reflects the post-WeaponBuilder state (grind
+    // level etc.), not a pre-roll snapshot -- without pinning to one exact
+    // roll outcome, which would make this test depend on WeaponBuilder's
+    // internal constants.
+    CHECK(loot_names[0] == FormatItemDisplayName(registry, dropped, affixes));
 }

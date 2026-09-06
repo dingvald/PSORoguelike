@@ -43,6 +43,7 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Render/TileVertexMath.h"
+#include "Items/AffixLibraryFile.h"
 #include "Items/CharacterScreenSnapshot.h"
 #include "Items/Equip.h"
 #include "Items/Hotbar.h"
@@ -157,12 +158,16 @@ void GameplayLayer::LoadNewGame()
     // exit instead of an OS crash dialog.
     const EntitySchemaModel schema = RegisterComponents(m_registry);
 
-    // Loaded before SetStatusEffectLibrary below needs it -- unlike
-    // m_affixes (still empty pending M8.2's drop-table work), status
-    // effects are real, immediately-consumed content: StatusEffectComponent's
+    // Loaded before SetStatusEffectLibrary below needs it -- status effects
+    // are real, immediately-consumed content: StatusEffectComponent's
     // handlers and TurnCoordinator's Freeze check both resolve ids through
     // this library on every turn.
     m_status_effects = LoadStatusEffectLibrary(ApplicationFilepaths::StatusEffectsPath);
+
+    // Loaded before SetAffixLibrary below needs it, same reasoning as
+    // m_status_effects above -- WeaponBuilder (see LootDropSystem) also reads
+    // this at drop time, via the same m_affixes reference.
+    m_affixes = LoadAffixLibrary(ApplicationFilepaths::AffixesPath);
 
     // Lets EquipmentComponent's AttachHandlers-registered handler (which
     // can't capture state) reach affix data when it contributes a
@@ -318,7 +323,7 @@ void GameplayLayer::LoadNewGame()
 
     m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
 
-    m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
+    m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_affixes, m_rng);
     m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
 
     m_experience_system.emplace(GetMessageBus(), m_growth_curve, m_floating_text);

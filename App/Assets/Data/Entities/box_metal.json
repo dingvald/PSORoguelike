@@ -39,6 +39,10 @@
                 {
                     "item_prefab_id": "armor.frame",
                     "weight": 0.4000000059604645
+                },
+                {
+                    "item_prefab_id": "weapons.saber",
+                    "weight": 0.4
                 }
             ],
             "no_drop_weight": 1.0,

@@ -14,3 +14,4 @@ const std::filesystem::path ApplicationFilepaths::TechniquesPath = ApplicationFi
 const std::filesystem::path ApplicationFilepaths::StatusEffectsPath = ApplicationFilepaths::DataPath / "StatusEffects";
 const std::filesystem::path ApplicationFilepaths::GrowthCurvePath =
     ApplicationFilepaths::DataPath / "growth_curve.json";
+const std::filesystem::path ApplicationFilepaths::AffixesPath = ApplicationFilepaths::DataPath / "Affixes";

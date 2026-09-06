@@ -170,7 +170,7 @@ private:
 
     Registry m_registry;
     PieceLibrary m_pieces;
-    AffixLibrary m_affixes; // empty: no affix content authored yet (pending M8.2's drop-table work)
+    AffixLibrary m_affixes; // loaded in LoadNewGame from ApplicationFilepaths::AffixesPath
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;

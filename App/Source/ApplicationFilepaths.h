@@ -18,4 +18,5 @@ public:
     static const std::filesystem::path TechniquesPath;
     static const std::filesystem::path StatusEffectsPath;
     static const std::filesystem::path GrowthCurvePath;
+    static const std::filesystem::path AffixesPath;
 };

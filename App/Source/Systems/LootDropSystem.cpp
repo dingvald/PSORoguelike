@@ -4,18 +4,16 @@
 #include "Components/DropTableComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/EventHandlerComponent.h"
-#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/World/Grid.h"
 #include "Items/DropTableRoller.h"
+#include "Items/ItemDisplayName.h"
+#include "Items/WeaponBuilder.h"
 #include "Messages/LootDropMessage.h"
 
 #include <entt/core/hashed_string.hpp>
-
-#include <optional>
-#include <string>
 
 namespace psr {
 
@@ -23,8 +21,9 @@ namespace {
     constexpr const char* kMesetaPrefabId = "meseta";
 } // namespace
 
-LootDropSystem::LootDropSystem(Registry& registry, Grid& grid, MessageBus& message_bus, std::mt19937& rng)
-    : m_registry(&registry), m_grid(&grid), m_message_bus(&message_bus), m_rng(&rng)
+LootDropSystem::LootDropSystem(Registry& registry, Grid& grid, MessageBus& message_bus, const AffixLibrary& affixes,
+                               std::mt19937& rng)
+    : m_registry(&registry), m_grid(&grid), m_message_bus(&message_bus), m_affixes(&affixes), m_rng(&rng)
 {
 }
 
@@ -64,11 +63,12 @@ void LootDropSystem::OnDamage(Entity /*player*/, AfterDamageEvent& event)
 
     if (result.kind == DropTableResult::Kind::Meseta)
         m_registry->GetComponent<CurrencyPickupComponent>(item).amount = result.meseta;
+    else
+        RunWeaponBuilder(*m_registry, item, *m_affixes, *m_rng);
 
     m_grid->AddEntity(target_position->tile, item);
 
-    const std::optional<std::string> label = NameIdRegistry::Find(item_prefab_id);
-    m_message_bus->Publish(LootDropMessage{label ? *label : std::string("an item")});
+    m_message_bus->Publish(LootDropMessage{FormatItemDisplayName(*m_registry, item, *m_affixes)});
 }
 
 } // namespace psr
