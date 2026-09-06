@@ -23,6 +23,15 @@ struct TargetRequest
     TargetingMode mode = TargetingMode::Directional;
     WeaponRangeShape shape = WeaponRangeShape::SingleTarget;
     int range = 1;
+
+    // Mirrors Technique::projectile_speed > 0 / projectile_pierces at request
+    // time, purely so TargetSelectionState can preview the same
+    // BuildProjectilePath travel/impact tiles TechniqueAction::Perform will
+    // actually resolve -- the cast itself still reads Technique directly.
+    // Always false for Photon Arts (weapon-style arts never spawn a
+    // projectile today).
+    bool is_projectile = false;
+    bool projectile_pierces = false;
 };
 
 class ITargetRequestSink
