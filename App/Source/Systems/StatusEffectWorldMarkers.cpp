@@ -61,6 +61,12 @@ void StatusEffectWorldMarkers::ClearMarkers()
 {
     for (entt::entity marker : m_markers)
     {
+        // Something outside this system (e.g. a scene swap tearing down the
+        // previous world's entities) may already have destroyed this
+        // marker -- skip the redundant remove/destroy rather than hitting
+        // entt's own validity assert on a double-destroy.
+        if (!m_registry->IsValid(marker))
+            continue;
         m_grid->RemoveEntity(m_marker_tile, marker);
         m_registry->DestroyEntity(marker);
     }

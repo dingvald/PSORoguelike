@@ -486,6 +486,30 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   `TweenSystemTests.cpp`; `Core-Test/Source/ActionMapTests.cpp` / `InputBufferTests.cpp` /
   `EasingTests.cpp` cover the new Core-level primitives.
 
+### M6 follow-up: `ActorComponent` replaces `EnergyComponent`, action costs scale by speed
+
+**Status:** done, landed uncommitted alongside a session boundary and captured here retroactively,
+same lag the M7/M8 follow-up sections already had. 6.1's own bullet named "variable per-action
+costs" as in scope but never delivered a mechanism to vary them by — every action charged its flat
+base cost regardless of the acting entity. `EnergyComponent` (the lone `{energy}` field
+`TurnQueue` membership keyed off) is gone, folded into a renamed, extended
+`App/Source/Components/ActorComponent.h`: `ap` (the same persisted scheduling value, renamed from
+`energy`) plus two new stats, `movement_speed`/`act_speed` (both default `100` = unmodified).
+`TurnCoordinator` and every other call site that referenced `EnergyComponent` was mechanically
+repointed at `ActorComponent`/`ap` — no behavior change there. New
+`App/Source/Combat/ActionCost.h/.cpp` (`EffectiveMoveCost`/`EffectiveActCost`) scales a base cost
+by `100 * base_cost / speed` (missing `ActorComponent` == baseline 100, same "safe to call for any
+entity" contract `ComputeEffectiveStats` already sets), floored at 1; `MoveAction`/`AttackAction`
+now charge `EffectiveMoveCost(actor, kMoveCost)`/`EffectiveActCost(actor, kAttackCost)` instead of
+the flat constants directly, and `PhotonArtAction`/`TechniqueAction`/`UseItemAction`/`DropAction`
+were updated to the same seam for their own fixed costs. `ap` is deliberately **not** exposed
+through `PrefabEditorLayer`'s new "Actor" Inspector card (only `movement_speed`/`act_speed` are
+authorable) — it's pure runtime scheduling state, never meant to be hand-set on a prefab, matching
+the old `EnergyComponent`'s same never-authored precedent. Catch2 coverage: new
+`App-Test/Source/ActionCostTests.cpp` and `ActorComponentTests.cpp` (schema shape/authorable
+fields), extended `AttackActionTests.cpp`/`MoveActionTests.cpp`/`TurnCoordinatorTests.cpp` for the
+renamed component and speed-scaled costs.
+
 ## Gameplay Layer (Phase A item 18)
 
 **Status:** initial landing done (player spawn + movement in a fixed test dungeon)
@@ -606,6 +630,60 @@ named.
   booma.json` (`ai`/`innate_weapon`/`health`/`stats`/`race`/`renderable`), with
   `booma_claws.json`/`saber.json` as its and the player's weapons. Catch2 coverage: new
   `InnateWeaponComponentTests.cpp`.
+
+### Gameplay Layer follow-ups: tab targeting, camera zoom, Frame armor, breakable boxes, HUD event-log overhaul
+
+**Status:** done, landed uncommitted alongside a session boundary and captured here retroactively —
+the same lag every other follow-ups section in this file already had. Five unrelated small
+additions bundled here because none is large enough for its own milestone bullet.
+
+- **Tab targeting** (`b89c63a`): Tab cycles the player's persistent target through every hostile
+  `HealthComponent` entity, nearest-first by Manhattan distance (a fresh scan each press, so
+  death/movement never leaves a stale ordering); Escape clears it. `TabTargetComponent` holds the
+  lock on the player; `TabTargetSystem` owns a single reusable world marker
+  (`ui.tab_target_marker`, drawn underneath the target's own sprite) repositioned via `Grid`
+  remove/add each frame as the target moves, and self-clears if the target dies. Both keys are
+  intercepted directly in `GameplayLayer::OnEvent` alongside the existing non-turn-costing
+  Character/Techniques-screen key handling, not routed through `ActionMap`.
+  `TargetSelectionState` now starts its interactive cursor at (`TargetSquare`) or facing
+  (`Directional`) the locked target instead of always defaulting to the caster's own tile/facing,
+  so attacks/Techniques/Photon Arts aim at it immediately. `HudLayer` gains a bottom-left target
+  panel (name, race, HP as a numberless bar) driven by a new `TargetStateMessage`, published every
+  frame alongside the existing floating-text state. `DisplayName`'s player-or-prefab-label
+  resolution was lifted out of `CombatLogBridge` into a shared `Combat/DisplayName.h` so both call
+  sites share one implementation. Confirmed with the user: room-visibility already restricts
+  cycling to visible enemies, no change needed there.
+- **Numpad camera zoom** (`5c2b130`): `Camera` already had a clamped `SetZoom`/`GetZoom` and
+  `TileRenderer::Draw` already accepted a zoom factor, but `GameplayLayer` never called either —
+  `OnRender` hardcoded `zoom=1.0f`. Numpad +/- now adjust `Camera`'s zoom in 0.5 steps (handled
+  unconditionally in `OnEvent`, a view control rather than a turn action); the render call uses
+  `Camera::GetZoom()`, and floating text's tile-to-pixel conversion scales its tile step by zoom too
+  so it stays aligned with the world. `ZoomLimits.h`'s range is now `[1x, 4x]`.
+- **Frame armor** (`de0e4d5`): the equip/unequip and damage-calc plumbing for armor already existed
+  and worked (M8.1's `ArmorComponent`/`EquipmentComponent` slot routing, already folded into every
+  damage/hit-chance formula) — this adds the missing piece, an actual armor prefab (Frame, torso,
+  DFP 10, matching PSO GameCube's base Frame) obtainable from `box_metal`, plus mod-slot *display*
+  as bullet points under its Character-screen equipment row (always "(empty)" for now, since
+  inserting a mod into a slot has no defined mechanic yet).
+- **Breakable boxes** (`6ea8d98`): `box_wood` (15 HP, common Monomate/small-Meseta drops) and
+  `box_metal` (35 HP, rarer Technique-Disk/bigger-Meseta drops) are pure content, no engine changes
+  needed — `HealthComponent` + `BlocksMovementComponent` already make `MoveAction`'s existing
+  bump-into-hostile-with-HP fallback redirect an attack into them, and
+  `HealthSystem`/`DeathSystem`/`LootDropSystem` already handle HP-to-zero, destruction, and
+  drop-table rolling generically for any `HealthComponent` entity. Stamped into several existing
+  room pieces as static furniture (not the enemy-spawn path, so neither joins the turn queue or
+  gets AI).
+- **HUD event-log overhaul** (`2e6df5b`): fixed `AppendLogLine` reading `GetScrollHeight()` one
+  frame stale (RmlUi only re-lays-out in `Context::Update()`, which runs after `HudLayer`'s own
+  `OnUpdate`) — previously invisible until the log outgrew its fixed-height box, at which point the
+  newest line was perpetually clipped; the scroll-to-bottom (and now opacity) recompute is deferred
+  to the top of the next `OnUpdate` instead. Adds a small `[c=#RRGGBB]`/`[b]`/`[i]` inline markup
+  syntax (`LogMarkup.h`) so combat-log lines can carry color/bold/italic — wired into
+  `CombatLogBridge`/`ExperienceSystem`/`HudLayer::OnLootDrop` reusing `hud.rcss`'s existing accent
+  palette (this is what M11.1's diffed level-up stat-gain line and the loot-drop/Technique-learned
+  lines above render through) — prefixes every entry with a "> " marker, and fades each visible
+  line's opacity by its position in the log's scroll viewport (newest = 1.0, oldest visible = 0.25)
+  via a new `RmlScrollListener` that recomputes live as the log is scrolled.
 
 ## M7 — Combat System
 
@@ -806,6 +884,82 @@ named.
   hit, `EffectFamily::Status` dealing no damage), and `MoveActionTests.cpp` (a deterministic
   redirect-consumption regression guard plus a statistical Confuse trial, since
   `StatusEffectComponent`'s Confuse handler owns its own unseedable RNG).
+
+### M7 follow-ups: Technique Disks replace weapon-granted Techniques, a real selection screen, technique projectiles, and generic on-hit VFX
+
+**Status:** done, landed uncommitted alongside a session boundary and captured here retroactively —
+the same lag the M6/M8 follow-up sections already had. Closes two of 7.2's own explicitly-deferred
+bullets ("real Photon Art/Technique selection menu," "status icons" stays open) plus adds a
+mechanic 7.2 never scoped at all (Techniques as something *learned*, not innately granted).
+
+- **Technique Disks & learning:** per the user's explicit direction, Techniques are no longer
+  weapon-granted — `WeaponComponent::technique_ids` is gone (Photon Arts are unaffected, still
+  weapon-granted). New `App/Source/Components/KnownTechniquesComponent.h`
+  (`{known: vector<KnownTechniqueEntry{technique_id, tier}>}`, deliberately not meta-registered —
+  runtime-only player state, same precedent `EquipmentComponent`/`InventoryComponent` already set)
+  tracks what a Force has actually learned. `Items/TechniqueLearning.h`'s `LearnTechnique` teaches
+  or raises a known Technique's tier (never downgrades a re-consumed lower-tier disk) via
+  `GetOrEmplace`, called by `UseItemAction` on a new `ConsumableEffect::TeachTechnique`
+  (`ConsumableComponent` gained a `technique_id` field alongside its existing `effect`/`amount`).
+  Content: `App/Assets/Data/Entities/TechniqueDisks/{foie,barta,zonde,resta}_disk.json`, one
+  consumable-item prefab per existing Technique, plus drop-table entries on `box_metal` (rarer than
+  Monomate/Monofluid). `TechniqueAction` now resolves its tier/affordability check against
+  `KnownTechniquesComponent` instead of the old weapon-granted lookup — casting an unlearned
+  Technique is a free no-op, same shape as an unaffordable-PP/TP cast already was.
+- **Real Techniques/Photon Arts selection screen:** replaces 7.2's placeholder number-key slots
+  (1–4/5–8) entirely. New `App/Source/States/TechniquesScreenState` (pushed/popped on `T`, mirrors
+  `CharacterScreenState`'s suspension mechanism exactly, minus `RequestClose()` — every action on
+  this screen, hotbar assignment included, is free/instant, so there's never a mid-modal turn to
+  wait out) publishes a new `TechniquesScreenMessage` (`Items/TechniquesScreenSnapshot.h`'s
+  `BuildTechniquesScreenMessage`: every learned Technique from `KnownTechniquesComponent` plus the
+  equipped weapon's granted Photon Arts, fully-resolved display names/TP costs/icon paths, same
+  "fully resolved, id is the key" contract `CharacterScreenMessage` already set for its own rows).
+  `HudLayer` renders it as a `#techniques-screen` overlay (same `hud.rml` overlay-div convention the
+  Character screen and game-over screen both already use) with keyboard row navigation; selecting a
+  row opens an "assign to hotbar slot 0–9" prompt publishing a new
+  `TechniquesScreenSlotAssignedMessage`, routed by `GameplayLayer` to a new
+  `Items/Hotbar.h::AssignAbilityToHotbarSlot` (validates server-side — the id must actually be
+  known/granted, not trusted from the message — same free/instant contract `AssignItemToHotbarSlot`
+  already has). `GameplayLayer::TryActivateSlot`'s number-key Photon-Art/Technique slot stub from
+  7.2 is gone, replaced by resolving whatever id each hotbar slot was actually assigned.
+- **Technique projectiles:** `Technique` gained `projectile_speed`/`projectile_prefab_id`/
+  `projectile_pierces` fields (`projectile_speed == 0`, the default, keeps a Technique's existing
+  instant-resolve behavior — `zonde` is untouched). When set, `TechniqueAction` spawns a real
+  `ProjectileComponent` + `ActorComponent` entity (a genuine `TurnQueue` participant, not a fake
+  tween) instead of resolving damage inline; its per-hop cost is derived from `projectile_speed`
+  against the same `ActorComponent`/`ActionCost` scheduler every other actor uses, so it acts far
+  more often than a normal entity with zero scheduler changes needed. New
+  `ProjectileAdvanceAction` moves it one tile per turn (instant `Position`/`Grid` update plus a
+  cosmetic glide `TweenComponent`, same idiom `MoveAction` already uses) and, once its path is
+  exhausted, rolls the hit fresh against whatever occupies the impact tile(s) — dispatched as the
+  original caster so damage attribution/combat log/lifesteal are unaffected. A new
+  `BuildProjectilePath` (shared with `TargetSelectionState`'s aim-preview, see below) decides
+  whether it stops at the first creature/wall or pierces to full range, per the authored
+  `projectile_pierces` flag.
+- **Generic on-hit VFX:** every weapon/Photon-Art/Technique hit (instant or projectile-resolved)
+  can now spawn a placeholder VFX at the impact tile. New `OnHitEffectComponent`
+  (`effect_prefab_id`/`duration`, authored on weapon prefabs) threads through
+  `BeforeAttackEvent`/`BeforePhotonArtCastEvent` (via `EquipmentComponent`'s existing event-fill
+  seam) and `IncomingDamageEvent`/`AfterDamageEvent` into a new `OnHitEffectSystem`, which spawns it
+  via the existing `VisualEffectSystem` — one mechanism covering all three attack paths. Techniques
+  carry the same two values directly (`hit_effect_prefab_id`/`hit_effect_duration`, since they
+  aren't ECS entities). Placeholder content: `vfx/generic_hit.json`,
+  `TechniqueDisks/{foie,barta}_projectile.json`.
+- **Target-select cursor & projectile aim preview:** the cursor prefab now renders `rectangle.png`
+  instead of reusing `floor.png`. While aiming a projectile Technique, `TargetSelectionState` spawns
+  travel-preview and area-preview tile entities as the cursor moves, computed via the same
+  `BuildProjectilePath` the real cast uses, so the preview always matches what the cast will
+  actually do (wall-stopping/pierce behavior included); melee Photon Arts and instant-cast
+  Techniques are unaffected. Confirmed with the user: tab-targeting's existing room-visibility
+  filter already restricts cycling to visible enemies, no change needed there.
+- Editor: `PrefabEditorLayer`'s Weapon card lost its `technique_ids` row list (Photon Arts only
+  now); `TechniqueEditorLayer` gained the three new projectile fields and
+  `hit_effect_prefab_id`/`hit_effect_duration`; `PrefabEditorLayer`'s Renderable-adjacent cards
+  gained an `OnHitEffectComponent` card. UI: PP/TP bars and status icons predate this entry (see
+  M7.2/M7.3 above); a real selection *menu* was this entry's own deferred item, now done — status
+  icons over affected entities remain the only still-open UI item from 7.2/7.3. Content authoring
+  (real disk/projectile/VFX prefab tuning beyond the placeholder values above) is the user's own
+  work, per `CLAUDE.md`'s division of labor.
 
 ## M8 — Itemization & Economy
 
@@ -1122,11 +1276,96 @@ of Equip being the only thing an inventory click could do.
 
 ## M10 — Hub, Missions & Difficulty
 
-**Status:** Not started
+**Status:** 10.1 implemented, **not yet build/manual-verified** (see its own note below) — this
+project builds Windows-only (MSVC + vcpkg x64-windows, per Setup-Windows.bat/vcpkg.json), and the
+session that wrote this milestone ran in a Linux sandbox with no Windows toolchain, no vcpkg, and
+no network access to fetch entt/rapidjson/Catch2 headers for even a syntax-only check — every
+other "Done" entry in this file states a real build/test/manual-run result; this one can't yet,
+so it's flagged instead of claimed. 10.2/10.3 not started.
 
 - **10.1 Persistent hub:** Engine: non-procedural hub scene, shop buy/sell, storage,
   mission-select gated by per-character unlocks. Editor: none new (consumes M4/M5.3 data). UI:
-  mission-select/shop/storage/character-sheet screens.
+  mission-select/shop/storage/character-sheet screens. **Implemented, pending your own Windows
+  build + manual verification:** `GameplayLayer::LoadNewGame()` is replaced by
+  `SpawnNewCharacter()` (one-time: registry/schema/content-library setup, creates the player and
+  its permanent components) + `TransitionToWorld(SceneKind, dungeon_id)` (rebuildable: destroys
+  every world entity except the player and everything reachable from its Inventory/Equipment/
+  Storage — see `DestroyWorldEntities`, keyed off every entity always carrying
+  `EventHandlerComponent` — then either hand-instantiates the hub's single authored
+  `DungeonPiece` directly, skipping `DungeonStitcher` entirely, or generates a Dungeon by id).
+  Content libraries (`m_pieces`/`m_dungeons`/`m_photon_arts`/`m_techniques`/`m_status_effects`/
+  `m_growth_curve`/`m_shop_stock`/`m_hub`) load once for the process lifetime instead of every
+  restart, since `m_registry` itself is no longer reset on a scene swap (only individual entities
+  are destroyed) — which in turn means every system holding just `Registry&`/`Grid&`/library
+  references (not per-dungeon cached data) needed to stop being rebuilt every swap too, to avoid
+  leaving a dangling player-`Subscribe()` handler bound to a destroyed instance
+  (`EventHandlerComponent` has no unsubscribe-by-instance, only by-owner-type — see
+  `TransitionToWorld`'s own doc comment): `CombatLogBridge`/`LootDropSystem`/`ExperienceSystem`/
+  `VisualEffectSystem`/`MissFlashEffectSystem`/`OnHitEffectSystem`/`StatusEffectWorldMarkers`/
+  `TurnCoordinator` are now lazy-once (built + player-`Subscribe`d exactly once, same idiom
+  `EnsureRenderResources` already used for GPU resources); `RoomMap`/`RoomVisibilityTracker`/
+  `SpawnWaveSystem`/`EnemyAiSystem`/`ProjectileAdvanceAction`/`TabTargetSystem` still rebuild every
+  swap (they hold genuinely per-dungeon data). Two small Core/App defensive fixes fell out of
+  this: `VisualEffectSystem::Update`/`StatusEffectWorldMarkers::ClearMarkers` now guard a cached
+  entity with `Registry::IsValid` before removing/destroying it, since a scene swap's
+  `DestroyWorldEntities` may already have destroyed it out from under them (an in-flight VFX or
+  status marker straddling a Hub<->Dungeon transition) — previously latent since a "restart" used
+  to wipe the whole registry at once rather than destroying entities individually.
+
+  Mission flow: reaching a Dungeon's `PieceCategory::Exit` piece (checked once per frame via
+  `RoomMap::GetRoom`) records the dungeon in a new `Missions::RunProgress` and returns to the hub;
+  a new `'H'` keybind abandons a mission without credit; **confirmed with the user:** dying now
+  returns to the hub with inventory/equipment/Meseta/level intact (full-heal, no reset) instead of
+  the old full-registry wipe, since a full wipe would erase exactly what the hub is supposed to
+  protect and real permadeath (M11.2) doesn't exist yet.
+
+  Hub interaction, **confirmed with the user:** Shop/Storage/Mission-Select are not plain
+  keybinds — each is a placed hub entity (shopkeeper/storage-terminal/teleprompter, via a new
+  `InteractableComponent{InteractionType}` schema-registered component, none carrying
+  `BlocksMovementComponent`) that the player walks onto (same tile) and opens with Space. New
+  `Hub/HubInteraction.h`'s `FindInteractableAt` (pure `Registry`+`Grid` lookup, unit-tested) backs
+  both a per-frame HUD prompt (`HubInteractionPromptMessage`, "Press SPACE to ...") and
+  `GameplayLayer::OnEvent`'s Space interception — Space still falls through to `ActionMap`'s
+  existing Wait binding everywhere else. `Hub/HubDefinition.h`/`HubDefinitionFile.h/.cpp` load a
+  single hand-authored `App/Assets/Data/hub.json` naming which `DungeonPiece` is the hub (no
+  dedicated editor, same "not worth one" precedent `growth_curve.json` already set); the hub
+  layout itself (`App/Assets/Data/Pieces/hub_main.json`, a 5x5 room) and the three interactable
+  entity prefabs (`App/Assets/Data/Entities/hub/{shopkeeper,storage_terminal,teleprompter}.json`)
+  are placeholder content authored directly as JSON in this session (not through the Piece/Prefab
+  Editor, which wasn't run) — left in place as minimal scaffolding for the user to replace/expand,
+  same "throwaway fixture, not real content" carve-out CLAUDE.md already allows.
+
+  Shop: new `Core/Source/Engine/ECS/ValueComponent.h` (an item's sell value, schema-registered —
+  gets a Prefab Editor Inspector card automatically) and `Shop/ShopStock.h`/`ShopStockFile.h/.cpp`
+  (the hub's fixed buy catalog, `App/Assets/Data/shop_stock.json`, seeded with a 3-entry
+  placeholder: Monomate/Monofluid/`weapons.saber`). `Items/Shop.h`'s `BuyItem`/`SellItem` follow
+  `Items/Equip.h`'s exact free/instant-mutation convention. New `Editor/Source/Layers/
+  ShopStockEditorLayer` (a single always-open screen, no List/browse mode — exactly one document —
+  reorderable rows via the existing `FieldWidgets::BuildRowList`, Add/Save/Back), wired into
+  `EditorMenuLayer` as a new "Shop Stock" row; `Editor/Build-Editor.lua` gained an
+  `App/Source/Shop/**` compile entry for it (mirrors the existing `Items/**` entry).
+
+  Storage: new `Components/StorageComponent.h` (uncapped, unlike `InventoryComponent`) +
+  `Items/Storage.h`'s `StoreItem`/`WithdrawItem`, same `Equip.h` convention.
+
+  UI: three new modal screens cloning `CharacterScreenState`/`TechniquesScreenState`'s exact
+  push/publish-on-enter/close-on-Escape shape (`MissionSelectState` — single flat list;
+  `ShopState`/`StorageState` — two-panel, no context menu) plus matching `HudLayer` overlay blocks
+  (row rendering, keyboard nav, `hud.rml`/`hud.rcss` markup) mirroring the existing Techniques
+  screen's two-panel-no-context-menu template throughout.
+
+  Unlock-gating seam: `Missions/RunProgress.h`'s `IsDungeonUnlocked` is unconditionally true this
+  round (placeholder policy, explicitly unit-tested as such) — M4.5 (fixed area unlock order,
+  still not started) extends its body with an area-predecessor check; M10.2 extends it with a
+  tier parameter once tiers exist.
+
+  Catch2 coverage (new, **not yet run** — see the status note above):
+  `App-Test/Source/{HubInteraction,HubDefinitionFile,RunProgress,MissionSelectSnapshot,
+  ShopStockFile,Shop,ShopSnapshot,Storage,StorageSnapshot}Tests.cpp`. `App-Test`/
+  `Editor`'s `.lua` build files gained `Hub/`/`Missions/`/`Shop/` compile entries. Content
+  authoring beyond the placeholder hub layout/shop catalog above (real hub geometry, real prices,
+  M4.5's area-order data) is the user's own work through the editors, per `CLAUDE.md`'s division
+  of labor.
 - **10.2 Difficulty tiers:** Engine: Normal→Hard→Very Hard→Ultimate data (stat/population/drop
   deltas + M5.3 roster substitutions), per-character clear-gating. Editor: difficulty-tier
   editor (per-area deltas, substitution table). UI: tier selector, clear/unlock indicators.
@@ -1136,10 +1375,45 @@ of Equip being the only thing an inventory click could do.
 
 ## M11 — Progression & Permadeath
 
-**Status:** Not started
+**Status:** 11.1 done, landed uncommitted alongside a session boundary and captured here
+retroactively — the same lag the M6/M7/M8 follow-up sections already had. 11.2 not started.
 
 - **11.1 XP & leveling:** Engine: combat XP, per-class stat growth curves. Editor:
-  growth-curve editor. UI: level-up notification + stat-delta display.
+  growth-curve editor. UI: level-up notification + stat-delta display. **Done:** new
+  `ExperienceValueComponent` (`App/Source/Components/`, single `xp` field) is authored directly on
+  enemy prefabs, same bespoke no-separate-library shape `DropTableComponent` already set — an
+  entity without one (breakable boxes included) simply grants no XP. `LevelComponent`
+  (`{level, xp}`, deliberately not schema-registered — never hand-authored, same "runtime-only
+  player state" precedent `TabTargetComponent` set) is emplaced on the player at spawn. New
+  `App/Source/Progression/GrowthCurve.h/.cpp` + `GrowthCurveFile.h/.cpp` load one **class-agnostic**
+  curve (per the user's explicit deviation from this bullet's literal "per-class" wording — no
+  character classes exist yet, per M10.3's own not-started status, so there's nothing to key a
+  per-class curve on) from a single hand-authored `App/Assets/Data/growth_curve.json` — a plain
+  file load, not a per-item content library, so **no dedicated growth-curve editor** was built
+  (deviates from this bullet's literal editor wording; revisit once M10.3 gives classes a reason to
+  split the curve). Each authored level holds absolute `max_hp`/`max_tp`/`StatsComponent` totals
+  (not incremental deltas), so applying a level-up is a plain overwrite. New
+  `App/Source/Systems/ExperienceSystem` (mirrors `LootDropSystem`'s shape: subscribed only on the
+  player, since `AfterDamageEvent` is dispatched at the attacker) banks XP on a kill, loops through
+  every level-up a single kill's XP crosses (carrying remainder XP forward), and fully restores
+  current HP/TP on each level gained. Follow-up: `ApplyLevelUp` now diffs each stat against its
+  pre-overwrite value and returns the gains as inline log markup (e.g. "HP +20, ATP +3", omitting
+  anything that didn't move), appended to a "Player reached level N!" combat-log line; a single
+  multi-level kill spawns exactly one "LEVEL UP!" floating text via `FloatingTextSystem` regardless
+  of how many levels it crossed. UI: the HUD's always-visible bars panel shows `Lv<N>` + the
+  player's name in place of the standalone Meseta counter (Meseta itself is unaffected, still
+  tracked/shown elsewhere). Separately, `TPComponent` — wired since M7.2 but dormant because the
+  player had no such component at all — is now emplaced on the player at spawn, lighting up
+  everything that was already built against it (Technique/Photon-Art TP costs, `RestoreTp`
+  consumables, and this milestone's own TP-scaling level-up data) plus a previously-always-hidden
+  HUD TP bar; a new Monofluid item (a `RestoreTp` mirror of Monomate) fixes a previously-inert
+  starter hotbar slot. Catch2 coverage in `App-Test/Source/ExperienceSystemTests.cpp` (XP banking,
+  multi-level-up carrying remainder XP, stat/HP/TP overwrite-and-restore, the diffed gain-markup
+  string, single floating text across a multi-level kill, no-op on a defeated entity with no
+  `ExperienceValueComponent`) and new `GrowthCurveFileTests.cpp`/`GrowthCurveTests.cpp`. Content
+  authoring (real per-enemy XP values beyond `booma.json`'s existing reference, and any further
+  tuning of `growth_curve.json` beyond its current placeholder curve) is the user's own work, per
+  `CLAUDE.md`'s division of labor.
 - **11.2 Run persistence & permadeath:** Engine: `cereal`-backed save of in-run state between
   missions; permadeath wipes on death; full reset on new character (no meta-progression, per
   GDD). Editor: none. UI: death/run-summary screen, new-character flow.

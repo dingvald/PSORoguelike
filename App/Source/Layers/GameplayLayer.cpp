@@ -17,6 +17,7 @@
 #include "Components/EquipmentComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
+#include "Components/InteractableComponent.h"
 #include "Components/InventoryComponent.h"
 #include "Components/LevelComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -25,15 +26,16 @@
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/StorageComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/TabTargetComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
-#include "Engine/Dungeon/DungeonLibrary.h"
 #include "Engine/Dungeon/DungeonLibraryFile.h"
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
+#include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
 #include "Engine/ECS/NameIdRegistry.h"
@@ -43,9 +45,15 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Render/TileVertexMath.h"
+#include "Hub/HubDefinitionFile.h"
+#include "Hub/HubInteraction.h"
 #include "Items/CharacterScreenSnapshot.h"
 #include "Items/Equip.h"
 #include "Items/Hotbar.h"
+#include "Items/Shop.h"
+#include "Items/ShopSnapshot.h"
+#include "Items/Storage.h"
+#include "Items/StorageSnapshot.h"
 #include "Layers/HudLayer.h"
 #include "Messages/CharacterScreenMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
@@ -54,13 +62,23 @@
 #include "Messages/HotbarSlotActivatedMessage.h"
 #include "Messages/HotbarSlotAssignedMessage.h"
 #include "Messages/HotbarStateMessage.h"
+#include "Messages/HubInteractionPromptMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
+#include "Messages/MissionCompletedMessage.h"
+#include "Messages/MissionSelectedMessage.h"
 #include "Messages/RestartRequestedMessage.h"
+#include "Messages/ShopBuyRequestedMessage.h"
+#include "Messages/ShopMessage.h"
+#include "Messages/ShopSellRequestedMessage.h"
+#include "Messages/StorageItemActivatedMessage.h"
+#include "Messages/StorageMessage.h"
+#include "Messages/StorageWithdrawRequestedMessage.h"
 #include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
 #include "Progression/GrowthCurveFile.h"
+#include "Shop/ShopStockFile.h"
 #include "States/GameState.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -71,6 +89,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 namespace psr {
 
@@ -80,11 +99,6 @@ namespace {
     constexpr int kTileWidth = 16;
     constexpr int kTileHeight = 24;
     constexpr float kCameraZoomStep = 0.5f;
-
-    // The dungeon this layer loads on attach. Hardcoded for now (no mission
-    // select exists yet) -- revisit once a hub/mission-select flow needs to
-    // choose this at runtime instead.
-    constexpr const char* kDungeonId = "test_dungeon";
 
     // The player's prefab -- appearance (and, later, base stats) lives in
     // App/Assets/Data/Entities/player.json like every other authored entity,
@@ -121,7 +135,7 @@ GameplayLayer::~GameplayLayer() = default;
 
 void GameplayLayer::OnAttach()
 {
-    LoadNewGame();
+    SpawnNewCharacter();
 
     Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
     Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
@@ -130,6 +144,11 @@ void GameplayLayer::OnAttach()
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
     Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
     Subscribe<TechniquesScreenSlotAssignedMessage>(&GameplayLayer::OnTechniquesScreenSlotAssigned, this);
+    Subscribe<MissionSelectedMessage>(&GameplayLayer::OnMissionSelected, this);
+    Subscribe<ShopBuyRequestedMessage>(&GameplayLayer::OnShopBuyRequested, this);
+    Subscribe<ShopSellRequestedMessage>(&GameplayLayer::OnShopSellRequested, this);
+    Subscribe<StorageItemActivatedMessage>(&GameplayLayer::OnStorageItemActivated, this);
+    Subscribe<StorageWithdrawRequestedMessage>(&GameplayLayer::OnStorageWithdrawRequested, this);
 
     PushOverlay<HudLayer>();
 
@@ -137,18 +156,8 @@ void GameplayLayer::OnAttach()
     m_state_machine.Push(m_exploring_state, context);
 }
 
-void GameplayLayer::LoadNewGame()
+void GameplayLayer::SpawnNewCharacter()
 {
-    // Discards the previous run's whole ECS world in one move -- every other
-    // member that holds a Registry&/Registry* into m_registry
-    // (m_turn_coordinator, m_renderable_lookup, ...) stays valid across this,
-    // since m_registry's own address never changes, only the entt::registry
-    // it wraps. A no-op the first time this runs (OnAttach's default-
-    // constructed m_registry is already empty), so LoadNewGame() doesn't need
-    // to know whether it's an initial load or a restart.
-    m_registry = Registry();
-    m_pending_slot_action.reset();
-
     // Content-load/generation failures below are build-input bugs (a missing
     // or malformed file, a dungeon definition with no valid layout), not a
     // runtime condition a player can hit -- they're allowed to propagate as
@@ -179,85 +188,236 @@ void GameplayLayer::LoadNewGame()
     loader.Load(ApplicationFilepaths::EntitiesPath);
     m_registry.RegisterPrefabs(loader);
 
+    // Content libraries loaded once for the whole process lifetime -- none
+    // of this changes at runtime, so there's no reason to reload any of it
+    // on a later scene swap (unlike the OLD single-dungeon LoadNewGame,
+    // which reloaded everything on every restart because it also reset the
+    // whole Registry each time).
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
+    m_dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
+    m_hub = LoadHubDefinition(ApplicationFilepaths::HubPath);
+    m_shop_stock = LoadShopStock(ApplicationFilepaths::ShopStockPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
     m_growth_curve = LoadGrowthCurve(ApplicationFilepaths::GrowthCurvePath);
 
-    // Created before dungeon generation below so CombatLogBridge (constructed
-    // right after) can Subscribe() every enemy on_enemy_spawned stamps,
-    // including the ones InstantiateDungeon spawns immediately --
-    // Position/PlayerControlledComponent/HealthComponent/ActorComponent are
-    // still emplaced later, once instantiation.entrance_tile is known;
-    // nothing this entity carries yet (innate_weapon/blocks_movement/
-    // renderable, from player.json) needs the grid or dungeon to exist first.
     m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
+    m_registry.Emplace<PlayerControlledComponent>(m_player);
+    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
+    // Same "hardcoded until M10.3 character creation exists" deferral as
+    // HealthComponent above -- growth_curve.json's level-2 max_tp (24) is the
+    // first authored value, so this level-1 baseline is chosen below it the
+    // same way HealthComponent's 40 sits below level-2's max_hp of 48.
+    m_registry.Emplace<TPComponent>(m_player, TPComponent{20, 20});
+    m_registry.Emplace<TabTargetComponent>(m_player);
+    m_registry.Emplace<LevelComponent>(m_player);
+    // Same "hardcoded until M10.3 character creation exists" deferral as
+    // HealthComponent above -- there's no Section ID picker yet, and no drop
+    // has happened yet to credit any Meseta.
+    m_registry.Emplace<SectionIdComponent>(m_player);
+    m_registry.Emplace<CurrencyComponent>(m_player);
+    m_registry.Emplace<InventoryComponent>(m_player);
+    m_registry.Emplace<StorageComponent>(m_player);
 
-    // Bridges per-entity combat events onto the Layer MessageBus for HudLayer
-    // to consume -- see CombatLogBridge.h. Subscribed to the player above and
-    // to every enemy via on_enemy_spawned below, so HudLayer's HP bar updates
-    // whether the player is the attacker or the target.
-    m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects, m_player);
-    m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
-    m_damage_text_system.Subscribe(Entity(m_registry, m_player));
+    // Hands off to TransitionToWorld for everything scene-shaped (Grid,
+    // TurnCoordinator, per-world systems) -- see its own doc comment. The
+    // player already exists (created just above) so it can be placed at the
+    // hub's entrance tile and subscribed to the per-world systems
+    // TransitionToWorld builds lazily on this first call.
+    TransitionToWorld(SceneKind::Hub, std::nullopt);
 
-    const DungeonLibrary dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
-    const Dungeon* dungeon = dungeons.Find(entt::hashed_string::value(kDungeonId));
-    if (!dungeon)
-        throw std::runtime_error(std::string("GameplayLayer: no '") + kDungeonId + "' dungeon definition found");
+    // Default hotbar loadout: first 4 weapon-granted Photon Arts into slots
+    // 4-7 (mirrors the old placeholder cast trigger's fixed key ranges, now
+    // captured as data instead of re-derived by key range on every press).
+    // Technique slots (0-3) deliberately start Empty -- nothing is known at
+    // spawn (see KnownTechniquesComponent.h); the player assigns them
+    // manually via the Techniques/Photon Arts screen ('T') once something is
+    // learned, same manual-assign flow Item slots already use. Slots 8-9 are
+    // Item slots bound to the two starter consumable prefab ids (see
+    // kMonomatePrefabId/kMonofluidPrefabId above) -- same "bind by prefab
+    // NameId, resolve to an inventory index at activation time" style
+    // PhotonArt slots already use, see TryActivateSlot's Item case.
+    //
+    // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
+    // in TransitionToWorld) -- there's no interactive equip/inventory system
+    // yet beyond the Character screen, so the player's starting weapon is
+    // authored the same way an enemy's innate weapon is: a weapon_prefab_id
+    // on InnateWeaponComponent, resolved into a live weapon entity here.
+    if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(m_player))
+    {
+        const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
+        m_registry.Emplace<EquipmentComponent>(m_player, EquipmentComponent{weapon});
+    }
 
-    const DungeonLayout layout = GenerateDungeon(*dungeon, m_pieces, m_rng());
+    HotbarComponent hotbar;
+    if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
+        equipment && equipment->weapon != entt::null)
+    {
+        if (const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon))
+        {
+            std::size_t slot = 4;
+            for (std::uint32_t photon_art_id : weapon->photon_art_ids)
+            {
+                if (slot >= 8)
+                    break;
+                hotbar.slots[slot++] = HotbarSlot{HotbarSlotType::PhotonArt, photon_art_id};
+            }
+        }
+    }
+    hotbar.slots[8] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonomatePrefabId)};
+    hotbar.slots[9] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonofluidPrefabId)};
+    m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
-    const Rect bounds = ComputeDungeonBounds(layout, m_pieces);
-    if (bounds.Empty())
-        throw std::runtime_error("GameplayLayer: generated dungeon has no cells");
+    m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
+}
+
+void GameplayLayer::DestroyWorldEntities()
+{
+    std::unordered_set<entt::entity> keep{m_player};
+
+    if (const InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player))
+        for (entt::entity item : inventory->items)
+            keep.insert(item);
+
+    if (const StorageComponent* storage = m_registry.TryGetComponent<StorageComponent>(m_player))
+        for (entt::entity item : storage->items)
+            keep.insert(item);
+
+    if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player))
+        for (entt::entity slot : {equipment->weapon, equipment->head, equipment->torso, equipment->hands,
+                                 equipment->legs})
+            if (slot != entt::null)
+                keep.insert(slot);
+
+    std::vector<entt::entity> to_destroy;
+    m_registry.Each<EventHandlerComponent>(
+        [&keep, &to_destroy](entt::entity entity, EventHandlerComponent&)
+        {
+            if (!keep.contains(entity))
+                to_destroy.push_back(entity);
+        });
+
+    for (entt::entity entity : to_destroy)
+        m_registry.DestroyEntity(entity);
+}
+
+void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::string> dungeon_id_string)
+{
+    DestroyWorldEntities();
+    m_mission_exit_handled = false;
+    m_room_categories.clear();
+
+    DungeonLayout layout;
+    Rect bounds;
+    if (target == SceneKind::Hub)
+    {
+        const std::uint32_t hub_piece_id = entt::hashed_string::value(m_hub.piece_id_string.c_str());
+        layout = DungeonLayout{{PlacedPiece{hub_piece_id, Vec2{0, 0}, PieceTransform{}}}, {}, {}, {}};
+        bounds = ComputeDungeonBounds(layout, m_pieces);
+        if (bounds.Empty())
+            throw std::runtime_error("GameplayLayer: hub piece '" + m_hub.piece_id_string + "' has no cells");
+        m_current_dungeon_id.clear();
+    }
+    else
+    {
+        const Dungeon* dungeon = m_dungeons.Find(entt::hashed_string::value(dungeon_id_string.value().c_str()));
+        if (!dungeon)
+            throw std::runtime_error("GameplayLayer: no '" + dungeon_id_string.value() + "' dungeon definition found");
+
+        layout = GenerateDungeon(*dungeon, m_pieces, m_rng());
+        bounds = ComputeDungeonBounds(layout, m_pieces);
+        if (bounds.Empty())
+            throw std::runtime_error("GameplayLayer: generated dungeon has no cells");
+        m_current_dungeon_id = dungeon_id_string.value();
+
+        m_room_categories.reserve(layout.pieces.size());
+        for (const PlacedPiece& placed : layout.pieces)
+        {
+            const DungeonPiece* piece = m_pieces.Find(placed.piece_id);
+            m_room_categories.push_back(piece ? piece->category : PieceCategory::Room);
+        }
+    }
+
     m_grid.emplace(bounds.size.x, bounds.size.y);
 
     // Must happen before any HealthComponent-carrying entity that could die
-    // is created (InstantiateDungeon below, then the player) -- DeathSystem
-    // resolves Registry::GetGrid() when it removes a dying entity from tile
-    // occupancy.
+    // is created (InstantiateDungeon below) -- DeathSystem resolves
+    // Registry::GetGrid() when it removes a dying entity from tile
+    // occupancy. Safe (and necessary) to call again on every transition:
+    // *m_grid's address is stable (see the class doc comment), so this just
+    // keeps the stashed reference pointed at whichever Grid is current.
     m_registry.SetGrid(*m_grid);
 
     // Writes an eased alpha into RenderableComponent::color_1/color_2 --
     // VisualEffectSystem (Core) can't name that App-only type itself, so this
     // callback is how it reaches through without knowing what it's writing to
-    // (see VisualEffectSystem.h's own doc comment).
-    m_visual_effects.emplace(m_registry, *m_grid,
-                             [this](entt::entity entity, std::uint8_t alpha)
-                             {
-                                 if (RenderableComponent* renderable =
-                                         m_registry.TryGetComponent<RenderableComponent>(entity))
+    // (see VisualEffectSystem.h's own doc comment). Lazy-once: see the class
+    // doc comment for why this and the other player-Subscribe()ing systems
+    // below are never rebuilt after their first construction.
+    if (!m_visual_effects)
+    {
+        m_visual_effects.emplace(m_registry, *m_grid,
+                                 [this](entt::entity entity, std::uint8_t alpha)
                                  {
-                                     renderable->color_1.a = alpha;
-                                     renderable->color_2.a = alpha;
-                                 }
-                             });
-    m_miss_flash_effect_system.emplace(*m_visual_effects, m_player);
-    m_miss_flash_effect_system->Subscribe(Entity(m_registry, m_player));
-    m_on_hit_effect_system.emplace(*m_visual_effects);
-    m_on_hit_effect_system->Subscribe(Entity(m_registry, m_player));
+                                     if (RenderableComponent* renderable =
+                                             m_registry.TryGetComponent<RenderableComponent>(entity))
+                                     {
+                                         renderable->color_1.a = alpha;
+                                         renderable->color_2.a = alpha;
+                                     }
+                                 });
+        m_miss_flash_effect_system.emplace(*m_visual_effects, m_player);
+        m_miss_flash_effect_system->Subscribe(Entity(m_registry, m_player));
+        m_on_hit_effect_system.emplace(*m_visual_effects);
+        m_on_hit_effect_system->Subscribe(Entity(m_registry, m_player));
+    }
 
     // Must be constructed before any entity's ActorComponent is emplaced --
     // TurnQueue membership is driven by TurnCoordinator's own
     // OnConstruct<ActorComponent> listener, wired in its constructor. That
     // includes enemies' ActorComponent below (via on_enemy_spawned, run from
-    // InstantiateDungeon), not just the player's -- constructing this any
-    // later left the dungeon's first enemy wave emplaced before the listener
-    // existed, so they never joined the turn queue and never acted.
-    m_turn_coordinator.emplace(m_registry);
-    m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng, GetMessageBus());
+    // InstantiateDungeon), not just the player's. Lazy-once (see the class
+    // doc comment): a scene swap never touches the player's ActorComponent/
+    // TurnQueue membership, so there's no reason to reconstruct this
+    // alongside the world it schedules turns for.
+    if (!m_turn_coordinator)
+    {
+        m_turn_coordinator.emplace(m_registry);
+        m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng, GetMessageBus());
+    }
+
+    if (!m_combat_log_bridge)
+    {
+        m_combat_log_bridge.emplace(m_registry, GetMessageBus(), m_techniques, m_photon_arts, m_status_effects,
+                                    m_player);
+        m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
+        m_damage_text_system.Subscribe(Entity(m_registry, m_player));
+    }
+    if (!m_loot_drop_system)
+    {
+        m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
+        m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
+    }
+    if (!m_experience_system)
+    {
+        m_experience_system.emplace(GetMessageBus(), m_growth_curve, m_floating_text);
+        m_experience_system->Subscribe(Entity(m_registry, m_player));
+    }
+    if (!m_status_effect_markers)
+    {
+        m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
+        m_status_effect_markers->Subscribe(Entity(m_registry, m_player));
+    }
 
     // Piece-authored PieceSpawn entries are creatures, not static dungeon
     // furniture -- DungeonInstantiator/SpawnWaveSystem only stamp them with
     // Position/grid membership/SpawnWaveComponent (all Core-level), so this
     // hook does the remaining App-level setup Core can't: joining the turn
     // queue, equipping an authored innate weapon, and wiring the enemy into
-    // CombatLogBridge the same way the player is above (so an enemy hitting
-    // the player still gets a PlayerStatusMessage published -- AfterDamageEvent
-    // is dispatched at the *source*, see DamageEvent.h, so the player being
-    // hit only reaches CombatLogBridge via the attacking enemy's own
-    // subscription).
+    // the player-subscribed systems above the same way the player already
+    // is. Always subscribes a *fresh* entity (every enemy spawn is a brand
+    // new entt::entity, never the persisting player), so unlike the
+    // lazy-once blocks above, this runs every time regardless.
     const auto on_enemy_spawned = [this](entt::entity entity)
     {
         m_registry.GetOrEmplace<ActorComponent>(entity);
@@ -297,96 +457,60 @@ void GameplayLayer::LoadNewGame()
             return m_enemy_ai_system->Decide(actor);
         });
 
-    m_registry.Emplace<Position>(m_player, Position{instantiation.entrance_tile});
-    m_registry.Emplace<PlayerControlledComponent>(m_player);
-    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
-    // Same "hardcoded until M10.3 character creation exists" deferral as
-    // HealthComponent above -- growth_curve.json's level-2 max_tp (24) is the
-    // first authored value, so this level-1 baseline is chosen below it the
-    // same way HealthComponent's 40 sits below level-2's max_hp of 48.
-    m_registry.Emplace<TPComponent>(m_player, TPComponent{20, 20});
-    m_registry.Emplace<TabTargetComponent>(m_player);
-    m_registry.Emplace<LevelComponent>(m_player);
-    // Same "hardcoded until M10.3 character creation exists" deferral as
-    // HealthComponent above -- there's no Section ID picker yet, and no drop
-    // has happened yet to credit any Meseta.
-    m_registry.Emplace<SectionIdComponent>(m_player);
-    m_registry.Emplace<CurrencyComponent>(m_player);
-    m_registry.Emplace<InventoryComponent>(m_player);
+    m_registry.GetComponent<Position>(m_player).tile = instantiation.entrance_tile;
     m_grid->AddEntity(instantiation.entrance_tile, m_player);
     m_camera.SetTarget(instantiation.entrance_tile);
 
-    m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
+    // Leaving a mission (win, die, or bail) or arriving at the hub always
+    // returns the player topped up -- confirmed with the user: no lingering-
+    // injury mechanic exists at this milestone.
+    HealthComponent& health = m_registry.GetComponent<HealthComponent>(m_player);
+    health.current_hp = health.max_hp;
+    TPComponent& tp = m_registry.GetComponent<TPComponent>(m_player);
+    tp.current_tp = tp.max_tp;
 
-    m_loot_drop_system.emplace(m_registry, *m_grid, GetMessageBus(), m_rng);
-    m_loot_drop_system->Subscribe(Entity(m_registry, m_player));
+    m_scene = target;
+    RepublishHudStateAfterTransition();
+}
 
-    m_experience_system.emplace(GetMessageBus(), m_growth_curve, m_floating_text);
-    m_experience_system->Subscribe(Entity(m_registry, m_player));
-
-    // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
-    // above) -- there's no interactive equip/inventory system yet (M8.1's UI
-    // bullet is deliberately deferred), so the player's starting weapon is
-    // authored the same way an enemy's innate weapon is: a weapon_prefab_id
-    // on InnateWeaponComponent, resolved into a live weapon entity here.
-    if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(m_player))
+void GameplayLayer::RepublishHudStateAfterTransition()
+{
+    PublishHotbarState();
+    if (m_combat_log_bridge)
     {
-        const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
-        m_registry.Emplace<EquipmentComponent>(m_player, EquipmentComponent{weapon});
+        m_combat_log_bridge->PublishPlayerStatus();
+        m_combat_log_bridge->PublishStatusEffects();
     }
-
-    // Default hotbar loadout: first 4 weapon-granted Photon Arts into slots
-    // 4-7 (mirrors the old placeholder cast trigger's fixed key ranges, now
-    // captured as data instead of re-derived by key range on every press).
-    // Technique slots (0-3) deliberately start Empty -- nothing is known at
-    // spawn (see KnownTechniquesComponent.h); the player assigns them
-    // manually via the Techniques/Photon Arts screen ('T') once something is
-    // learned, same manual-assign flow Item slots already use. Slots 8-9 are
-    // Item slots bound to the two starter consumable prefab ids (see
-    // kMonomatePrefabId/kMonofluidPrefabId above) -- same "bind by prefab
-    // NameId, resolve to an inventory index at activation time" style
-    // PhotonArt slots already use, see TryActivateSlot's Item case.
-    HotbarComponent hotbar;
-    if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
-        equipment && equipment->weapon != entt::null)
+    if (m_registry.IsValid(m_player))
     {
-        if (const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon))
-        {
-            std::size_t slot = 4;
-            for (std::uint32_t photon_art_id : weapon->photon_art_ids)
-            {
-                if (slot >= 8)
-                    break;
-                hotbar.slots[slot++] = HotbarSlot{HotbarSlotType::PhotonArt, photon_art_id};
-            }
-        }
+        if (const CurrencyComponent* currency = m_registry.TryGetComponent<CurrencyComponent>(m_player))
+            Publish(MesetaChangedMessage{currency->meseta, 0});
     }
-    hotbar.slots[8] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonomatePrefabId)};
-    hotbar.slots[9] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonofluidPrefabId)};
-    m_registry.Emplace<HotbarComponent>(m_player, hotbar);
+    PublishTargetState();
+}
 
-    m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
-    m_status_effect_markers->Subscribe(Entity(m_registry, m_player));
+void GameplayLayer::OnMissionExitReached()
+{
+    m_mission_exit_handled = true;
+    m_run_progress.completed_dungeon_ids.insert(entt::hashed_string::value(m_current_dungeon_id.c_str()));
+    Publish(MissionCompletedMessage{m_current_dungeon_id});
+    TransitionToWorld(SceneKind::Hub, std::nullopt);
 }
 
 void GameplayLayer::OnRestartRequested(const RestartRequestedMessage& /*message*/)
 {
-    LoadNewGame();
+    // Dying returns the player to the hub with gear/Meseta/level intact
+    // (full-heal, no reset) instead of the old full-registry wipe -- see the
+    // class doc comment. Real permadeath is M11.2's job.
+    TransitionToWorld(SceneKind::Hub, std::nullopt);
 
     // GameOverState never replaced ExploringState -- it was pushed on top
     // (see ExploringState::Update's PlayerDefeated case), so popping it here
-    // uncovers the same ExploringState instance, now driving the fresh
-    // TurnCoordinator/registry LoadNewGame() just built.
+    // uncovers the same ExploringState instance, now driving the hub
+    // TransitionToWorld just built.
     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
     m_state_machine.Pop(context);
 
-    // HudLayer cached the previous run's HP/TP/hotbar; every entity/component
-    // that produced them was just discarded by LoadNewGame(), so republish
-    // fresh values the same way OnHudReady() does after HudLayer's own
-    // (re)attach.
-    PublishHotbarState();
-    m_combat_log_bridge->PublishPlayerStatus();
-    m_combat_log_bridge->PublishStatusEffects();
     Publish(GameRestartedMessage{});
 }
 
@@ -405,6 +529,13 @@ void GameplayLayer::OnUpdate(float delta_time)
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         m_camera.SetTarget(player_tile);
         m_room_visibility->Update(m_room_map->GetRoom(player_tile));
+
+        if (m_scene == SceneKind::Dungeon && !m_mission_exit_handled)
+        {
+            const std::optional<std::uint32_t> room = m_room_map->GetRoom(player_tile);
+            if (room && *room < m_room_categories.size() && m_room_categories[*room] == PieceCategory::Exit)
+                OnMissionExitReached();
+        }
     }
     m_camera.Update(delta_time);
 
@@ -417,6 +548,8 @@ void GameplayLayer::OnUpdate(float delta_time)
     {
         m_tab_target_system->Update(Entity(m_registry, m_player));
         PublishTargetState();
+        if (m_scene == SceneKind::Hub)
+            PublishHubInteractionPrompt();
     }
 }
 
@@ -594,6 +727,64 @@ void GameplayLayer::OnTechniquesScreenSlotAssigned(const TechniquesScreenSlotAss
         PublishHotbarState();
 }
 
+void GameplayLayer::OnMissionSelected(const MissionSelectedMessage& message)
+{
+    if (m_state_machine.Top() != &m_mission_select_state)
+        return;
+
+    const Dungeon* dungeon = m_dungeons.Find(entt::hashed_string::value(message.dungeon_id_string.c_str()));
+    if (!dungeon || !IsDungeonUnlocked(m_run_progress, *dungeon))
+        return;
+
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+    m_state_machine.Pop(context);
+    TransitionToWorld(SceneKind::Dungeon, message.dungeon_id_string);
+}
+
+void GameplayLayer::OnShopBuyRequested(const ShopBuyRequestedMessage& message)
+{
+    if (m_state_machine.Top() != &m_shop_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (BuyItem(Entity(m_registry, m_player), m_shop_stock, message.stock_index))
+    {
+        Publish(BuildShopMessage(m_registry, m_player, m_shop_stock, m_affixes));
+        if (const CurrencyComponent* currency = m_registry.TryGetComponent<CurrencyComponent>(m_player))
+            Publish(MesetaChangedMessage{currency->meseta, 0});
+    }
+}
+
+void GameplayLayer::OnShopSellRequested(const ShopSellRequestedMessage& message)
+{
+    if (m_state_machine.Top() != &m_shop_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (SellItem(Entity(m_registry, m_player), message.inventory_index))
+    {
+        Publish(BuildShopMessage(m_registry, m_player, m_shop_stock, m_affixes));
+        if (const CurrencyComponent* currency = m_registry.TryGetComponent<CurrencyComponent>(m_player))
+            Publish(MesetaChangedMessage{currency->meseta, 0});
+    }
+}
+
+void GameplayLayer::OnStorageItemActivated(const StorageItemActivatedMessage& message)
+{
+    if (m_state_machine.Top() != &m_storage_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (StoreItem(Entity(m_registry, m_player), message.inventory_index))
+        Publish(BuildStorageMessage(m_registry, m_player, m_affixes));
+}
+
+void GameplayLayer::OnStorageWithdrawRequested(const StorageWithdrawRequestedMessage& message)
+{
+    if (m_state_machine.Top() != &m_storage_state || !m_registry.IsValid(m_player))
+        return;
+
+    if (WithdrawItem(Entity(m_registry, m_player), message.storage_index))
+        Publish(BuildStorageMessage(m_registry, m_player, m_affixes));
+}
+
 void GameplayLayer::PublishCharacterScreenState()
 {
     if (!m_registry.IsValid(m_player))
@@ -644,6 +835,17 @@ void GameplayLayer::PublishTargetState()
                 state.max_hp = health->max_hp;
             }
         }
+    }
+    Publish(state);
+}
+
+void GameplayLayer::PublishHubInteractionPrompt()
+{
+    HubInteractionPromptMessage state;
+    if (m_registry.IsValid(m_player) && m_grid)
+    {
+        const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+        state.interaction_type = FindInteractableAt(m_registry, *m_grid, player_tile);
     }
     Publish(state);
 }
@@ -749,11 +951,12 @@ void GameplayLayer::OnEvent(Event& event)
     if (event.handled)
         return;
 
-    // Hotbar key-press trigger and the Character-screen toggle only
-    // intercept keys while the player is free to act (Exploring on top, not
-    // already mid-target-select or already viewing the Character screen --
-    // closing the latter is CharacterScreenState's own HandleEvent's job,
-    // reached via m_state_machine.HandleEvent below once it's on top).
+    // Hotbar key-press trigger, the Character/Techniques-screen toggles, and
+    // the hub interaction/mission-abandon keys only intercept keys while the
+    // player is free to act (Exploring on top, not already mid-target-select
+    // or already viewing a modal screen -- closing one is that screen's own
+    // HandleEvent's job, reached via m_state_machine.HandleEvent below once
+    // it's on top).
     if (m_state_machine.Top() == &m_exploring_state)
     {
         EventDispatcher dispatcher(event);
@@ -791,6 +994,42 @@ void GameplayLayer::OnEvent(Event& event)
                     m_registry.GetComponent<TabTargetComponent>(m_player).target != entt::null)
                 {
                     m_tab_target_system->ClearTarget(Entity(m_registry, m_player));
+                    return true;
+                }
+
+                // Walking onto a hub entity carrying InteractableComponent
+                // and pressing Space opens the matching screen -- Space
+                // otherwise falls through to ActionMap's existing Wait
+                // binding (see KeyBindings.cpp), untouched here.
+                if (m_scene == SceneKind::Hub && key_event.GetKeyCode() == SDLK_SPACE && m_registry.IsValid(m_player))
+                {
+                    const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+                    if (const std::optional<InteractionType> interaction =
+                            FindInteractableAt(m_registry, *m_grid, player_tile))
+                    {
+                        GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+                        switch (*interaction)
+                        {
+                        case InteractionType::Shop:
+                            m_state_machine.Push(m_shop_state, context);
+                            return true;
+                        case InteractionType::Storage:
+                            m_state_machine.Push(m_storage_state, context);
+                            return true;
+                        case InteractionType::MissionSelect:
+                            m_state_machine.Push(m_mission_select_state, context);
+                            return true;
+                        }
+                    }
+                }
+
+                // Abandons the current mission without completion credit,
+                // returning to the hub -- no in-mission entity to walk onto
+                // for this one, so it stays a plain keybind, active only
+                // mid-dungeon.
+                if (m_scene == SceneKind::Dungeon && key_event.GetKeyCode() == SDLK_H)
+                {
+                    TransitionToWorld(SceneKind::Hub, std::nullopt);
                     return true;
                 }
 

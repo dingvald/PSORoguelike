@@ -3,6 +3,9 @@
 #include "Components/HotbarComponent.h"
 #include "Engine/Layer.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Messages/MissionSelectMessage.h"
+#include "Messages/ShopMessage.h"
+#include "Messages/StorageMessage.h"
 #include "Messages/TechniquesScreenMessage.h"
 
 #include <cstddef>
@@ -33,6 +36,11 @@ struct CharacterScreenClosedMessage;
 struct TechniquesScreenClosedMessage;
 struct FloatingTextStateMessage;
 struct TargetStateMessage;
+struct HubInteractionPromptMessage;
+struct MissionCompletedMessage;
+struct MissionSelectClosedMessage;
+struct ShopClosedMessage;
+struct StorageClosedMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -95,6 +103,20 @@ private:
         PhotonArts
     };
 
+    // Which of the Shop screen's two panels currently has keyboard focus.
+    enum class ShopScreenPanel
+    {
+        Stock,
+        Sellable
+    };
+
+    // Which of the Storage screen's two panels currently has keyboard focus.
+    enum class StorageScreenPanel
+    {
+        Inventory,
+        Storage
+    };
+
     // Which screen the pending "awaiting a 0-9 hotbar slot" sub-state (see
     // BeginAwaitingHotbarSlot/BeginAwaitingAbilityHotbarSlot) started from --
     // determines which message OnEvent publishes once a slot key is pressed,
@@ -135,6 +157,7 @@ private:
     void OnPlayerDefeated(const PlayerDefeatedMessage& message);
     void OnGameRestarted(const GameRestartedMessage& message);
     void OnLootDrop(const LootDropMessage& message);
+    void OnMissionCompleted(const MissionCompletedMessage& message);
 
     // Shows the Character screen panel and rebuilds its Stats/Equipment/
     // Inventory contents (SetInnerRML once per container, then
@@ -154,6 +177,47 @@ private:
     // straight into the awaiting-slot sub-state via ActivateFocusedTechRow).
     void OnTechniquesScreenState(const TechniquesScreenMessage& message);
     void OnTechniquesScreenClosed(const TechniquesScreenClosedMessage& message);
+
+    // Single-panel variant of OnCharacterScreenState/OnTechniquesScreenState
+    // for Mission Select -- a flat row list (no panel split), a locked row
+    // renders dimmed and can't be focused/selected. Space on a focused
+    // unlocked row publishes MissionSelectedMessage directly (no context
+    // menu, no awaiting-hotbar-slot sub-state).
+    void OnMissionSelectState(const MissionSelectMessage& message);
+    void OnMissionSelectClosed(const MissionSelectClosedMessage& message);
+    int MissionSelectRowCount() const;
+    void MoveMissionSelectRowFocus(int direction);
+    void ActivateFocusedMissionSelectRow();
+    void RenderMissionSelectFocusHighlight();
+
+    // Same two-panel, no-context-menu shape as OnTechniquesScreenState, for
+    // the Shop screen (Stock / Your Items). Space on a focused Stock row
+    // publishes ShopBuyRequestedMessage; on a focused Sellable row,
+    // ShopSellRequestedMessage.
+    void OnShopScreenState(const ShopMessage& message);
+    void OnShopScreenClosed(const ShopClosedMessage& message);
+    int ShopScreenRowCount(ShopScreenPanel panel) const;
+    void MoveShopPanelFocus(int direction);
+    void MoveShopRowFocus(int direction);
+    void ActivateFocusedShopRow();
+    void RenderShopFocusHighlights();
+    void RenderShopRowFocus(const char* container_id, const char* row_class, ShopScreenPanel panel);
+
+    // Same shape again, for the Storage screen (Inventory / Storage). Space
+    // on a focused Inventory row publishes StorageItemActivatedMessage; on a
+    // focused Storage row, StorageWithdrawRequestedMessage.
+    void OnStorageScreenState(const StorageMessage& message);
+    void OnStorageScreenClosed(const StorageClosedMessage& message);
+    int StorageScreenRowCount(StorageScreenPanel panel) const;
+    void MoveStoragePanelFocus(int direction);
+    void MoveStorageRowFocus(int direction);
+    void ActivateFocusedStorageRow();
+    void RenderStorageFocusHighlights();
+    void RenderStorageRowFocus(const char* container_id, const char* row_class, StorageScreenPanel panel);
+
+    // Shows/hides the hub interaction hint ("Press SPACE to ...") keyed off
+    // the current InteractionType, or hides it entirely on nullopt.
+    void OnHubInteractionPrompt(const HubInteractionPromptMessage& message);
 
     // Rebuilds #floating-text-layer every call (published every frame by
     // GameplayLayer) -- one positioned, non-interactive span per active
@@ -253,6 +317,27 @@ private:
 
     TechniquesScreenPanel m_tech_focused_panel = TechniquesScreenPanel::Techniques;
     int m_tech_focused_row = 0;
+
+    // Rebuilt on every OnMissionSelectState call -- same reasoning as
+    // m_character_screen_listeners.
+    std::vector<std::unique_ptr<RmlClickListener>> m_mission_select_listeners;
+
+    // Same "cache drives OnEvent interception, empty means closed" contract
+    // as m_character_screen_cache.
+    std::optional<MissionSelectMessage> m_mission_select_cache;
+    int m_mission_select_focused_row = 0;
+
+    // Same three members, for the Shop screen.
+    std::vector<std::unique_ptr<RmlClickListener>> m_shop_listeners;
+    std::optional<ShopMessage> m_shop_cache;
+    ShopScreenPanel m_shop_focused_panel = ShopScreenPanel::Stock;
+    int m_shop_focused_row = 0;
+
+    // Same again, for the Storage screen.
+    std::vector<std::unique_ptr<RmlClickListener>> m_storage_listeners;
+    std::optional<StorageMessage> m_storage_cache;
+    StorageScreenPanel m_storage_focused_panel = StorageScreenPanel::Inventory;
+    int m_storage_focused_row = 0;
 
     // Set by BeginAwaitingHotbarSlot/BeginAwaitingAbilityHotbarSlot ("Assign
     // to Hotbar" chosen, waiting on a 0-9 keypress); mutually exclusive with

@@ -47,6 +47,9 @@ project "Editor"
       -- AffixEditorLayer/PrefabEditorLayer read/write Affix content directly.
       "../App/Source/Items/**.h",
       "../App/Source/Items/**.cpp",
+      -- ShopStockEditorLayer reads/writes the shop's ShopStock content directly.
+      "../App/Source/Shop/**.h",
+      "../App/Source/Shop/**.cpp",
       -- RegistryRenderableLookup resolves a live entity's RenderableComponent
       -- into the RenderableTile content editors draw for palette icons/canvas
       -- previews -- reused as-is rather than duplicating it Editor-side.

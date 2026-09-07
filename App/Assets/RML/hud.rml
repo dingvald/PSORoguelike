@@ -43,6 +43,8 @@
             </div>
         </div>
 
+        <div id="hub-interaction-prompt"></div>
+
         <div id="event-log"></div>
 
         <div id="floating-text-layer"></div>
@@ -70,6 +72,31 @@
                 <div id="techniques-screen-photon-arts" class="character-screen-panel"></div>
             </div>
             <div id="techniques-screen-hint">Numpad to navigate, Space to assign to hotbar, T / Esc to close</div>
+        </div>
+
+        <div id="mission-select-screen">
+            <div id="mission-select-title">Mission Select</div>
+            <div id="mission-select-list"></div>
+            <div id="mission-select-hint">Numpad to navigate, Space to select, Esc to close</div>
+        </div>
+
+        <div id="shop-screen">
+            <div id="shop-title">Shop</div>
+            <div id="shop-meseta"></div>
+            <div id="shop-columns">
+                <div id="shop-stock-list" class="character-screen-panel"></div>
+                <div id="shop-sellable-list" class="character-screen-panel"></div>
+            </div>
+            <div id="shop-hint">Numpad to navigate, Space to buy/sell, Esc to close</div>
+        </div>
+
+        <div id="storage-screen">
+            <div id="storage-title">Storage</div>
+            <div id="storage-columns">
+                <div id="storage-inventory-list" class="character-screen-panel"></div>
+                <div id="storage-storage-list" class="character-screen-panel"></div>
+            </div>
+            <div id="storage-hint">Numpad to navigate, Space to store/withdraw, Esc to close</div>
         </div>
     </body>
 </rml>

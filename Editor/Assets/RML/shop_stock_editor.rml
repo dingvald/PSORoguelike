@@ -1,0 +1,21 @@
+<rml>
+    <head>
+        <title>Shop Stock Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <h1>Shop Stock</h1>
+                <span id="add-entry" class="btn action">Add Entry</span>
+                <span id="save-stock" class="btn action">Save</span>
+                <span id="stock-dirty" class="text-accent"></span>
+                <span id="stock-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="shop-stock-entry-list" class="scroll-panel"></div>
+        </div>
+    </body>
+</rml>
