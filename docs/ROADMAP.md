@@ -153,6 +153,8 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | No minimap, no turn-order indicator, no help screen | High | M16 |
 | Uncapped frame rate (no vsync or frame limiter) | High | M18 |
 | One AI behavior; no boss encounter framework | High | M17 |
+| Entities are always 1x1; no multi-tile entities or bosses | High | M5.4 / M17.3 |
+| An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters | Medium | M4.6 |
 | Area/biome schema (M3.2) never built, so no per-area theming | High | M3 |
 | No character creation, no classes, no difficulty tiers | High | M10 |
 | Mag companion not started | Medium | M9 |
@@ -421,7 +423,7 @@ stranger could install, launch, understand, play, configure, quit, and come back
 
 ## M4 — Dungeon Piece Library & Generation
 
-**Status:** 4.1/4.2/4.3/4.4 done, 4.5 not started
+**Status:** 4.1/4.2/4.3/4.4 done, 4.5/4.6 not started
 
 - **4.1 Piece data format & socket schema:** Engine: `DungeonPiece` schema — a sparse set of
   cells (arbitrary/non-rectangular footprint; membership, not a fixed W×H array, defines the
@@ -536,10 +538,27 @@ stranger could install, launch, understand, play, configure, quit, and come back
   `Missions::IsDungeonUnlocked` exists, is unit-tested, and returns true unconditionally, with a
   doc comment naming this bullet as what fills in its body. Until it lands, Mission Select offers
   every authored dungeon from the first mission and the GDD's difficulty ramp does not exist.
+- **4.6 Multi-level dungeons & teleporters.** Not started. Today a `Dungeon` asset generates one
+  stitched layout, Entrance to Exit, and reaching the Exit ends the mission — an "area" and "the
+  one dungeon authored for it" are the same thing. The GDD's PSO-inspired structure wants an area
+  to be a numbered sequence of levels instead (Forest 1, Forest 2; Caves 1-3; and so on), where
+  reaching a level's Exit steps into the next level's freshly-generated layout rather than closing
+  the mission, and only the final level's Exit (or its boss, once M17.3 lands) completes it.
+  Engine: an ordered list of `Dungeon` ids per area (naturally a field alongside M4.5's unlock
+  order, on whatever asset ends up owning area sequencing — M3.2's area schema or a new
+  `AreaProgression` wrapper), plus a `TeleporterComponent`-carrying piece/prefab, authored
+  alongside Entrance/Exit, that on interaction tears down the current level's world state and
+  instantiates the next (or previous, for a backtracking teleporter) level's generated layout —
+  reusing `DungeonInstantiator`'s existing world-swap plumbing rather than the Exit piece's
+  current "end mission" behavior. Editor: an ordered per-area level list (mirrors M4.5's ordering
+  field) on the Dungeon/area editor, and a Teleporter piece category authorable like
+  Entrance/Exit on the Piece editor. UI: a level indicator ("Forest 1/2") on the HUD or the
+  transition card M13.4 already plans for area entry. Depends on M3.2 the same way M4.5 does —
+  there is no "area" to sequence levels within until that schema exists.
 
 ## M5 — Entity & Stat Framework
 
-**Status:** 5.1/5.2 done. A generic **Prefab Editor** already exists ahead of schedule
+**Status:** 5.1/5.2 done, 5.3/5.4 not started. A generic **Prefab Editor** already exists ahead of schedule
 (`Editor/Source/Layers/PrefabEditorLayer`) — browse/create/edit/delete the entity-prefab JSON
 files under `App/Assets/Data/Entities/`, rendering one Inspector-style card per currently-registered
 *authorable* component (see the M4.4 follow-up note above for the `authorable` flag and shared
@@ -593,6 +612,25 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   palette-swap shading. The "rare/boss visual callout" this bullet defers to M7 was never picked
   up there; it is tracked in M17.4's UI lens now, and wants an audio cue alongside it (M12.3) -
   a rare spawn the player does not notice defeats the entire mechanic.
+- **5.4 Multi-tile entities & footprints.** Not started. `Grid` (M3.1, extended in M4.1's
+  follow-up) holds a stack of entities per cell, but every entity that gets stamped or spawned
+  into one — the eventual boss included — is assumed to occupy exactly one cell; there is no
+  concept of a single logical entity spanning more than one tile. Bosses (M17.3) and other large
+  enemies need a footprint of multiple cells (a 2x2 or 3x3 body, or an irregular shape) that still
+  behaves as one entity: one `HealthComponent`, one turn-queue slot, one set of stats, but
+  movement, collision, targeting, and rendering that account for every occupied cell, not just an
+  anchor tile. Engine: a `FootprintComponent` (an offset list from the entity's anchor `Position`)
+  that `Grid` placement/removal, `MoveAction`'s collision check, targeting-mode queries, and
+  `RenderableTile`/`TileRenderer` all read instead of assuming 1x1 — placement needs to stamp the
+  anchor entity into every covered cell so a lookup from any of them resolves to the same entity,
+  and move/destroy needs to clear and restamp the whole footprint atomically rather than one cell
+  at a time. Editor: a footprint field (width/height, or an explicit offset list for irregular
+  shapes) on the Prefab Editor, with the preview canvas and `PreviewWindowChrome` rendering the
+  full footprint instead of a single cell. UI: none new — existing HUD/targeting UI already keys
+  off a resolved entity, not a tile count. This is a prerequisite for M17.3's boss framework
+  (a boss confined to one tile reads as a reskinned regular enemy, not a boss) and is scoped as
+  its own bullet rather than folded into that milestone, since ordinary large enemies benefit from
+  it too.
 
 ## M6 — Turn-Based Scheduler & Movement
 
@@ -1973,10 +2011,12 @@ tier-reskin mechanics were never started.
   (the `BossArena` piece category is already authored and already reaches the stitcher), an HP
   threshold phase system with per-phase behavior and ability sets, telegraphed multi-turn attacks,
   add-summoning that reuses the existing `SpawnWaveSystem`, and mission completion on boss defeat
-  as an alternative to reaching an `Exit` piece. UI: a boss health bar distinct from the target
-  panel, a boss name and phase callout, and an arena-locked indicator. Editor: phase and ability
-  authoring on the Prefab Editor, and a boss field on the Dungeon schema naming which piece and
-  which boss end the mission.
+  as an alternative to reaching an `Exit` piece. Depends on M5.4 (multi-tile entities &
+  footprints) for bosses that are meant to visually and mechanically occupy more than one tile —
+  without it a boss is just a reskinned regular enemy with more HP. UI: a boss health bar distinct
+  from the target panel, a boss name and phase callout, and an arena-locked indicator. Editor:
+  phase and ability authoring on the Prefab Editor, and a boss field on the Dungeon schema naming
+  which piece and which boss end the mission.
 - **17.4 Rare enemies & tier reskins (M5.3, restated here because it is a mechanism, not
   content).** Engine: a rare-variant roll at spawn time applying an alternate palette, a stat
   multiplier, and a guaranteed drop override; and a roster-substitution table so a higher
@@ -2097,6 +2137,7 @@ scope — every row points at a bullet above.
 - [ ] Scene-transition fades and an area title card (13.4)
 - [ ] More than one AI behavior, including ranged and casting enemies (17.1)
 - [ ] A boss encounter framework, since `BossArena` is authored and unconsumed (17.3)
+- [ ] Multi-tile entities & footprints, so bosses can occupy more than one tile (5.4)
 - [ ] Area/biome schema and editor, which several other gaps depend on (3.2)
 - [ ] Difficulty tiers (10.2) and fixed area unlock order (4.5)
 - [ ] Accessibility baseline: colorblind-safe palettes, text scale, reduced motion (15.6)
@@ -2112,6 +2153,7 @@ scope — every row points at a bullet above.
 - [ ] Mag companion (9.1)
 - [ ] Stat materials (8.3)
 - [ ] Environmental hazards and real in-world locks and keys (17.6)
+- [ ] Multi-level areas (Forest 1/2, Caves 1-3) and teleporters between them (4.6)
 - [ ] Visual consistency pass across the modal screens (16.8)
 - [ ] `ContentWatcher` actually wired into `App`, which was built and never connected (1.3)
 - [ ] Build portability, so a session without Windows can still verify its own work (18.2)
