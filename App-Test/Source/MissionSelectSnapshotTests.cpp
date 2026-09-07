@@ -1,5 +1,6 @@
 #include "Missions/MissionSelectSnapshot.h"
 
+#include "Areas/AreaLibrary.h"
 #include "Engine/Dungeon/Dungeon.h"
 #include "Engine/Dungeon/DungeonLibrary.h"
 #include "Missions/RunProgress.h"
@@ -28,8 +29,9 @@ TEST_CASE("BuildMissionSelectMessage lists every dungeon, unlocked with empty pr
 {
     DungeonLibrary dungeons(std::vector<Dungeon>{MakeDungeon(1, "test_dungeon", "Test Dungeon")});
     RunProgress progress;
+    AreaLibrary areas;
 
-    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress);
+    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress, areas);
 
     REQUIRE(message.entries.size() == 1);
     REQUIRE(message.entries[0].dungeon_id_string == "test_dungeon");
@@ -43,8 +45,9 @@ TEST_CASE("BuildMissionSelectMessage still lists a completed dungeon as unlocked
     DungeonLibrary dungeons(std::vector<Dungeon>{MakeDungeon(1, "test_dungeon", "Test Dungeon")});
     RunProgress progress;
     progress.completed_dungeon_ids.insert(1);
+    AreaLibrary areas;
 
-    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress);
+    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress, areas);
 
     REQUIRE(message.entries.size() == 1);
     REQUIRE(message.entries[0].unlocked);
@@ -54,7 +57,8 @@ TEST_CASE("BuildMissionSelectMessage is empty for an empty library", "[MissionSe
 {
     DungeonLibrary dungeons;
     RunProgress progress;
+    AreaLibrary areas;
 
-    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress);
+    const MissionSelectMessage message = BuildMissionSelectMessage(dungeons, progress, areas);
     REQUIRE(message.entries.empty());
 }

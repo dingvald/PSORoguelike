@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Actions/ProjectileAdvanceAction.h"
+#include "Areas/AreaLibrary.h"
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
@@ -292,6 +293,7 @@ private:
     void PublishHubInteractionPrompt();
 
     Registry m_registry;
+    AreaLibrary m_areas;
     PieceLibrary m_pieces;
     DungeonLibrary m_dungeons;
     HubDefinition m_hub;
@@ -488,14 +490,14 @@ private:
     // pushed directly from GameplayLayer::OnEvent's own key/interaction
     // handling instead of from inside ExploringState::Update -- but each
     // needs its own constructor arguments (m_affixes/m_techniques/
-    // m_photon_arts/m_dungeons/m_run_progress/m_shop_stock, all declared
-    // well above this block) constructed first.
+    // m_photon_arts/m_dungeons/m_run_progress/m_areas/m_shop_stock, all
+    // declared well above this block) constructed first.
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
     CharacterScreenState m_character_screen_state{m_affixes};
     TechniquesScreenState m_techniques_screen_state{m_techniques, m_photon_arts};
-    MissionSelectState m_mission_select_state{m_dungeons, m_run_progress};
+    MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};
     StorageState m_storage_state{m_affixes};
     ExploringState m_exploring_state{m_target_selection_state, m_game_over_state, m_animation_state};

@@ -110,7 +110,10 @@ this list, and anything partial says so.
 - **Hub loop:** a hub scene instantiated from one authored piece, walk-up interactables
   (shopkeeper/storage terminal/teleprompter), buy and sell, uncapped storage, mission select,
   mission completion recorded into `RunProgress`, an abandon-mission key, and death returning to
-  the hub with inventory/equipment/Meseta/level intact.
+  the hub with inventory/equipment/Meseta/level intact. Mission Select gates on a fixed
+  Forest→Caves→Mines→Ruins-style area unlock order once an `Area` names a predecessor.
+- **Areas:** an `Area` library (name, dominant race, hazard type, tile palette, unlock
+  predecessor) giving a `Dungeon`'s bare `area_tag` real content.
 - **HUD:** HP/TP bars, level and name, status-effect chips, hotbar, target panel, Meseta counter,
   a scrolling combat log with inline color/bold/italic markup and scroll-position opacity fade,
   an interaction prompt, and six full-screen modal overlays.
@@ -122,11 +125,11 @@ this list, and anything partial says so.
 - Standalone executable, shared dark theme, and a reusable field-widget library
   (int/float/string/bool/NameId/Vec2/enum/color/texture/id-enum/row-list) plus color and texture
   picker popups and a shared pan/zoom preview canvas.
-- Seven content editors: Prefabs (per-component Inspector cards), Pieces (paint grid, sockets,
-  spawns), Dungeons (piece pool, live generation preview, lock/key debug overlay), Affixes,
-  Photon Arts, Techniques, and Shop Stock.
+- Eight content editors: Areas, Prefabs (per-component Inspector cards), Pieces (paint grid,
+  sockets, spawns), Dungeons (piece pool, live generation preview, lock/key debug overlay),
+  Affixes, Photon Arts, Techniques, and Shop Stock.
 
-**Testing:** 30 `Core-Test` files and 50 `App-Test` files of Catch2 coverage over the pure-logic
+**Testing:** 30 `Core-Test` files and 49 `App-Test` files of Catch2 coverage over the pure-logic
 layer. Rendering, live input, and RmlUi widget code are verified by running the app instead, per
 the convention this file already documents.
 
@@ -155,7 +158,7 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | One AI behavior; no boss encounter framework | High | M17 |
 | Entities are always 1x1; no multi-tile entities or bosses | High | M5.4 / M17.3 |
 | An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters | Medium | M4.6 |
-| Area/biome schema (M3.2) never built, so no per-area theming | High | M3 |
+| ~~Area/biome schema (M3.2) never built, so no per-area theming~~ — resolved | High | M3 |
 | No character creation, no classes, no difficulty tiers | High | M10 |
 | Mag companion not started | Medium | M9 |
 | No localization seam; strings hardcoded in C++ and RML | Medium | M16 |
@@ -363,7 +366,10 @@ stranger could install, launch, understand, play, configure, quit, and come back
 
 ## M3 — Tile/Grid World Representation
 
-**Status:** 3.1 done
+**Status:** 3.1 done, 3.2 implemented **pending your own Windows build + manual verification** —
+same caveat M10.1 already carries: this session ran in a Linux sandbox with no MSVC/vcpkg
+toolchain, so the new `Area`/editor code compiles by careful inspection against this codebase's
+own established patterns, not an actual build.
 
 - **3.1 Grid & tile rendering:** Engine: `TileMap`/`Grid` component, camera, SDL-renderer tile
   blitting, ECS `Position`/`Transform`. Editor/UI: none yet (no content format to edit until
@@ -411,19 +417,63 @@ stranger could install, launch, understand, play, configure, quit, and come back
 - **3.2 Area/biome data schema:** Engine: JSON schema for area theme (tile palette, race,
   hazard type) — feeds dungeon generation in M4. Editor: **Area editor layer** — tile palette
   assignment, race/hazard config, live preview (mirrors `BiomeEditorLayer` + its texture/color
-  pickers). UI: none (content authoring only, not player-facing).
+  pickers). UI: none (content authoring only, not player-facing). **Done:** built as its own
+  bespoke content type (`App/Source/Areas/`: `Area`/`AreaSchema`/`AreaSchemaEmitter`/
+  `AreaLibrary`/`AreaLibraryFile`, content at `App/Assets/Data/Areas/*.json`) rather than fields
+  folded onto `Dungeon`, per the user's explicit brief — follows the `Affix`/`Dungeon` five-file
+  family exactly, letting multiple Dungeons share one Area definition. Lives in **App, not
+  Core** — `Dungeon`/`DungeonPiece` (Core) stay theme-agnostic, carrying `area_tag` as a bare
+  filter string with no meaning of its own (see `DungeonStitcher`'s plain equality checks); `Area`
+  is what gives that string real content, the same relationship `RaceComponent` (also App-side)
+  already has with Core's generic NameId race fields. `Area::tag` — not its file-derived
+  `id_string` — is the field that actually matches `Dungeon::area_tag`/`DungeonPiece::area_tag`,
+  since those compare as a plain string, not a `NameIdRegistry`-resolved reference like every
+  other cross-content link in this project; `tag` defaults to `id_string` when left unauthored,
+  same "name defaults to id" convention `Affix`/`Dungeon` already use for their own `name` field.
+  Fields: `name`, `tag`, `race_id` (NameId, open-ended like `RaceComponent`'s own races), `hazard`
+  (a fixed `HazardType` enum — **None/Poison/Electric/Fire/Dark**, per the user's explicit choice
+  over an open NameId, since hazards are meant to be a short curated list like `Element`/
+  `SectionId`; nothing consumes a hazard yet, so it only needs to round-trip as data for now, same
+  precedent `DungeonLockConfig`/`Affix::amount` already set), a three-field tile palette
+  (`floor_texture_id`/`wall_texture_id`/`accent_texture_id`, each a plain NameId rather than a
+  nested object, for the same "no consumer yet" reason — this project's rendering is
+  prefab-driven per M3.1's own design note, not biome/tileset-driven, so there is nothing to wire
+  these into besides round-tripping), and `unlock_predecessor_tag` (a plain area-tag string, empty
+  = unlocked from the start — M4.5 below is its consumer). Editor: new
+  `Editor/Source/Layers/AreaEditorLayer` (+ `area_editor.rml`), per the user's explicit choice of
+  a dedicated layer over folding into `DungeonEditorLayer` — follows `AffixEditorLayer`'s List/
+  Edit shell exactly (no nested arrays, no preview canvas), with the three texture-palette fields
+  and `race_id` as plain `BuildNameIdField` text-entry rather than `PrefabEditorLayer`'s
+  swatch+picker-popup `BuildTextureField`, deliberately avoiding that popup's extra plumbing for
+  fields nothing consumes yet; wired into `EditorMenuLayer` as a new "Areas" row (now first in the
+  list, ahead of Pieces, since every later piece/dungeon-authoring step wants an Area to tag
+  against first). UI: none (content authoring only, not player-facing, matching the bullet's own
+  UI lens). A committed `App/Assets/Data/Areas/.gitkeep` keeps the directory present on a fresh
+  checkout — `LoadJsonDirectory` throws if the directory itself is missing (unlike an empty one),
+  and `GameplayLayer` now loads this library for real every run (unlike `m_affixes`/`m_photon_arts`
+  /`m_status_effects`, which stay pending their own content directories not existing yet — a
+  pre-existing gap this pass didn't touch since it's outside this bullet's scope, but is worth
+  flagging: those three `LoadXLibrary` calls in `GameplayLayer::SpawnNewCharacter` will throw on a
+  truly fresh checkout with no local editor-created directory, since `Affixes`/`PhotonArts`/
+  `StatusEffects` are never `git add`ed as empty dirs the way `Areas` now is). No area content
+  (real Forest/Caves/Mines/Ruins definitions) authored — that's the user's own work through the
+  new editor, per `CLAUDE.md`'s division of labor; `IsDungeonUnlocked` (M4.5 below) falls back to
+  "unconditionally unlocked" for any `area_tag` with no matching `Area` yet, so today's existing
+  `test_dungeon.json` (whose `area_tag` is empty) is unaffected. Catch2 coverage in
+  `App-Test/Source/AreaSchemaTests.cpp` (schema shape/field kinds, `SaveArea`/`LoadAreaLibrary`
+  round-trip including `FindByTag`, the `tag`-defaults-to-`id_string` fallback, and the
+  unknown-hazard/schema-version-mismatch error paths).
 
-  **Ship-readiness gap detail:** still not started, and it has become the most depended-on
-  unstarted bullet in this file. Nothing else can key off "which area is this": M4.5's unlock
-  order, M10.2's per-area difficulty deltas, M12.4's per-area music, M13.4's area title card, and
-  M17.5's per-area weighted spawn tables all name it as a prerequisite. Today a `Dungeon` carries
-  an area tag used only to filter the piece pool, and there is no area *definition* anywhere — no
-  display name, no tile palette, no dominant race, no hazard type, no music, no unlock
-  predecessor. Build this before M4.5 or M10.2.
+  **Ship-readiness gap detail — resolved.** Was the most depended-on unstarted bullet in this
+  file (M4.5's unlock order, M10.2's per-area difficulty deltas, M12.4's per-area music, M13.4's
+  area title card, and M17.5's per-area weighted spawn tables all name it as a prerequisite); M4.5
+  is picked up immediately below in the same pass. M10.2/M12.4/M13.4/M17.5 still consume nothing
+  from `Area` yet — that's each milestone's own future work.
 
 ## M4 — Dungeon Piece Library & Generation
 
-**Status:** 4.1/4.2/4.3/4.4 done, 4.5/4.6 not started
+**Status:** 4.1/4.2/4.3/4.4 done, 4.5 implemented **pending your own Windows build + manual
+verification** (same caveat as M3.2 above -- landed in the same unverified pass), 4.6 not started
 
 - **4.1 Piece data format & socket schema:** Engine: `DungeonPiece` schema — a sparse set of
   cells (arbitrary/non-rectangular footprint; membership, not a fixed W×H array, defines the
@@ -532,12 +582,33 @@ stranger could install, launch, understand, play, configure, quit, and come back
   never hand-authored), threaded through `EntitySchemaEmitter`'s JSON-schema emission so authoring
   either's key is now a hard validation failure.
 - **4.5 Fixed area unlock order:** Engine: Forest→Caves→Mines→Ruins gating hook, consumed by
-  the hub in M10. Editor: ordering field on the M3.2 area editor. UI: none yet.
-
-  **Ship-readiness gap detail:** blocked on M3.2, and its consumer is already built and waiting -
-  `Missions::IsDungeonUnlocked` exists, is unit-tested, and returns true unconditionally, with a
-  doc comment naming this bullet as what fills in its body. Until it lands, Mission Select offers
-  every authored dungeon from the first mission and the GDD's difficulty ramp does not exist.
+  the hub in M10. Editor: ordering field on the M3.2 area editor. UI: none yet. **Done:** rather
+  than a numeric ordering field, `Area` (M3.2 above) carries an explicit
+  `unlock_predecessor_tag` string (empty = unlocked from the start) — a predecessor reference
+  reads its own gating directly, without every area needing to agree on a shared index space, and
+  matches `Dungeon`/`DungeonPiece`'s existing "area is just a plain tag" convention rather than
+  introducing a second kind of area reference. `Missions::IsDungeonUnlocked`'s body (previously
+  unconditionally `true`, per its own doc comment naming this bullet as the fill-in) now resolves
+  `dungeon.area_tag` to an `Area` via the new `AreaLibrary::FindByTag`, and — if that area has a
+  non-empty `unlock_predecessor_tag` — requires at least one dungeon tagged with that predecessor
+  area to already be in `RunProgress::completed_dungeon_ids`. **Deviates from the function's own
+  prior doc comment** ("M4.5 is expected to extend this function's body, not signature"): that
+  turned out to be unworkable once `Area` existed as real content rather than a hypothetical —
+  resolving a predecessor area's completion needs both the `Area` definition itself and every
+  other `Dungeon` tagged with that predecessor's area, neither of which `IsDungeonUnlocked`'s old
+  two-parameter signature could reach. It now takes `DungeonLibrary`/`AreaLibrary` too; both new
+  call sites (`MissionSelectSnapshot::BuildMissionSelectMessage`, already threaded through
+  `MissionSelectState`, and `GameplayLayer::OnMissionSelected`) already held both libraries as
+  process-lifetime members, so this was a pure wiring change, no new loading. An area with no
+  matching `Area` entry (including today's placeholder `test_dungeon.json`, whose `area_tag` is
+  empty) stays unconditionally unlocked, preserving this function's pre-M4.5 fallback exactly. No
+  ordering field on the editor as such (see M3.2's own note) — the predecessor-tag field doubles
+  as it. UI: none yet, unchanged from this bullet's own scope — a locked Mission Select row's
+  visual treatment is M16's job. M10.2 is expected to add a tier parameter alongside this same
+  check once difficulty tiers exist. Catch2 coverage in `App-Test/Source/RunProgressTests.cpp`
+  (unconditionally unlocked with no matching `Area`; unconditionally unlocked for an `Area` with
+  no predecessor; locked until a predecessor-area dungeon is completed, unlocked after) and
+  updated `MissionSelectSnapshotTests.cpp` for the new `AreaLibrary` parameter.
 - **4.6 Multi-level dungeons & teleporters.** Not started. Today a `Dungeon` asset generates one
   stitched layout, Entrance to Exit, and reaching the Exit ends the mission — an "area" and "the
   one dungeon authored for it" are the same thing. The GDD's PSO-inspired structure wants an area

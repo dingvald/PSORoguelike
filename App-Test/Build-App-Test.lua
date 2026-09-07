@@ -18,6 +18,9 @@ project "App-Test"
       -- ApplicationFilepaths above, not a whole-folder glob.
       "../App/Source/UI/LogMarkup.h", "../App/Source/UI/LogMarkup.cpp",
       "../App/Source/Actions/**.h", "../App/Source/Actions/**.cpp",
+      -- Areas/ is pure-logic (no SDL/RmlUi dependency), same bar as Hub/
+      -- Missions/Shop below.
+      "../App/Source/Areas/**.h", "../App/Source/Areas/**.cpp",
       "../App/Source/Combat/**.h", "../App/Source/Combat/**.cpp",
       "../App/Source/Components/**.h", "../App/Source/Components/**.cpp",
       "../App/Source/Content/**.h", "../App/Source/Content/**.cpp",

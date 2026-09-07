@@ -1,0 +1,49 @@
+<rml>
+    <head>
+        <title>Area Editor</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="content_editor.rcss"/>
+    </head>
+    <body>
+        <div id="screen-list" class="screen">
+            <div class="toolbar">
+                <h1>Areas</h1>
+                <span id="new-area" class="btn action">New Area</span>
+                <span id="list-error" class="text-danger"></span>
+                <span id="back-to-menu" class="btn back">Back</span>
+            </div>
+            <div id="area-list" class="scroll-panel"></div>
+        </div>
+
+        <div id="screen-edit" class="screen">
+            <div class="toolbar">
+                <span id="edit-title" class="title text-accent"></span>
+                <span id="save-area" class="btn action">Save</span>
+                <span id="edit-dirty" class="text-accent"></span>
+                <span id="edit-error" class="text-danger"></span>
+                <span id="back-to-list" class="btn back">Back</span>
+            </div>
+            <div class="scroll-panel">
+                <h3>Id</h3>
+                <div id="field-id" class="field-row"></div>
+                <h3>Name</h3>
+                <div id="field-name" class="field-row"></div>
+                <h3>Tag</h3>
+                <div id="field-tag" class="field-row"></div>
+                <h3>Race</h3>
+                <div id="field-race-id" class="field-row"></div>
+                <h3>Hazard</h3>
+                <div id="field-hazard" class="field-row"></div>
+                <h3>Floor Texture</h3>
+                <div id="field-floor-texture-id" class="field-row"></div>
+                <h3>Wall Texture</h3>
+                <div id="field-wall-texture-id" class="field-row"></div>
+                <h3>Accent Texture</h3>
+                <div id="field-accent-texture-id" class="field-row"></div>
+                <h3>Unlock Predecessor Tag</h3>
+                <div id="field-unlock-predecessor-tag" class="field-row"></div>
+            </div>
+        </div>
+    </body>
+</rml>

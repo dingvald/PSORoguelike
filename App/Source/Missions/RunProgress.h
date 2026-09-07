@@ -6,6 +6,8 @@
 namespace psr {
 
 struct Dungeon;
+class DungeonLibrary;
+class AreaLibrary;
 
 // In-memory, session-scoped, per-process progress toward mission unlocks --
 // no serialization exists yet (M11.2 "run persistence & permadeath" hasn't
@@ -20,15 +22,19 @@ struct RunProgress
 };
 
 // Whether `dungeon` should be selectable from Mission Select for a character
-// with `progress`. Placeholder policy this milestone: every authored Dungeon
-// is unlocked unconditionally -- there is no fixed area order yet (M4.5,
-// "Forest->Caves->Mines->Ruins gating hook, consumed by the hub in M10," is
-// separately not started) and no difficulty tiers yet (M10.2). M4.5 is
-// expected to extend this function's body (not signature) to also require
-// dungeon.area_tag's predecessor area to already be in
-// progress.completed_dungeon_ids; M10.2 is expected to add a tier parameter
-// once tiers exist, so "finishing a mission at a given tier unlocks the next
-// tier up for the same area" (per docs/GDD.md) can actually be expressed.
-bool IsDungeonUnlocked(const RunProgress& progress, const Dungeon& dungeon);
+// with `progress`. M4.5's fixed area unlock order: `dungeon`'s Area (looked
+// up via its area_tag in `areas`) is unlocked unconditionally if it has no
+// authored unlock_predecessor_tag; otherwise it requires at least one dungeon
+// tagged with that predecessor area to already be in
+// progress.completed_dungeon_ids. An area with no Area entry authored yet
+// (areas.FindByTag finds nothing -- e.g. today's placeholder test_dungeon,
+// whose area_tag is empty) stays unconditionally unlocked, same as this
+// function's pre-M4.5 placeholder policy -- this only tightens gating once
+// an author actually opts an area into it. M10.2 is expected to add a tier
+// parameter once difficulty tiers exist, so "finishing a mission at a given
+// tier unlocks the next tier up for the same area" (per docs/GDD.md) can
+// actually be expressed.
+bool IsDungeonUnlocked(const RunProgress& progress, const Dungeon& dungeon, const DungeonLibrary& dungeons,
+                       const AreaLibrary& areas);
 
 } // namespace psr

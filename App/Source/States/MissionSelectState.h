@@ -5,6 +5,7 @@
 namespace psr {
 
 class DungeonLibrary;
+class AreaLibrary;
 struct RunProgress;
 
 // Modal Mission Select screen, pushed by GameplayLayer's Space-key
@@ -17,7 +18,7 @@ struct RunProgress;
 class MissionSelectState : public GameState
 {
 public:
-    MissionSelectState(const DungeonLibrary& dungeons, const RunProgress& progress);
+    MissionSelectState(const DungeonLibrary& dungeons, const RunProgress& progress, const AreaLibrary& areas);
 
     GameStateId GetId() const override { return GameStateId::MissionSelect; }
 
@@ -29,6 +30,7 @@ public:
 private:
     const DungeonLibrary* m_dungeons;
     const RunProgress* m_progress;
+    const AreaLibrary* m_areas;
     bool m_close_requested = false;
 };
 

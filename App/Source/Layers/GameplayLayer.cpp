@@ -5,6 +5,7 @@
 #include "Actions/TechniqueAction.h"
 #include "Actions/UseItemAction.h"
 #include "ApplicationFilepaths.h"
+#include "Areas/AreaLibraryFile.h"
 #include "Combat/DisplayName.h"
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibraryFile.h"
@@ -193,6 +194,7 @@ void GameplayLayer::SpawnNewCharacter()
     // on a later scene swap (unlike the OLD single-dungeon LoadNewGame,
     // which reloaded everything on every restart because it also reset the
     // whole Registry each time).
+    m_areas = LoadAreaLibrary(ApplicationFilepaths::AreasPath);
     m_pieces = LoadPieceLibrary(ApplicationFilepaths::PiecesPath);
     m_dungeons = LoadDungeonLibrary(ApplicationFilepaths::DungeonsPath);
     m_hub = LoadHubDefinition(ApplicationFilepaths::HubPath);
@@ -733,7 +735,7 @@ void GameplayLayer::OnMissionSelected(const MissionSelectedMessage& message)
         return;
 
     const Dungeon* dungeon = m_dungeons.Find(entt::hashed_string::value(message.dungeon_id_string.c_str()));
-    if (!dungeon || !IsDungeonUnlocked(m_run_progress, *dungeon))
+    if (!dungeon || !IsDungeonUnlocked(m_run_progress, *dungeon, m_dungeons, m_areas))
         return;
 
     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};

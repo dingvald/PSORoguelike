@@ -11,15 +11,16 @@
 
 namespace psr {
 
-MissionSelectState::MissionSelectState(const DungeonLibrary& dungeons, const RunProgress& progress)
-    : m_dungeons(&dungeons), m_progress(&progress)
+MissionSelectState::MissionSelectState(const DungeonLibrary& dungeons, const RunProgress& progress,
+                                       const AreaLibrary& areas)
+    : m_dungeons(&dungeons), m_progress(&progress), m_areas(&areas)
 {
 }
 
 void MissionSelectState::OnEnter(GameplayContext& context)
 {
     m_close_requested = false;
-    context.message_bus.Publish(BuildMissionSelectMessage(*m_dungeons, *m_progress));
+    context.message_bus.Publish(BuildMissionSelectMessage(*m_dungeons, *m_progress, *m_areas));
 }
 
 void MissionSelectState::OnExit(GameplayContext& context)

@@ -36,6 +36,9 @@ project "Editor"
       -- ApplicationFilepaths::TexturesPath, so it must be compiled too.
       "../App/Source/ApplicationFilepaths.h",
       "../App/Source/ApplicationFilepaths.cpp",
+      -- AreaEditorLayer reads/writes Area content directly.
+      "../App/Source/Areas/**.h",
+      "../App/Source/Areas/**.cpp",
       "../App/Source/Components/**.h",
       "../App/Source/Components/**.cpp",
       -- EquipmentComponent::AttachHandlers calls ComputeEffectiveStats to

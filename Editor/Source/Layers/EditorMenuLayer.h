@@ -25,8 +25,10 @@ class RmlClickListener;
 // slice of M5.2, ahead of the M5.1 stat components). Affixes (M8.1) is the
 // bespoke weapon prefix/suffix library, separate from Prefabs since an Affix
 // isn't an entity -- weapon/armor/mod authoring itself stayed folded into
-// the Prefabs row (see PrefabEditorLayer's class doc comment). Status effects
-// are authored directly as JSON (Core/Combat/StatusEffect.h) -- just
+// the Prefabs row (see PrefabEditorLayer's class doc comment). Areas (M3.2)
+// is the bespoke area-theme library (App/Areas/Area.h) -- also not an
+// entity, so it gets its own row rather than folding into Prefabs. Status
+// effects are authored directly as JSON (Core/Combat/StatusEffect.h) -- just
 // four plain fields, not worth a dedicated editor.
 //
 // Both keyboard (Up/Down/Enter/Space) and mouse (hover selects, click
@@ -57,18 +59,19 @@ private:
 
     enum Row
     {
-        RowPieces = 0,
-        RowDungeons = 1,
-        RowPrefabs = 2,
-        RowAffixes = 3,
-        RowPhotonArts = 4,
-        RowTechniques = 5,
-        RowShopStock = 6,
-        RowExit = 7,
-        RowCount = 8
+        RowAreas = 0,
+        RowPieces = 1,
+        RowDungeons = 2,
+        RowPrefabs = 3,
+        RowAffixes = 4,
+        RowPhotonArts = 5,
+        RowTechniques = 6,
+        RowShopStock = 7,
+        RowExit = 8,
+        RowCount = 9
     };
     static constexpr std::array<const char*, RowCount> kRowIds = {
-        "menu-pieces",  "menu-dungeons",    "menu-prefabs", "menu-affixes",
+        "menu-areas",       "menu-pieces",     "menu-dungeons",   "menu-prefabs", "menu-affixes",
         "menu-photon-arts", "menu-techniques", "menu-shop-stock", "menu-exit"};
 };
 

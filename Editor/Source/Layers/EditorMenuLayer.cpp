@@ -2,6 +2,7 @@
 
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/AffixEditorLayer.h"
+#include "Layers/AreaEditorLayer.h"
 #include "Layers/DungeonEditorLayer.h"
 #include "Layers/PhotonArtEditorLayer.h"
 #include "Layers/PieceEditorLayer.h"
@@ -43,7 +44,7 @@ void EditorMenuLayer::OnAttach()
         return;
     }
 
-    m_selected_index = RowPieces;
+    m_selected_index = RowAreas;
     RefreshSelectionHighlight();
 
     for (std::size_t i = 0; i < kRowIds.size(); ++i)
@@ -126,6 +127,9 @@ void EditorMenuLayer::ConfirmSelection()
 {
     switch (m_selected_index)
     {
+    case RowAreas:
+        TransitionTo<AreaEditorLayer>();
+        break;
     case RowPieces:
         TransitionTo<PieceEditorLayer>();
         break;

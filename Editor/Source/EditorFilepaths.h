@@ -16,6 +16,7 @@ public:
     // Assets/ above -- content editors save here so authored JSON survives as
     // real, committed content instead of living only under gitignored Binaries/.
     static const std::filesystem::path DataPath;
+    static const std::filesystem::path AreasPath;
     static const std::filesystem::path PiecesPath;
     static const std::filesystem::path DungeonsPath;
     static const std::filesystem::path EntitiesPath;

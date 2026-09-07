@@ -1,12 +1,14 @@
 #include "Missions/MissionSelectSnapshot.h"
 
+#include "Areas/AreaLibrary.h"
 #include "Engine/Dungeon/Dungeon.h"
 #include "Engine/Dungeon/DungeonLibrary.h"
 #include "Missions/RunProgress.h"
 
 namespace psr {
 
-MissionSelectMessage BuildMissionSelectMessage(const DungeonLibrary& dungeons, const RunProgress& progress)
+MissionSelectMessage BuildMissionSelectMessage(const DungeonLibrary& dungeons, const RunProgress& progress,
+                                               const AreaLibrary& areas)
 {
     MissionSelectMessage message;
     message.entries.reserve(dungeons.All().size());
@@ -16,7 +18,7 @@ MissionSelectMessage BuildMissionSelectMessage(const DungeonLibrary& dungeons, c
         entry.dungeon_id_string = dungeon.id_string;
         entry.name = dungeon.name;
         entry.area_tag = dungeon.area_tag;
-        entry.unlocked = IsDungeonUnlocked(progress, dungeon);
+        entry.unlocked = IsDungeonUnlocked(progress, dungeon, dungeons, areas);
         message.entries.push_back(std::move(entry));
     }
     return message;

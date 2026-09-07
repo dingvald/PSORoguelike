@@ -11,6 +11,7 @@ public:
     static const std::filesystem::path ShadersPath;
     static const std::filesystem::path TexturesPath;
     static const std::filesystem::path DataPath;
+    static const std::filesystem::path AreasPath;
     static const std::filesystem::path PiecesPath;
     static const std::filesystem::path DungeonsPath;
     static const std::filesystem::path EntitiesPath;
