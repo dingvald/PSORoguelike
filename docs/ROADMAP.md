@@ -1,9 +1,11 @@
 # Feature Roadmap
 
 This is a living roadmap connecting [ARCHITECTURE.md](../ARCHITECTURE.md) (how the engine is
-built) to [GDD.md](GDD.md) (what the game is). It orders the work from the current engine
+built) to [GDD.md](GDD.md) (what the game is). It ordered the work from the original engine
 scaffold (SDL3 window, RmlUi, empty ECS, `HelloWorldLayer` — nothing else) through to a
-playable game, milestone by milestone.
+playable game, milestone by milestone, and now carries the ship-readiness work past that point
+too. For where the project actually stands today, see "Feature overview" below rather than this
+paragraph.
 
 Per [CLAUDE.md](../CLAUDE.md)'s division-of-labor: Claude builds the systems and tooling in
 each epic below; the user authors the real game content through them. Claude does not author
@@ -49,6 +51,115 @@ entity-stamp footprints.
 with which bullet is about to be worked on and let them give an upfront brief — scope,
 constraints, specifics they want honored or avoided — before Claude writes an implementation
 plan for it. Don't skip straight from picking a bullet to planning it.
+
+**Scope note (ship-readiness pass):** M1-M11 were written as a plan for building the *game
+systems*. They do not describe everything a shippable build needs, and taking them as a
+complete definition of done would leave the project with no title screen, no audio, no save
+file, and no way to quit without losing a character. A feature-overview and gap analysis was run
+across the whole codebase to close that hole; its findings are the "Feature overview" section
+immediately below, expansions to several existing bullets (each marked **Ship-readiness gap
+detail**), and seven new milestones, M12-M18, sequenced as "Phase C" inside the fast-path section.
+Content and balance are excluded from that analysis by design — it covers only mechanisms,
+tooling, and release engineering.
+
+## Feature overview — what exists today
+
+A snapshot of shipped capability, written so the ship-readiness analysis (M12–M18 below) has
+something concrete to be measured against. Every line here is implemented and either
+unit-tested or manually verified per its own milestone entry — nothing aspirational appears in
+this list, and anything partial says so.
+
+**Engine (`Core`)**
+
+- **Application & loop:** SDL3 resizable window, GPU-backed `SDL_Renderer` (Vulkan/SPIR-V),
+  RmlUi context, layer stack with deferred push/replace/remove, two independent event passes
+  (raw SDL native + semantic `Event`), deferred-delivery `MessageBus`.
+- **ECS:** `entt`-backed `Registry` with `entt::meta` component reflection, JSON-Schema-validated
+  prefab loading, per-entity pub/sub (`EventHandlerComponent`), read-path introspection
+  (`EntityDescriber`), an `authorable` flag gating what may be hand-authored.
+- **Content pipeline:** `ReadJsonFile`/`WriteJsonFile`, `LoadJsonDirectory`, `ContentWatcher`
+  (mtime-polled hot-reload, built but not yet wired into `App`), `NameIdRegistry` string interning.
+- **World & generation:** fixed-size multi-occupant `Grid`; a `DungeonPiece` library with authored
+  sockets and spawn waves; `DungeonStitcher` (entrance-to-exit tree growth, loopbacks, dead-end
+  fallback, BFS-verified-solvable lock/key placement); `DungeonInstantiator`; `RoomMap` and
+  `RoomVisibilityTracker`.
+- **Rendering:** custom SDL_GPU tile pipeline with two-tone palette-swap shading, runtime texture
+  atlas packer, camera/viewport with clamped zoom, the `IRenderableLookup` decorator seam,
+  sprite-strip animation (`AnimationClock`), floating text, generic visual effects.
+- **Turns & actions:** energy-keyed `TurnQueue`, `IAction`/`ActionExecutor` with fallback chains,
+  `ActionMap`/`InputBuffer` with DAS-style held-key repeat.
+- **Combat primitives:** `HealthComponent` with `HealthSystem` as sole HP writer, `DeathSystem`,
+  damage/heal event chains with veto and modify hooks, targeting modes, and the
+  status-effect/element content types.
+
+**Game (`App`)**
+
+- **Turn loop & states:** `TurnCoordinator` plus a pushdown `GameStateMachine` with Exploring,
+  TargetSelection, Animation, CharacterScreen, TechniquesScreen, MissionSelect, Shop, Storage,
+  and GameOver states.
+- **Combat:** hit chance (ATA vs EVP, clamped), damage (ATP vs DFP with a variance band),
+  four-race bonuses, four weapon range shapes, hits-per-turn, Photon Arts, Techniques with
+  tiers/elements/projectiles/aim preview, five status effects with stacking and per-turn ticks,
+  on-hit VFX, miss flashes, floating damage numbers.
+- **Items:** weapon/armor/mod/rarity/consumable components, an affix library, inventory and
+  equipment with equip/unequip, ground pickup and drop, Meseta as a real ground pickup,
+  inline weighted drop tables, Technique Disks that teach Techniques, a ten-slot hotbar carrying
+  both items and abilities.
+- **Progression:** XP on kill, a class-agnostic growth curve, multi-level-up in one kill with a
+  diffed stat-gain line in the log.
+- **Hub loop:** a hub scene instantiated from one authored piece, walk-up interactables
+  (shopkeeper/storage terminal/teleprompter), buy and sell, uncapped storage, mission select,
+  mission completion recorded into `RunProgress`, an abandon-mission key, and death returning to
+  the hub with inventory/equipment/Meseta/level intact.
+- **HUD:** HP/TP bars, level and name, status-effect chips, hotbar, target panel, Meseta counter,
+  a scrolling combat log with inline color/bold/italic markup and scroll-position opacity fade,
+  an interaction prompt, and six full-screen modal overlays.
+- **AI & population:** piece-authored spawn waves gated on previous-wave clear, one
+  `ChaseAndAttack` behavior with a detection range, per-room fog of war, tab targeting.
+
+**Editor**
+
+- Standalone executable, shared dark theme, and a reusable field-widget library
+  (int/float/string/bool/NameId/Vec2/enum/color/texture/id-enum/row-list) plus color and texture
+  picker popups and a shared pan/zoom preview canvas.
+- Seven content editors: Prefabs (per-component Inspector cards), Pieces (paint grid, sockets,
+  spawns), Dungeons (piece pool, live generation preview, lock/key debug overlay), Affixes,
+  Photon Arts, Techniques, and Shop Stock.
+
+**Testing:** 30 `Core-Test` files and 50 `App-Test` files of Catch2 coverage over the pure-logic
+layer. Rendering, live input, and RmlUi widget code are verified by running the app instead, per
+the convention this file already documents.
+
+### What that adds up to, and what it is missing
+
+The vertical slice is genuinely complete: a player can leave a hub, generate a dungeon, explore it
+under fog of war, fight enemies that chase and hit back, cast Techniques with real projectiles and
+status effects, loot and equip and consume, level up, return to the hub, and buy, sell, store, and
+launch the next mission. Very little of the *simulation* is missing.
+
+What is missing is almost entirely the layer *around* that simulation — the parts a player
+touches before, between, and after the turn loop, and the parts a build needs to leave a
+developer's machine. Specifically, and each expanded into its own milestone below:
+
+| Gap | Severity | Milestone |
+|---|---|---|
+| No audio subsystem of any kind | Blocker | M12 |
+| No title screen, pause, settings, or quit confirmation | Blocker | M14 |
+| No save/load; a closed window loses the character | Blocker | M11.2 |
+| Escape quits to desktop instantly from gameplay | Blocker | M14 |
+| No key rebinding, no gamepad, minimal mouse support | High | M15 |
+| No packaging, no CI, Windows-only, three known test failures | Blocker | M18 |
+| No item tooltips, comparison, stacking, or sorting | High | M16 |
+| No minimap, no turn-order indicator, no help screen | High | M16 |
+| Uncapped frame rate (no vsync or frame limiter) | High | M18 |
+| One AI behavior; no boss encounter framework | High | M17 |
+| Area/biome schema (M3.2) never built, so no per-area theming | High | M3 |
+| No character creation, no classes, no difficulty tiers | High | M10 |
+| Mag companion not started | Medium | M9 |
+| No localization seam; strings hardcoded in C++ and RML | Medium | M16 |
+
+Severity here means "distance from shippable," not implementation difficulty. A blocker is
+something a player would hit in the first two minutes and correctly call broken.
 
 ## Fast path to a playable dungeon
 
@@ -121,6 +232,37 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 28. M10.3 — Character creation (extends `GameplayLayer` with a real class-picker)
 29. M11.1 — XP & leveling
 30. M11.2 — Run persistence & permadeath (`cereal` added here)
+### Phase C — ship readiness (M12–M18, everything but content and balance)
+
+Phase A reached a playable dungeon and Phase B fills in the remaining designed depth. Neither
+produces a *shippable build*: both are scoped entirely to simulation and content tooling, and a
+player never sees a title screen, hears a sound, rebinds a key, or reloads a character in either
+one. Phase C is that missing layer, and it is deliberately kept separate rather than sprinkled
+through M1–M11 — mixing "the game needs a pause menu" into a combat milestone is how it stays
+un-owned until the week before release.
+
+Ordering logic within Phase C: the session shell (M14) comes first because everything else needs
+somewhere to live — an options screen has no home until there is a pause menu, and save/load has
+no trigger until there is a "quit to title." Persistence (M11.2) follows immediately, since it is
+the one remaining blocker that silently destroys player progress. Audio (M12) is third because it
+is the largest single missing subsystem and its editor surface (sound reference fields) wants to
+land before content authoring gets far. Input and options (M15) then have both a screen to live in
+and a settings file to persist into. UI polish (M16) and encounter depth (M17) are the two
+broad-front passes, and release engineering (M18) is last only in the sense that its final gates
+run last — its CI and cross-platform work should start early and run continuously.
+
+31. M14 — Front end & session flow (title, pause, quit, transitions, credits)
+32. M11.2 — Run persistence & permadeath (`cereal` added here; see its heavily expanded entry)
+33. M12 — Audio (engine, content type, editor field, and a cue for every existing feedback moment)
+34. M15 — Input, options & accessibility (rebinding, gamepad, mouse, settings persistence)
+35. M16 — UI polish & information architecture (tooltips, stacking, minimap, help, localization seam)
+36. M17 — Encounter & simulation depth (boss framework, AI behaviors, factions, rare enemies)
+37. M18 — Release engineering & distribution (CI, packaging, crash handling, performance, licensing)
+
+**Phase C does not include content or balance.** Authoring the four areas, their enemies, weapons,
+drop weights, growth curve numbers, prices, and difficulty deltas remains the user's work through
+the editors, per `CLAUDE.md`'s division of labor. Phase C is only about making a build that a
+stranger could install, launch, understand, play, configure, quit, and come back to.
 
 ---
 
@@ -269,6 +411,14 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
   assignment, race/hazard config, live preview (mirrors `BiomeEditorLayer` + its texture/color
   pickers). UI: none (content authoring only, not player-facing).
 
+  **Ship-readiness gap detail:** still not started, and it has become the most depended-on
+  unstarted bullet in this file. Nothing else can key off "which area is this": M4.5's unlock
+  order, M10.2's per-area difficulty deltas, M12.4's per-area music, M13.4's area title card, and
+  M17.5's per-area weighted spawn tables all name it as a prerequisite. Today a `Dungeon` carries
+  an area tag used only to filter the piece pool, and there is no area *definition* anywhere — no
+  display name, no tile palette, no dominant race, no hazard type, no music, no unlock
+  predecessor. Build this before M4.5 or M10.2.
+
 ## M4 — Dungeon Piece Library & Generation
 
 **Status:** 4.1/4.2/4.3/4.4 done, 4.5 not started
@@ -382,6 +532,11 @@ Techniques (7.2) — matches the GDD's own fallback framing for Force without Te
 - **4.5 Fixed area unlock order:** Engine: Forest→Caves→Mines→Ruins gating hook, consumed by
   the hub in M10. Editor: ordering field on the M3.2 area editor. UI: none yet.
 
+  **Ship-readiness gap detail:** blocked on M3.2, and its consumer is already built and waiting -
+  `Missions::IsDungeonUnlocked` exists, is unit-tested, and returns true unconditionally, with a
+  doc comment naming this bullet as what fills in its body. Until it lands, Mission Select offers
+  every authored dungeon from the first mission and the GDD's difficulty ramp does not exist.
+
 ## M5 — Entity & Stat Framework
 
 **Status:** 5.1/5.2 done. A generic **Prefab Editor** already exists ahead of schedule
@@ -431,6 +586,13 @@ additional hand-wired cards on this same layer, per its own class doc comment, n
   + guaranteed drop hook), tier-based roster substitution (e.g. Garanz→Baranz on Ultimate, not
   just stat scaling). Editor: rare-variant toggle + tier-substitution mapping on the entity
   editor. UI: none yet — rare/boss visual callouts land with combat UI in M7.
+
+  **Ship-readiness gap detail:** restated as a mechanism (not content) in M17.4 below. The
+  rare-variant roll needs a home in the spawn path (`DungeonInstantiator` / `SpawnWaveSystem`),
+  and the alternate palette is nearly free given `RenderableComponent`'s existing two-color
+  palette-swap shading. The "rare/boss visual callout" this bullet defers to M7 was never picked
+  up there; it is tracked in M17.4's UI lens now, and wants an audio cue alongside it (M12.3) -
+  a rare spawn the player does not notice defeats the entire mechanic.
 
 ## M6 — Turn-Based Scheduler & Movement
 
@@ -1229,6 +1391,12 @@ of Equip being the only thing an inventory click could do.
   (Power/Mind/HP Material, etc.). Editor: material-effect fields on the item editor. UI:
   use-item confirmation + stat-gain feedback. **Not started** — see the addition immediately
   below, which covers a different (instant-recovery) consumable shape first.
+
+  **Ship-readiness gap detail:** still not started. The core mechanism is small — a third
+  `ConsumableEffect` value plus a permanent write to `StatsComponent`, on top of the
+  `UseItemAction` path that already exists. What it needs beyond that is a per-stat use cap (PSO's
+  materials are limited, and uncapped they trivialize the growth curve), and the stat-gain
+  feedback this bullet's own UI lens names, which folds into M16.5's feedback pass.
 - **Addition: recovery consumables (Monomate/Monofluid) & the use-item action.** Deviates from
   8.3's literal scope (permanent stat-boost materials) — this is the general-purpose "consume an
   item" mechanic plus instant HP/TP recovery items, chosen by the user's explicit direction as the
@@ -1273,6 +1441,19 @@ of Equip being the only thing an inventory click could do.
   evolution/stat-boost accumulation. Editor: Mag species/evolution editor (feed-response
   table, evolution thresholds). UI: Mag status panel, feed-prompt when holding a feedable
   item.
+
+  **Ship-readiness gap detail:** the last wholly-unstarted *designed* system, and the only
+  milestone in M1-M11 with no code behind it at all. Much of its plumbing now exists for free: it
+  is an entity with components; it feeds on `ConsumableComponent` items through a
+  `UseItemAction`-shaped path; its stat contribution can route through `ComputeEffectiveStats`
+  the same way equipment already does; its species and evolution thresholds are a content library
+  in the established five-file pattern; and its HUD panel is one more `hud.rml` block alongside
+  the existing bars. Its genuinely new work is the feed-response table, the evolution rules, and a
+  companion entity that follows the player across the turn scheduler *and* across hub-to-dungeon
+  swaps — that last part interacts directly with `TransitionToWorld`'s selective entity
+  destruction, which today preserves only the player and what is reachable from its inventory,
+  equipment, and storage. A Mag must be added to that preserved set explicitly or it is destroyed
+  on the first mission launch.
 
 ## M10 — Hub, Missions & Difficulty
 
@@ -1369,9 +1550,27 @@ so it's flagged instead of claimed. 10.2/10.3 not started.
 - **10.2 Difficulty tiers:** Engine: Normal→Hard→Very Hard→Ultimate data (stat/population/drop
   deltas + M5.3 roster substitutions), per-character clear-gating. Editor: difficulty-tier
   editor (per-area deltas, substitution table). UI: tier selector, clear/unlock indicators.
+
+  **Ship-readiness gap detail:** not started, and it is the other half of what gives a run shape -
+  without tiers, every mission after the first is the same difficulty forever, no matter how far
+  the character levels. Depends on M3.2 (per-area deltas need an area definition to hang off) and
+  on M5.3 / M17.4 for roster substitution. `IsDungeonUnlocked`'s doc comment already anticipates
+  the tier parameter. Its UI lens extends the existing Mission Select screen rather than adding a
+  new one.
 - **10.3 Character creation:** Engine: class lock (Hunter/Ranger/Force) + Section ID chosen at
   creation, persisted for the run. Editor: none (player-facing flow, not content data). UI:
   character-creation screen.
+
+  **Ship-readiness gap detail: promoted to a blocker.** Today `GameplayLayer::SpawnNewCharacter`
+  creates one hardcoded player from `player.json`, hardcodes `SectionId::Viridia`, and assigns no
+  class at all. Two of the GDD's three central identity choices therefore do not exist in the
+  game, and the class triad that the entire weapon, Photon Art, and Technique design rests on is
+  unrepresented in code: there is no class component anywhere, and M11.1's growth curve was
+  deliberately built class-agnostic precisely because there was nothing to key it on. This bullet
+  needs a class component and its per-class starting kit, per-class growth curves replacing the
+  single `growth_curve.json`, a Section ID choice that actually affects something, and the
+  creation screen itself — which attaches to M14.1's title-screen "New Character" row, not to
+  `OnAttach`.
 
 ## M11 — Progression & Permadeath
 
@@ -1417,3 +1616,502 @@ retroactively — the same lag the M6/M7/M8 follow-up sections already had. 11.2
 - **11.2 Run persistence & permadeath:** Engine: `cereal`-backed save of in-run state between
   missions; permadeath wipes on death; full reset on new character (no meta-progression, per
   GDD). Editor: none. UI: death/run-summary screen, new-character flow.
+
+  **Ship-readiness gap detail: promoted to a blocker, and considerably larger than this bullet
+  makes it sound.** As written it reads as one serialization pass. In practice it is the widest
+  cross-cutting change left in the project, because the thing being saved is a live `entt`
+  registry rather than a plain struct.
+
+  What must round-trip: the player entity and every component on it; the contents of
+  `InventoryComponent`, `EquipmentComponent`, and `StorageComponent`, all three of which hold raw
+  `entt::entity` handles that are meaningless across a process boundary and must be remapped;
+  `KnownTechniquesComponent`, `HotbarComponent`, `LevelComponent`, `CurrencyComponent`,
+  `SectionIdComponent`, `StatusEffectComponent`; and `Missions::RunProgress`, which is today an
+  in-memory `unordered_set` carrying a doc comment naming this milestone as its storage.
+
+  Decide the save-point scope explicitly and early, because it is the difference between a modest
+  milestone and a very large one. A hub-only save point is the simpler and defensible choice:
+  dungeons are non-persistent by design per the GDD, so saving on return to the hub avoids
+  serializing the `Grid`, the `RoomMap`, the `RoomVisibilityTracker`, the `TurnQueue`, in-flight
+  tweens, live projectiles, and pending spawn waves entirely.
+
+  Three structural problems to solve before writing any `cereal` code:
+
+  — **Entity handle stability.** Every cross-entity reference in the project is a raw
+    `entt::entity`. Saving needs a stable identity — a persistent id component, or a save-time
+    remap table — plus a load-time fixup pass.
+  — **Nothing is registered for serialization.** The `entt::meta` reflection built in M1.2 covers
+    *authorable* prefab fields only, and the components that matter most here
+    (`InventoryComponent`, `EquipmentComponent`, `StorageComponent`, `HotbarComponent`,
+    `LevelComponent`) are all deliberately not meta-registered. A second, separate persistence
+    registration path is needed, and it has to be kept honest: a component added later and not
+    registered fails silently by dropping player data.
+  — **Versioning.** Saves must survive content and schema changes, or every update destroys every
+    character. Version the format in the first commit, not later.
+
+  Permadeath itself is then a policy layer on top. Death currently returns the player to the hub
+  fully intact — a deliberate M10.1 decision, made because a full wipe would erase exactly what
+  the hub exists to protect and because real permadeath did not exist yet. Making it real means
+  deleting the save on death, and that demands the surrounding safety rails: an unambiguous death
+  screen, a run summary, save-file integrity checking with a defined behavior on corruption,
+  crash-safe writes (write to a temp file, then rename), and a deliberate decision about whether
+  quitting mid-mission is allowed to be a save-scum. Also in scope: autosave on hub return and on
+  mission completion, multiple character slots or an explicit single-slot decision, and a
+  "Continue" row on the title screen that knows whether a save exists (M14.1).
+
+---
+
+# Phase C milestones — ship readiness
+
+Everything below was produced by the ship-readiness analysis rather than the original
+system-by-system plan, so each bullet states the **evidence** for the gap (what was checked and
+what was found) before stating the work. Each keeps this file's existing three-lens
+**Engine** / **UI** / **Editor** format, and each says explicitly when a lens is genuinely empty.
+
+## M12 — Audio
+
+**Status:** Not started. **Severity: blocker.**
+
+**Evidence:** there is no audio code anywhere in the repository. `vcpkg.json` lists SDL3,
+SDL3-image, FreeType, RmlUi, EnTT, rapidjson, and glslang — no mixer, no decoder, no audio
+feature on the SDL3 entry. A case-insensitive search across `Core`, `App`, and `Editor` for
+`audio`, `sound`, `music`, `mixer`, and the SDL audio entry points returns nothing. This is not a
+partially-built system; it is the one major subsystem with zero foundation, and it is the most
+visible thing missing from a build a player would try.
+
+- **12.1 Audio engine & mixing.** Engine: add an audio backend to `vcpkg.json` and initialize a
+  device in `Application::Initialize` alongside the window and renderer, torn down in
+  `Shutdown()` in the same explicitly-ordered way RmlUi already is. A new
+  `Core/Source/Engine/Audio/AudioEngine` owns the device, a decoded-clip cache keyed the same way
+  `TextureAtlas` keys textures (filename stem hashed to a `NameId`), and a small bus model —
+  master, music, SFX, UI — so a volume slider has something to move. Needs one-shot SFX playback
+  with a voice cap and a same-frame duplicate-collapse rule (a four-hits-per-turn Mechgun must not
+  play four fully overlapping samples at full gain), looping music with crossfade between tracks,
+  and 2D panning/attenuation derived from a sound's tile distance to the camera centre so an
+  off-screen enemy dying is quieter than an adjacent one. Playback must be non-blocking and must
+  never be driven from the turn loop directly. UI: none itself. Editor: none itself.
+- **12.2 Sound as authored content.** Engine: a `Sound` bespoke content type following the exact
+  five-file family pattern (`Sound`/`SoundSchema`/`SoundSchemaEmitter`/`SoundLibrary`/
+  `SoundLibraryFile`) that `Affix`, `PhotonArt`, `Technique`, and `StatusEffect` all already use —
+  clip reference, gain, pitch-randomization range, bus, and a looping flag — so a sound is
+  referenced by `NameId` from content rather than by a hardcoded path in C++. Alongside it, an
+  `AudioEmitterComponent` for ambient loops placed into pieces (a humming terminal, a dripping
+  cave), which is what makes an area feel authored rather than silent.
+  Editor: a `BuildSoundField` widget, sibling to the existing `BuildTextureField`, backed by a
+  `SoundPickerPopup` that rescans a new `EditorFilepaths::SoundsPath` — the `TexturePickerPopup`
+  already establishes the whole pattern, including the rescan-on-`Open()` behavior. Then sound
+  reference fields on the cards that need them: Weapon (swing, hit, miss), Technique and Photon
+  Art (cast, impact), StatusEffect (apply, tick, expire), Consumable (use), Prefab
+  (spawn, hurt, death, footstep), and Piece (ambient emitters). A new `SoundEditorLayer` row for
+  the `Sound` library itself, mirroring `AffixEditorLayer`'s List/Edit shell.
+- **12.3 Wiring a cue to every existing feedback moment.** Engine: this project already dispatches
+  a well-factored event for nearly everything worth hearing — `AfterDamageEvent`,
+  `AfterHealEvent`, `AfterItemPickupEvent`, `AfterItemDropEvent`, `AfterItemUseEvent`,
+  `AfterStatusEffectsChangedEvent`, `AfterTurnEvent`, `MoveEvent`, `DeathEvent`,
+  `TechniqueCastEvent`, `PhotonArtCastEvent`, plus the `MesetaChangedMessage` /
+  `LootDropMessage` / `MissionCompletedMessage` / `PlayerDefeatedMessage` bus traffic. An
+  `AudioBridge` system subscribing to those, mirroring `CombatLogBridge`'s shape almost exactly,
+  is the right seam — one system, no scattered mixer calls, and it inherits `CombatLogBridge`'s
+  existing lazy-once construction so a hub-to-dungeon swap does not leave a dangling handler.
+  UI: every menu needs move, confirm, cancel, and denied cues, and every currently-silent visual
+  feedback moment needs a paired audible one — a landed hit, a miss (the `MissFlashEffectSystem`
+  flash is currently the only signal), a level-up, a purchase, a rejected purchase, an
+  out-of-range cast, a full inventory. A denied action that is *silently* denied is the single
+  most common source of "the game is broken" reports.
+- **12.4 Music.** Engine: per-scene track selection with crossfade on the hub-to-dungeon
+  transition (`TransitionToWorld` is the one call site), plus a combat-vs-explore intensity swap
+  if wanted later. Editor: a music track field on the M3.2 area schema, and on `hub.json`. UI:
+  music and SFX sliders, which land with M15's options screen.
+
+## M13 — Game feel & visual presentation
+
+**Status:** Not started, though several of its foundations exist. **Severity: medium-high.**
+
+**Evidence:** the moving parts are unusually good already — `TweenSystem` with easing,
+`AnimationClock` for sprite strips, `FloatingTextSystem`, `DamageTextSystem`,
+`MissFlashEffectSystem`, `VisualEffectSystem`, `OnHitEffectSystem`, camera zoom, and smooth
+camera follow (recorded as fixed in `issues_and_bugs.md`). What is missing is the layer that
+turns those primitives into readable, weighty feedback. Concretely: `RenderableComponent` has
+`texture_id`, `texture_size`, `uv`, two colors, `render_layer`, `frames`, and `frame_time` — and
+no facing, no per-state clip selection. A search for `facing` or `direction` across
+`App/Source/Components` returns only unrelated comments. So every entity faces the same way
+forever, and a sprite has exactly one animation regardless of whether it is idle, walking,
+attacking, hurt, or dying.
+
+- **13.1 Facing & animation states.** Engine: a `FacingComponent` (or a facing field on
+  `RenderableComponent`) written by `MoveAction` and by every targeted action's resolved
+  direction, plus a small named-clip table on the renderable — idle / walk / attack / hurt /
+  death, each a row offset and frame count into the same strip — so `AnimationClock` picks a row
+  as well as a column. This is the difference between a turn-based game reading as animated and
+  reading as a spreadsheet with sprites. Editor: clip rows on the Prefab Editor's Renderable
+  card, previewed live in the existing preview canvas.
+- **13.2 Impact weight.** Engine: hit-stop (a few frames of suspended tween advance on a landed
+  hit, which `AnimationState` is already the natural owner of, since it already gates the turn
+  loop on tween completion), a short directional knockback or shake on the struck entity, and a
+  camera shake with a magnitude scaled by damage relative to max HP. Screen-space flash on player
+  damage. All of these are cheap and all of them are the difference between "the number changed"
+  and "that hurt." Editor: shake and hit-stop magnitudes belong on the Weapon / Technique /
+  Photon Art cards as authored values, not constants in C++.
+- **13.3 Death & spawn presentation.** Engine: `DeathSystem` currently destroys an entity
+  outright. A death animation clip, a dissolve or fade, and a brief corpse or scorch decal give
+  a kill a beat. Spawn waves appearing instantly is likewise jarring — a telegraphed spawn (a
+  marker tile for one turn, then the enemy) is both better feel and better fairness.
+- **13.4 Scene transitions.** Engine: `TransitionToWorld` swaps the hub and a dungeon in a single
+  frame with no visual break, which reads as a glitch rather than a transition. A fade-out,
+  swap, fade-in — with the fade owned by a thin overlay `Layer` so it composes over both RmlUi
+  and the tile pass — plus an area-name title card on dungeon entry. UI: the title card and the
+  fade are the whole surface. Editor: area display name comes from the M3.2 area schema.
+- **13.5 UI motion.** UI: the six modal overlays currently appear and disappear instantly. RmlUi
+  supports transitions and animations in RCSS; a consistent open/close treatment (a short fade
+  and scale) applied once in `hud.rcss` covers every screen at once. Same for the HP bar, which
+  should ease to its new value rather than snap, and for the log's newest line.
+
+## M14 — Front end & session flow
+
+**Status:** Not started. **Severity: blocker.**
+
+**Evidence:** `App/Source/main.cpp` pushes `GameplayLayer` directly and calls `Run()`. There is no
+title screen, no menu layer, and no state before gameplay. Worse, `Application::OnKeyPressed`
+handles `SDLK_ESCAPE` by calling `RequestQuit()` — so from the Exploring state, where no layer
+consumes Escape, pressing it closes the game instantly, with no confirmation and (since M11.2 has
+not started) no save. That single line is the most severe player-facing defect in the project.
+There is also no pause: closing a modal returns straight to the turn loop, and there is no way to
+stop playing other than quitting.
+
+- **14.1 Title screen & app state machine.** Engine: `main.cpp` should push a `MainMenuLayer`
+  rather than `GameplayLayer`, with the existing `Application::TransitionTo` doing the swap — the
+  mechanism is already built and already used by the Editor's own menu. An app-level state
+  distinction (Title / Playing / Paused) above the existing in-game `GameStateMachine`. UI: title
+  art, the game name, and rows for Continue (disabled without a save), New Character, Options,
+  Credits, and Quit — the `EditorMenuLayer` keyboard-navigable row shell is a direct model.
+  Editor: none; this is a player-facing flow, the same call M10.3 already makes.
+- **14.2 Pause menu & escape hierarchy.** Engine: remove the unconditional Escape-quits handler
+  from `Application::OnKeyPressed` and replace it with a proper hierarchy — Escape closes the
+  topmost modal if one is open, otherwise cancels targeting, otherwise opens the pause menu, and
+  only the pause menu's own Quit row ends the process. `Application::RequestQuit` stays, but
+  nothing reaches it without passing a confirmation. The pause menu itself is a
+  `GameStateMachine` state, identical in shape to `CharacterScreenState`, which already suspends
+  the turn loop by sitting on top of the stack. UI: a `#pause-screen` overlay in `hud.rml`
+  following the six existing overlays' convention, with Resume, Options, Help, Abandon Mission
+  (folding in the current bare `H` keybind, which today abandons with no confirmation), Quit to
+  Title, and Quit to Desktop. Every destructive row needs a confirm step.
+- **14.3 Confirmation & destructive-action guards.** Engine: a reusable confirm-prompt sub-state,
+  since several existing flows currently destroy things silently — abandoning a mission (`H`),
+  dropping an item, selling an item, and eventually deleting a save. UI: one shared confirm
+  widget rather than a bespoke one per screen.
+- **14.4 New-character flow.** Engine: this is where M10.3's character creation actually attaches
+  — the title's New Character row leads into class and Section ID selection, then into
+  `SpawnNewCharacter`. Today `SpawnNewCharacter` is called unconditionally on attach with a
+  hardcoded `player.json`, `Viridia`, and no class. See M10.3's own expanded entry.
+- **14.5 Loading & first-frame cost.** Engine: `GameplayLayer::OnAttach` loads every content
+  library, generates a dungeon, instantiates it, and builds GPU resources synchronously. That is
+  fine at today's content volume and will not stay fine. A loading state with a visible indicator,
+  and content-library loading hoisted out of the gameplay layer into a process-lifetime content
+  service that the title screen can warm up behind its own art. UI: a loading screen.
+- **14.6 Credits & attribution.** UI: a credits screen listing SDL3, RmlUi, EnTT, rapidjson,
+  Catch2, FreeType, glslang, cereal, the font, and every asset licence — this is a legal
+  requirement of shipping, not a nicety, and the README's existing PSO trademark note belongs in
+  the build too, not only in the repository.
+
+## M15 — Input, options & accessibility
+
+**Status:** Not started. **Severity: high.**
+
+**Evidence:** `App/Source/Content/KeyBindings.cpp` hardcodes every binding at construction —
+arrows and numpad for movement, Space to wait, `G` to pick up. Another eight keys are intercepted
+directly inside `GameplayLayer::OnEvent` rather than going through `ActionMap` at all (`C`, `T`,
+`Tab`, `Escape`, `H`, `Space` in the hub, numpad `+`/`-`, and the digit row). Nothing reads a
+config file; nothing can be changed by a player. There is no gamepad code anywhere — searches for
+`gamepad`, `joystick`, and `controller` return nothing. Mouse support exists only where RmlUi
+provides it for free, so the world itself is keyboard-only: no click-to-move, no click-to-target,
+no scroll-to-zoom. And there is no options screen of any kind, no resolution or fullscreen
+control, and no persisted settings.
+
+- **15.1 Rebindable input.** Engine: consolidate the split — everything the player can press
+  should be a named action in one table, including the eight keys currently special-cased inside
+  `GameplayLayer::OnEvent`, so a rebinding screen has a single source of truth. `ActionMap<int>`
+  already keys on an `int` keycode and is generic enough; what is missing is the layer above it
+  mapping *semantic action* to *binding*, plus conflict detection and a restore-defaults path.
+  UI: a rebinding screen with press-to-bind capture. Editor: none — bindings are player settings,
+  not authored content, so they belong in a settings file rather than in `App/Assets/Data`.
+- **15.2 Gamepad support.** Engine: SDL3's gamepad API, mapped onto the same semantic action
+  table, with the analog stick driving the existing `InputBuffer` DAS repeat and the d-pad driving
+  discrete steps. Every modal screen already has keyboard navigation, so gamepad navigation is
+  mostly a matter of feeding the same events. UI: on-screen glyphs that switch between keyboard
+  and gamepad labels based on the last-used device — the hint lines in `hud.rml` currently
+  hardcode "Numpad to navigate, Space to select, Esc to close" in six places, which is both a
+  gamepad problem and a rebinding problem, since those strings lie the moment anything is rebound.
+  Those hints should be generated from the live binding table.
+- **15.3 Mouse in the world.** Engine: click-to-move with pathfinding, click-to-target, hover to
+  inspect a tile, and scroll-to-zoom. Note that pathfinding does not exist anywhere yet — the only
+  navigation logic in the project is `EnemyAiSystem`'s single-step cardinal snap with one
+  perpendicular retry. A real A* or Dijkstra pass over the `Grid` is a prerequisite here, and it
+  is shared with M17's smarter AI, so build it once in `Core` as a grid-navigation utility.
+- **15.4 Options screen & settings persistence.** Engine: a settings file in the platform's user
+  data directory (`SDL_GetPrefPath`), covering display mode, resolution, vsync, frame cap, UI
+  scale, master/music/SFX/UI volumes, bindings, and accessibility toggles — written on change,
+  loaded before the window is created so the window opens at the right size. `ApplicationInitContext`
+  currently carries only a title and a fixed 1280x720, and nothing reads a config. UI: the options
+  screen, reachable from both the title screen and the pause menu, and identical in both.
+- **15.5 Display & window.** Engine: fullscreen, borderless, and windowed modes with a toggle
+  binding; resolution selection; and correct handling of the resize path that already exists
+  (`OnWindowResize` updates the RmlUi context dimensions but nothing re-derives the viewport or
+  UI scale). A UI scale factor matters more than usual here because the HUD is a fixed-pixel RmlUi
+  layout and this is a tile game that people will run at 4K.
+- **15.6 Accessibility.** Engine and UI: this project's rendering makes several of these unusually
+  cheap, and skipping them is a real exclusion, not a polish item.
+  — **Color:** every renderable already carries `color_1`/`color_2` for palette-swap shading, and
+    combat-log markup is color-coded. Colorblind-safe palette options and a rule that color is
+    never the *only* carrier of meaning (status chips need shapes or letters, not just tints).
+  — **Text:** a UI scale and font-size setting; the HUD's fixed sizes are currently unadjustable.
+  — **Motion:** a reduced-motion toggle disabling camera shake, screen flash, and tween easing —
+    which matters most for the very effects M13 adds.
+  — **Timing:** turn-based play is inherently forgiving here, but held-key DAS repeat speed should
+    be adjustable, and no prompt should be timed.
+  — **Remapping** is itself an accessibility feature, covered by 15.1.
+  — **Audio:** subtitles or a visual indicator for any audio-only cue, which is a constraint on
+    M12's design rather than separate work.
+
+## M16 — UI polish & information architecture
+
+**Status:** Not started. **Severity: high.**
+
+**Evidence:** the HUD is further along than most of this list — bars, hotbar, target panel,
+status chips, a markup-capable scrolling log, and six modal screens with keyboard navigation.
+The gaps are in what the screens *tell* the player. Searches for `tooltip` and `compare` across
+`App` and `Editor` return nothing, so an item's only representation anywhere is the decorated
+display-name string built by `CharacterScreenSnapshot` — a player can equip a weapon without ever
+seeing its ATP, range shape, hits per turn, element, or affix effect. `InventoryComponent` is a
+flat `vector<entt::entity>` with `capacity = 20` and no stacking, so ten Monomates occupy ten of
+those twenty slots. There is no minimap anywhere (searches for `minimap` and `world_map` return
+nothing) in a game built on procedurally generated multi-room dungeons with fog of war. There is
+no turn-order indicator, which M6.1's own bullet named as its UI deliverable and which was
+deferred and never revisited. And every user-visible string is hardcoded in C++ or in `hud.rml`.
+
+- **16.1 Item information.** UI: a detail panel or tooltip showing an item's real numbers, and a
+  side-by-side comparison against the currently equipped item in that slot when browsing
+  inventory — the single highest-value UI addition available, since the entire itemization
+  milestone is currently invisible to the player. All the data already exists;
+  `ComputeEffectiveStats` already computes exactly the deltas a comparison needs. Also: rarity
+  coloring on names, an unidentified-item treatment if the GDD's optional tekking mechanic is ever
+  taken up, and an icon per item rather than text-only rows.
+- **16.2 Inventory usability.** Engine: stackable consumables (a count on the entry rather than
+  one entity per unit) — twenty slots divided among Monomates is a hard usability wall, and it
+  gets worse the moment drop tables are tuned. Sorting and filtering by type; a "new item" marker;
+  a full-inventory warning at pickup time rather than a silent failure. UI: the Character screen's
+  inventory panel. Editor: a stack-size field on the Consumable card.
+- **16.3 Spatial awareness.** Engine and UI: a minimap or full map screen driven by the data that
+  already exists — `RoomMap` maps every tile to its placed piece, `RoomVisibilityTracker` already
+  tracks Hidden/Explored/Visible per room, and `DungeonLayout` knows the entrance, the exit, and
+  which connections are locked. Rendering that as a room graph is a small amount of work on top of
+  systems that are already built and tested, and without it a player has no way to know where the
+  exit is or which rooms they have not visited. Also worth surfacing: an off-screen indicator for
+  the tab-target, and a compass or exit direction hint.
+- **16.4 Turn and combat readability.** UI: the turn-order indicator M6.1 promised and never
+  delivered — with variable action costs and speed-scaled `ActionCost`, the player currently has
+  no way to know who acts next or how a slow weapon changes that. Also: a movement-range or
+  valid-move highlight (M6.2's own deferred UI bullet), a threat overlay showing which tiles are
+  covered by an enemy's reach, an accuracy or damage estimate on the target panel, and a clearer
+  attack-vs-move distinction when bumping.
+- **16.5 Feedback for failure.** UI: the most common bug reports on games like this are actions
+  that silently do nothing. Today, an unaffordable cast, an unlearned Technique, an out-of-range
+  target, a full inventory, an equip attempt on a non-equippable item, and a hotbar activation
+  with no matching inventory item all resolve as free no-ops with no message. Each needs a log
+  line, a sound, and where appropriate a HUD flash. This is cheap and it is the difference between
+  a game feeling broken and feeling strict.
+- **16.6 Onboarding.** UI: a controls and help screen reachable from the pause menu, generated
+  from the live binding table so it cannot go stale; contextual first-time hints for the hub
+  interactables, the Character screen, hotbar assignment, and targeting; and a glossary for the
+  PSO vocabulary the game uses without explaining (Meseta, Section ID, Photon Art, Technique
+  Disk, Mag, ATP/ATA/MST/DFP/EVP/LCK). None of the stat abbreviations are expanded anywhere in the
+  UI today.
+- **16.7 Localization seam.** Engine: every player-visible string is currently a literal in C++ or
+  in `hud.rml`, including the six hint lines, every combat-log format string built by
+  `CombatLogBridge`, every screen title, and every enum display name. Retrofitting a string table
+  later is far more expensive than routing through one now, even if only English ever ships —
+  and the same indirection is what lets 15.2's binding-aware hint lines work. Also in scope:
+  RmlUi font coverage for any non-Latin target, and number and date formatting.
+- **16.8 Visual consistency pass.** UI: the six modal overlays grew one at a time by cloning each
+  other, and `hud.rcss` is now 642 lines. A pass to unify spacing, panel chrome, focus treatment,
+  hint-line placement, and the two different navigation idioms currently in use (context-menu
+  rows on the Character screen, direct two-panel activation on Shop, Storage, and Techniques).
+  Also: a consistent modal-close contract, and making sure every screen states its own controls.
+
+## M17 — Encounter & simulation depth
+
+**Status:** Not started. **Severity: high.** Distinct from content and balance: everything below
+is a missing *mechanism*, not a missing number or a missing enemy.
+
+**Evidence:** `AiBehavior` has exactly one value, `ChaseAndAttack`, and `EnemyAiSystem::Decide`
+issues only `MoveAction` — an enemy's only way to attack is `MoveAction`'s bump-into-hostile
+fallback. That means no enemy can use a ranged weapon, cast a Technique, use a Photon Art, apply
+a status effect deliberately, flee, patrol, guard, or support another enemy, regardless of what
+its prefab carries. `PieceCategory` includes `BossArena`, but nothing anywhere consumes it: there
+is no boss component, no boss health bar, no arena lock, no phase system, and mission completion
+is triggered by walking onto an `Exit` piece rather than by defeating anything.
+`Combat/Hostility.h` is a two-line placeholder declaring the player hostile to every other entity
+and vice versa, which makes friendly or neutral entities impossible — including the hub NPCs,
+which are only safe today because they carry no `HealthComponent`. And M5.3's rare-enemy and
+tier-reskin mechanics were never started.
+
+- **17.1 AI behavior library.** Engine: `AiBehavior` needs to become a real set — ranged attacker
+  (kite to preferred distance, fire), caster (spend TP on Techniques with the existing target
+  resolution), support (heal or buff allies), skirmisher (attack then withdraw), guard (hold a
+  tile until provoked), patrol (a route authored on the piece), and flee-at-low-HP. The action
+  layer these need is already complete and already unit-tested — `AttackAction`, `TechniqueAction`,
+  `PhotonArtAction`, and `UseItemAction` are all usable by any entity, not just the player, so
+  this is decision-making work rather than new mechanics. It does need grid pathfinding
+  (see 15.3) and a line-of-sight query, neither of which exists. Editor: behavior selection and
+  per-behavior parameters on the Prefab Editor's AI card, which today has only `behavior` and
+  `detection_range`.
+- **17.2 Faction & hostility.** Engine: replace `IsHostile`'s placeholder with a real faction
+  component and relationship table, so neutral wildlife, friendly NPCs, summoned allies, and
+  enemy-infighting are all expressible. This also removes a latent trap — any hub NPC that ever
+  gains a `HealthComponent` becomes attackable today. Editor: a faction field on the Prefab
+  Editor.
+- **17.3 Boss encounter framework.** Engine: a `BossComponent`, arena entry and exit locking
+  (the `BossArena` piece category is already authored and already reaches the stitcher), an HP
+  threshold phase system with per-phase behavior and ability sets, telegraphed multi-turn attacks,
+  add-summoning that reuses the existing `SpawnWaveSystem`, and mission completion on boss defeat
+  as an alternative to reaching an `Exit` piece. UI: a boss health bar distinct from the target
+  panel, a boss name and phase callout, and an arena-locked indicator. Editor: phase and ability
+  authoring on the Prefab Editor, and a boss field on the Dungeon schema naming which piece and
+  which boss end the mission.
+- **17.4 Rare enemies & tier reskins (M5.3, restated here because it is a mechanism, not
+  content).** Engine: a rare-variant roll at spawn time applying an alternate palette, a stat
+  multiplier, and a guaranteed drop override; and a roster-substitution table so a higher
+  difficulty swaps an enemy for a tougher counterpart rather than only inflating its numbers.
+  The spawn path (`DungeonInstantiator` plus `SpawnWaveSystem`) is where the roll belongs, and
+  `RenderableComponent`'s existing two-color palette swap already makes the alternate palette
+  nearly free. UI: a rare-enemy visual and audible callout on spawn — the whole point of the
+  mechanic is that the player notices. Editor: rare-variant and substitution fields on the Prefab
+  Editor.
+- **17.5 Population & spawn weighting.** Engine: M5.2 explicitly deferred a spawn-weight field
+  because nothing consumed it. That is still true — every spawn is hand-placed on a piece — which
+  means enemy variety per mission is fixed by piece authoring rather than rolled per run. A
+  weighted per-area spawn table, rolled at instantiation against the area's race and difficulty
+  tier, is what makes a generated dungeon feel generated. This is the natural consumer M5.2 was
+  waiting for, and it depends on M3.2's area schema.
+- **17.6 Environmental interaction.** Engine: the GDD names a per-area hazard type, and M3.2's
+  schema bullet lists it, but no hazard mechanic exists — no traps, no damaging tiles, no doors
+  beyond the abstract lock/key annotation the stitcher records, no destructible terrain beyond the
+  breakable boxes. The lock/key system in particular is worth finishing: M4.3 deliberately left it
+  as a verified-solvable annotation on the layout with no in-world entities, and items and
+  interaction now both exist, so it can be made real.
+
+## M18 — Release engineering & distribution
+
+**Status:** Not started. **Severity: blocker.** Start this early and run it continuously — it is
+listed last only because its final gates run last.
+
+**Evidence:** there is no `.github` directory, so nothing builds or tests automatically. The
+build is Windows-only and Visual-Studio-only by construction (a vendored premake `vs2026` binary,
+an `x64-windows` vcpkg triplet hardcoded in `Build.lua`, and PowerShell and batch scripts as the
+only entry points), which has already cost this project real work — M10.1 is recorded in this very
+file as implemented but never built or verified, because the session that wrote it had no Windows
+toolchain. `issues_and_bugs.md` records three App-Test failures confirmed present on `master`.
+`Application::Run` computes a delta time from the performance counter but never calls
+`SDL_SetRenderVSync` and imposes no frame cap, so the loop spins as fast as the GPU allows. There
+is no packaging step, no installer, no version string, no crash handler, and logging is
+`SDL_Log` to stdout with no file sink.
+
+- **18.1 Continuous integration.** A workflow building `Core`, `App`, `Editor`, `Core-Test`, and
+  `App-Test` on every push, running both Catch2 suites, and running `Run-ClangFormat.ps1 -Check`
+  and `Run-ClangTidy.ps1` — both scripts already exist and are documented as manual-only, which
+  is why nothing enforces them. Fix the three known `App-Test` failures first so the suite can be
+  a gate rather than a warning: `TweenSystemTests.cpp:86` (a float-precision comparison that
+  should use a tolerance), `MoveActionTests.cpp:174` (bump-to-attack queues four tweens where two
+  are expected), and `CombatLogBridgeTests.cpp:106` (a lethal hit publishes one log line where a
+  hit-plus-defeat pair is expected). The second and third are behavioral and may be real defects
+  rather than stale expectations.
+- **18.2 Build portability.** The Windows-only constraint is the single biggest tax on this
+  project's own development, independent of whether Linux or macOS is ever a shipping target.
+  Every dependency in `vcpkg.json` is cross-platform; the blockers are the vendored premake
+  binary, the hardcoded triplet, and the PowerShell-only scripts. Even a headless
+  compile-and-test configuration on Linux would have caught M10.1's unverified state.
+- **18.3 Packaging & distribution.** A `Dist` configuration that produces a self-contained,
+  runnable folder — executable, required runtime libraries, `Assets/`, compiled shaders, and
+  licence files — with the asset copy done as a real install step rather than the current
+  postbuild copy into `Binaries/`. Then an installer or archive, an application icon (the window
+  has none), correct executable metadata, and a decision about whether the Editor ships alongside
+  the game or stays a development tool. Also: a version string, surfaced in the title screen and
+  in logs, and a place to record it.
+- **18.4 Crash handling & diagnostics.** `main.cpp` catches `std::exception` around `Run()` and
+  logs it, which is good but only covers the exception path. Needs a structured logger with a
+  file sink in the user data directory, log rotation, a crash handler capturing a stack trace, an
+  opt-in crash report (never automatic, never silent), and the build metadata to make a report
+  actionable. Content-load failures deliberately throw loudly, per this file's own convention —
+  that is correct for development and needs a player-facing error dialog for a shipped build,
+  because "the process exited with code 1" is not a bug report.
+- **18.5 Performance & frame pacing.** Set vsync or an explicit frame cap — an uncapped loop on a
+  turn-based tile game pins a GPU for no reason and is the kind of thing that gets a build called
+  broken on a laptop. Then measure: per-frame draw-call count as room count grows, `TextureAtlas`
+  packing behavior with a real asset volume, generation time for large dungeons, memory growth
+  across many hub-to-dungeon swaps (`TransitionToWorld`'s selective entity destruction is exactly
+  the shape that leaks), and RmlUi layout cost with a full inventory. A simple in-build overlay for
+  frame time, entity count, and draw calls pays for itself.
+- **18.6 Robustness under bad input.** Content-load failures throwing is right; a *shipped* build
+  should also survive a corrupt save, a partially-written settings file, a missing asset, a
+  dungeon that fails to generate, and a display mode the hardware rejects. Each of those wants a
+  defined fallback, and the generation path in particular needs a retry-with-a-new-seed rather
+  than a hard failure.
+- **18.7 Legal & compliance.** Third-party licence texts bundled in the build (SDL3, RmlUi, EnTT,
+  rapidjson, Catch2, FreeType, glslang, cereal, the vendored RmlUi SDL backend, PixelCode, and
+  every art and audio asset). Confirm the licence on every asset actually used. The README's PSO
+  trademark note belongs in the shipped credits too. If the project ever moves past
+  private and non-commercial, that note needs a real review, not a footnote.
+- **18.8 Privacy.** No telemetry exists today, which is the correct default. If any is ever added,
+  it must be opt-in and disclosed. A crash reporter counts as telemetry.
+
+## Ship checklist
+
+A condensed gate list, ordered by what a stranger installing the build would hit first. Content
+and balance are deliberately excluded throughout, per this analysis's scope. Nothing here is new
+scope — every row points at a bullet above.
+
+**Blocking — a build cannot ship without these**
+
+- [ ] Escape no longer quits the game from gameplay (14.2)
+- [ ] Title screen, pause menu, and a confirmed quit path (14.1, 14.2, 14.3)
+- [ ] Save and load, so closing the window does not destroy the character (11.2)
+- [ ] Audio: an engine, a content type, and a cue on every feedback moment (12.1–12.3)
+- [ ] Options screen with volume, display, and rebinding (15.1, 15.4, 15.5)
+- [ ] Settings persisted to the user data directory (15.4)
+- [ ] The three known `App-Test` failures fixed and CI gating both suites (18.1)
+- [ ] A packaged, self-contained, runnable build with an icon and a version (18.3)
+- [ ] Crash handling, file logging, and a player-facing error path (18.4)
+- [ ] vsync or a frame cap (18.5)
+- [ ] Third-party licences bundled in the build (18.7)
+- [ ] Character creation, so the player is not always the one hardcoded prefab (10.3)
+
+**High — a build shipping without these will be called unfinished**
+
+- [ ] Item tooltips and equipped-item comparison (16.1)
+- [ ] Consumable stacking, plus sorting and a full-inventory warning (16.2)
+- [ ] A minimap or map screen (16.3)
+- [ ] Turn-order indicator and movement-range highlight (16.4)
+- [ ] Visible feedback for every currently-silent failed action (16.5)
+- [ ] A controls and help screen generated from live bindings (16.6)
+- [ ] Gamepad support, and hint lines that respect rebinding (15.2)
+- [ ] Facing and per-state animation clips (13.1)
+- [ ] Scene-transition fades and an area title card (13.4)
+- [ ] More than one AI behavior, including ranged and casting enemies (17.1)
+- [ ] A boss encounter framework, since `BossArena` is authored and unconsumed (17.3)
+- [ ] Area/biome schema and editor, which several other gaps depend on (3.2)
+- [ ] Difficulty tiers (10.2) and fixed area unlock order (4.5)
+- [ ] Accessibility baseline: colorblind-safe palettes, text scale, reduced motion (15.6)
+
+**Medium — expected, and cheaper to do before release than after**
+
+- [ ] Impact weight: hit-stop, knockback, camera shake (13.2)
+- [ ] Death and spawn presentation, including telegraphed spawns (13.3)
+- [ ] Localization seam, even if only English ships (16.7)
+- [ ] Faction system replacing the placeholder hostility rule (17.2)
+- [ ] Rare enemies and tier roster substitution (5.3, 17.4)
+- [ ] Per-area weighted spawn tables (17.5)
+- [ ] Mag companion (9.1)
+- [ ] Stat materials (8.3)
+- [ ] Environmental hazards and real in-world locks and keys (17.6)
+- [ ] Visual consistency pass across the modal screens (16.8)
+- [ ] `ContentWatcher` actually wired into `App`, which was built and never connected (1.3)
+- [ ] Build portability, so a session without Windows can still verify its own work (18.2)
