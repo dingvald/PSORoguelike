@@ -3,7 +3,9 @@
 #include "Actions/AttackAction.h"
 #include "Combat/ActionCost.h"
 #include "Combat/Hostility.h"
+#include "Combat/ProjectileImpact.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/ProjectileComponent.h"
 #include "Components/TweenComponent.h"
 #include "Engine/Actions/MoveEvent.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -11,6 +13,7 @@
 #include "Engine/Math/Vec2f.h"
 
 #include <memory>
+#include <vector>
 
 namespace psr {
 
@@ -68,6 +71,31 @@ ActionResult MoveAction::Perform(Entity actor)
 
     AfterMoveEvent after_move{tile, target};
     actor.Dispatch(after_move);
+
+    // Symmetric counterpart to ProjectileAdvanceAction's own per-hop check:
+    // this actor just walked onto a tile that may already hold an in-flight
+    // projectile sitting there between its own hops, so resolve against any
+    // it finds there now instead of waiting for the projectile's next hop.
+    // Snapshot first -- ResolveProjectileImpact can mutate the Grid's own
+    // occupant vector via RemoveEntity on a lethal hit, same precaution as
+    // every other hit loop here.
+    const std::vector<entt::entity> tile_occupants = m_grid->GetEntities(target);
+    for (entt::entity occupant : tile_occupants)
+    {
+        if (!registry.HasComponent<ProjectileComponent>(occupant))
+            continue;
+        const ProjectileComponent& projectile = registry.GetComponent<ProjectileComponent>(occupant);
+        if (!ResolveProjectileImpact(registry, *m_grid, *m_affixes, *m_rng, projectile, target))
+            continue;
+        if (!projectile.pierces)
+        {
+            m_grid->RemoveEntity(target, occupant);
+            registry.DestroyEntity(occupant);
+        }
+    }
+
+    if (!actor.IsValid())
+        return ActionResult(0); // the projectile it walked into killed it
 
     return ActionResult(EffectiveMoveCost(actor, kMoveCost));
 }
