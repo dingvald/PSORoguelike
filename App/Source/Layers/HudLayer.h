@@ -236,8 +236,9 @@ private:
     void OnTeleporterPrompt(const TeleporterPromptMessage& message);
 
     // Rebuilds #floating-text-layer every call (published every frame by
-    // GameplayLayer) -- one positioned, non-interactive span per active
-    // FloatingTextSystem instance, left/top/color set inline since they're
+    // GameplayLayer) -- one positioned, non-interactive anchor div per active
+    // FloatingTextSystem instance (see .floating-text-anchor in hud.rcss),
+    // wrapping the actual text span; left/top/color set inline since they're
     // per-instance, not shared CSS.
     void OnFloatingTextState(const FloatingTextStateMessage& message);
 

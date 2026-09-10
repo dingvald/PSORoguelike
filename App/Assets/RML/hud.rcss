@@ -252,12 +252,25 @@ body {
     pointer-events: none;
 }
 
-.floating-text {
-    display: block;
+/* Zero-size, positioned at a tile's centre in screen space (see
+   GameplayLayer::PublishFloatingTextState); its .floating-text child is
+   centred on that point via align-items/justify-content, which -- unlike a
+   transform: translate(-50%, -50%) on the text itself -- centres correctly
+   regardless of the child's own rendered width/height. */
+.floating-text-anchor {
+    display: flex;
     position: absolute;
+    width: 0;
+    height: 0;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.floating-text {
+    white-space: nowrap;
     pointer-events: none;
     font-weight: bold;
-    transform: translate(-50%, -50%);
 }
 
 #game-over {

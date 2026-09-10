@@ -1936,10 +1936,16 @@ void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)
     std::string markup;
     for (const FloatingTextStateMessage::Entry& entry : message.entries)
     {
-        markup += "<span class=\"floating-text\" style=\"left:" + std::to_string(entry.screen_x) +
-                  "px; top:" + std::to_string(entry.screen_y) +
-                  "px; font-size:" + std::to_string(kFloatingTextBaseFontSizeEm * entry.scale) +
-                  "em; color:" + ColorToRgbaCss(entry.color) + ";\">" + EscapeRml(entry.text) + "</span>";
+        // A zero-size flex anchor centered on (screen_x, screen_y), its
+        // .floating-text child centered within it by align-items/
+        // justify-content regardless of the child's own rendered
+        // width/height -- see the .floating-text-anchor doc comment in
+        // hud.rcss for why this replaced a transform: translate(-50%, -50%)
+        // on the text span itself.
+        markup += "<div class=\"floating-text-anchor\" style=\"left:" + std::to_string(entry.screen_x) +
+                  "px; top:" + std::to_string(entry.screen_y) + "px;\"><span class=\"floating-text\" style=\"font-size:" +
+                  std::to_string(kFloatingTextBaseFontSizeEm * entry.scale) + "em; color:" +
+                  ColorToRgbaCss(entry.color) + ";\">" + EscapeRml(entry.text) + "</span></div>";
     }
     layer->SetInnerRML(markup);
 }
