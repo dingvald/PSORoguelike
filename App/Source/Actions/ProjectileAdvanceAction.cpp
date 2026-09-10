@@ -25,66 +25,74 @@ namespace psr {
 namespace {
     constexpr float kProjectileHopDuration = 0.08f;
 
-    void ResolveImpact(Registry& registry, const Grid& grid, const AffixLibrary& affixes, std::mt19937& rng,
-                       const ProjectileComponent& projectile, const std::vector<Vec2>& impact_tiles)
+    // Resolves against whatever currently occupies `tile` -- called fresh on
+    // every hop against the tile the projectile just landed on, so a target
+    // that only briefly shares that tile with the in-flight projectile (e.g.
+    // walks onto it between hops) still gets checked, not just whatever's
+    // sitting on the path's final tile once travel completes. Returns
+    // whether a hostile target was found there, whether or not the hit
+    // roll/effect actually landed -- ProjectileAdvanceAction uses this to
+    // decide whether a non-piercing bolt stops here.
+    bool ResolveImpact(Registry& registry, const Grid& grid, const AffixLibrary& affixes, std::mt19937& rng,
+                       const ProjectileComponent& projectile, Vec2 tile)
     {
         if (!registry.IsValid(projectile.source))
-            return; // caster died mid-flight -- nothing to attribute the hit to
+            return false; // caster died mid-flight -- nothing to attribute the hit to
 
         Entity source(registry, projectile.source);
         std::uniform_real_distribution<float> unit_roll(0.0f, 1.0f);
 
-        for (Vec2 tile : impact_tiles)
+        bool impacted = false;
+        // Snapshot before hitting anything -- a lethal hit mutates the
+        // Grid's own occupant vector via RemoveEntity, same precaution
+        // every other Action's hit loop takes.
+        const std::vector<entt::entity> occupants = grid.GetEntities(tile);
+        for (entt::entity occupant : occupants)
         {
-            // Snapshot before hitting anything -- a lethal hit mutates the
-            // Grid's own occupant vector via RemoveEntity, same precaution
-            // every other Action's hit loop takes.
-            const std::vector<entt::entity> occupants = grid.GetEntities(tile);
-            for (entt::entity occupant : occupants)
+            if (occupant == projectile.source || !registry.HasComponent<HealthComponent>(occupant))
+                continue;
+            Entity target(registry, occupant);
+            if (!IsHostile(source, target))
+                continue;
+            impacted = true;
+
+            const StatsComponent defender_stats = ComputeEffectiveStats(target, affixes);
+            const float hit_chance = ComputeHitChance(projectile.attacker_stats.ata, defender_stats.evp);
+            if (unit_roll(rng) > hit_chance)
             {
-                if (occupant == projectile.source || !registry.HasComponent<HealthComponent>(occupant))
-                    continue;
-                Entity target(registry, occupant);
-                if (!IsHostile(source, target))
-                    continue;
-
-                const StatsComponent defender_stats = ComputeEffectiveStats(target, affixes);
-                const float hit_chance = ComputeHitChance(projectile.attacker_stats.ata, defender_stats.evp);
-                if (unit_roll(rng) > hit_chance)
-                {
-                    AttackMissEvent miss{target};
-                    source.Dispatch(miss);
-                    continue;
-                }
-
-                if (projectile.effect_family == EffectFamily::Status)
-                {
-                    ApplyStatusEffect(target, registry.GetStatusEffectLibrary(), projectile.status_effect_id);
-                    continue;
-                }
-
-                const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
-                const int resistance_percent =
-                    defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
-                int damage = static_cast<int>(
-                    std::lround(ComputeTechniqueDamage(projectile.attacker_stats.mst, resistance_percent) *
-                                projectile.power_multiplier));
-
-                BeforeDamageEvent before{target, damage};
-                source.Dispatch(before);
-                damage = before.incoming_damage;
-
-                IncomingDamageEvent incoming{source, damage, false, projectile.hit_effect_prefab_id,
-                                             projectile.hit_effect_duration};
-                target.Dispatch(incoming);
-
-                if (!target.IsValid())
-                    continue;
-
-                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), projectile.status_effect_id,
-                                          projectile.status_chance_percent, rng);
+                AttackMissEvent miss{target};
+                source.Dispatch(miss);
+                continue;
             }
+
+            if (projectile.effect_family == EffectFamily::Status)
+            {
+                ApplyStatusEffect(target, registry.GetStatusEffectLibrary(), projectile.status_effect_id);
+                continue;
+            }
+
+            const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+            const int resistance_percent =
+                defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
+            int damage = static_cast<int>(
+                std::lround(ComputeTechniqueDamage(projectile.attacker_stats.mst, resistance_percent) *
+                            projectile.power_multiplier));
+
+            BeforeDamageEvent before{target, damage};
+            source.Dispatch(before);
+            damage = before.incoming_damage;
+
+            IncomingDamageEvent incoming{source, damage, false, projectile.hit_effect_prefab_id,
+                                         projectile.hit_effect_duration};
+            target.Dispatch(incoming);
+
+            if (!target.IsValid())
+                continue;
+
+            MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), projectile.status_effect_id,
+                                      projectile.status_chance_percent, rng);
         }
+        return impacted;
     }
 } // namespace
 
@@ -111,13 +119,12 @@ ActionResult ProjectileAdvanceAction::Perform(Entity actor)
               Vec2f{}, kProjectileHopDuration, 0.0f, nullptr});
 
     const int step_cost = projectile.step_cost;
-    if (projectile.next_hop < projectile.path.size())
-        return ActionResult(step_cost); // more hops queued for later turns
-
-    const std::vector<Vec2> impact_tiles =
-        projectile.pierces ? projectile.path : std::vector<Vec2>{projectile.path.back()};
     Registry& registry = actor.GetRegistry();
-    ResolveImpact(registry, *m_grid, *m_affixes, *m_rng, projectile, impact_tiles);
+    const bool impacted = ResolveImpact(registry, *m_grid, *m_affixes, *m_rng, projectile, next_tile);
+
+    const bool stopped_by_impact = impacted && !projectile.pierces;
+    if (!stopped_by_impact && projectile.next_hop < projectile.path.size())
+        return ActionResult(step_cost); // more hops queued for later turns
 
     registry.DestroyEntity(actor.Handle());
     return ActionResult(step_cost);

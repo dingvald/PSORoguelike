@@ -18,12 +18,16 @@ namespace psr {
 // GameplayLayer's SetNpcDecision wrapper, ahead of the real AI decision.
 //
 // Each hop moves the entity's logical Position/Grid membership instantly
-// and queues a purely cosmetic glide Tween, same idiom as MoveAction. Once
-// the path is exhausted, resolves the hit (fresh hit-roll/damage against
-// whatever occupies the impact tile(s) now, dispatched as
+// and queues a purely cosmetic glide Tween, same idiom as MoveAction. After
+// every hop, resolves against whatever occupies the tile just landed on --
+// checked live per hop rather than deferred to path completion, so a target
+// that only shares a tile with the projectile mid-flight (e.g. steps onto it
+// between hops) still gets hit (fresh hit-roll/damage, dispatched as
 // ProjectileComponent::source so combat log/lifesteal/OnHitEffectSystem all
-// attribute it to the original caster, not the projectile) and destroys the
-// projectile entity.
+// attribute it to the original caster, not the projectile). A non-piercing
+// bolt is destroyed as soon as it lands a hostile hit; a piercing one keeps
+// going and can resolve against every tile in its path. Either way, the
+// projectile entity is destroyed once it stops (impact or path exhausted).
 class ProjectileAdvanceAction : public IAction
 {
 public:
