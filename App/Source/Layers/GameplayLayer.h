@@ -45,6 +45,8 @@
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
 #include "Systems/ExperienceSystem.h"
+#include "Systems/HealEffectSystem.h"
+#include "Systems/HealTextSystem.h"
 #include "Systems/LootDropSystem.h"
 #include "Systems/MissFlashEffectSystem.h"
 #include "Systems/OnHitEffectSystem.h"
@@ -174,7 +176,8 @@ private:
     //    did.
     //  - m_turn_coordinator/m_lifetime_system/m_combat_log_bridge/m_loot_drop_system/
     //    m_experience_system/m_visual_effects/m_miss_flash_effect_system/
-    //    m_on_hit_effect_system/m_status_effect_markers/m_switch_trigger_system
+    //    m_on_hit_effect_system/m_heal_effect_system/m_status_effect_markers/
+    //    m_switch_trigger_system
     //    hold no such per-dungeon data -- just references plus, for several of them, a
     //    Subscribe(player) call. Since the player entity itself survives a
     //    scene swap (kept by DestroyWorldEntities) but
@@ -381,6 +384,12 @@ private:
     // are always brand-new entities, never the persisting player.
     DamageTextSystem m_damage_text_system{m_floating_text};
 
+    // Bridges AfterHealEvent onto m_floating_text -- see HealTextSystem.h.
+    // Same "plain long-lived member, player Subscribe() issued exactly once
+    // from SpawnNewCharacter" shape as m_damage_text_system just above, for
+    // the identical reason.
+    HealTextSystem m_heal_text_system{m_floating_text};
+
     // Room-granularity fog of war: which placed piece each tile belongs to,
     // and which pieces are current/visited -- see RoomMap/RoomVisibilityTracker.
     // Hold no pointers into other members, so declaration order relative to
@@ -520,6 +529,14 @@ private:
     // fresh Subscribe call each time it's spawned, same as
     // m_damage_text_system/m_combat_log_bridge.
     std::optional<OnHitEffectSystem> m_on_hit_effect_system;
+
+    // Bridges AfterHealEvent onto m_visual_effects for a fixed heal glow --
+    // see HealEffectSystem.h. Not player-filtered, same breadth as
+    // m_on_hit_effect_system -- lazy-once/never-rebuilt for the player's own
+    // Subscribe call, same reasoning as m_combat_log_bridge; every enemy
+    // still gets its own fresh Subscribe call each time it's spawned, same
+    // as m_on_hit_effect_system.
+    std::optional<HealEffectSystem> m_heal_effect_system;
 
     // Kept alive across the interactive target-select flow -- RequestTargeting
     // only takes a non-owning IAction*, so whoever constructs the action

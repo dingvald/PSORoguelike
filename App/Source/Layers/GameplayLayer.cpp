@@ -404,6 +404,8 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, m_player));
         m_on_hit_effect_system.emplace(*m_visual_effects);
         m_on_hit_effect_system->Subscribe(Entity(m_registry, m_player));
+        m_heal_effect_system.emplace(*m_visual_effects);
+        m_heal_effect_system->Subscribe(Entity(m_registry, m_player));
     }
 
     // Must be constructed before any entity's ActorComponent is emplaced --
@@ -431,6 +433,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
                                     m_player);
         m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
         m_damage_text_system.Subscribe(Entity(m_registry, m_player));
+        m_heal_text_system.Subscribe(Entity(m_registry, m_player));
     }
     if (!m_loot_drop_system)
     {
@@ -482,8 +485,10 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
                 entity, KnownTechniquesComponent{{KnownTechniqueEntry{ranged_tech->technique_id, 1}}});
         m_combat_log_bridge->Subscribe(Entity(m_registry, entity));
         m_damage_text_system.Subscribe(Entity(m_registry, entity));
+        m_heal_text_system.Subscribe(Entity(m_registry, entity));
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
         m_on_hit_effect_system->Subscribe(Entity(m_registry, entity));
+        m_heal_effect_system->Subscribe(Entity(m_registry, entity));
 
         if (const Position* position = m_registry.TryGetComponent<Position>(entity))
         {
