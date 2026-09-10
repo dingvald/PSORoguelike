@@ -1,0 +1,69 @@
+{
+    "schema_version": 1,
+    "components": {
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.booma_claws"
+        },
+        "blocks_movement": {},
+        "ai": {
+            "behavior": "ranged_tech_at_distance",
+            "detection_range": 8
+        },
+        "ranged_tech": {
+            "technique_id": "foie",
+            "range": 5
+        },
+        "tp": {
+            "current_tp": 30,
+            "max_tp": 30
+        },
+        "health": {
+            "current_hp": 120,
+            "max_hp": 120
+        },
+        "stats": {
+            "atp": 110,
+            "ata": 75,
+            "mst": 40,
+            "dfp": 15,
+            "evp": 40,
+            "lck": 15
+        },
+        "race": {
+            "race_id": "a_beast"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#4a6a8aff",
+            "color_2": "#c9a86aff",
+            "render_layer": 1
+        },
+        "drop_table": {
+            "entries": [
+                {
+                    "item_prefab_id": "monomate",
+                    "weight": 1.0
+                },
+                {
+                    "item_prefab_id": "monofluid",
+                    "weight": 0.8
+                }
+            ],
+            "no_drop_weight": 2.0,
+            "meseta_weight": 3.0,
+            "meseta_min": 30,
+            "meseta_max": 80
+        },
+        "experience_value": {
+            "xp": 30
+        }
+    }
+}

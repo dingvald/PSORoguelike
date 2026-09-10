@@ -1,0 +1,11 @@
+{
+    "schema_version": 1,
+    "components": {
+        "item": {},
+        "weapon": {
+            "range_shape": "single_target",
+            "range": 1,
+            "hits_per_turn": 1
+        }
+    }
+}
