@@ -17,10 +17,17 @@ TurnCoordinator::TurnCoordinator(Registry& registry, int action_threshold)
     registry.OnDestroy<ActorComponent, &TurnCoordinator::OnActorDestroyed>(*this);
     registry.OnConstruct<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledConstructed>(*this);
     registry.OnDestroy<PlayerControlledComponent, &TurnCoordinator::OnPlayerControlledDestroyed>(*this);
+
+    // The time sentinel: a plain ActorComponent-bearing entity with no other
+    // role, enqueued by the OnConstruct<ActorComponent> listener just wired
+    // above like any other actor. See Step()'s own comment for how it's used.
+    m_time_sentinel = m_registry->CreateEntity();
+    m_registry->Emplace<ActorComponent>(m_time_sentinel);
 }
 
 TurnCoordinator::~TurnCoordinator()
 {
+    m_registry->DestroyEntity(m_time_sentinel);
     m_registry->DisconnectComponentLifecycle<ActorComponent>(*this);
     m_registry->DisconnectComponentLifecycle<PlayerControlledComponent>(*this);
 }
@@ -62,6 +69,18 @@ TurnStep TurnCoordinator::Step(float delta_time)
     {
         entt::entity actor_handle = m_turn_queue.NextActor();
         Entity actor(*m_registry, actor_handle);
+
+        if (actor_handle == m_time_sentinel)
+        {
+            if (m_on_turn_passed)
+                m_on_turn_passed();
+
+            const int energy = m_turn_queue.GetEnergy(actor_handle) - WaitAction::kWaitCost;
+            m_turn_queue.Requeue(actor_handle, energy);
+            actor.Get<ActorComponent>().ap = energy;
+            continue;
+        }
+
         const bool is_player = actor.Has<PlayerControlledComponent>();
 
         IAction* action = nullptr;

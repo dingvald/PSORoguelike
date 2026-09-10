@@ -45,6 +45,12 @@ public:
 
     RoomVisibility GetVisibility(std::optional<std::uint32_t> room) const;
 
+    // The player's current room, as last passed to Update() -- nullopt
+    // before the first Update() call or while standing on an untagged tile.
+    // Lets a caller (see GameplayLayer::EnterRoom) detect a room change
+    // itself before handing the new value to Update().
+    std::optional<std::uint32_t> CurrentRoom() const { return m_current_room; }
+
 private:
     bool IsAdjacentToCurrent(std::uint32_t room) const;
 

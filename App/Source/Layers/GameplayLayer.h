@@ -13,6 +13,7 @@
 #include "Engine/Dungeon/RoomVisibilityTracker.h"
 #include "Engine/Dungeon/SpawnWaveSystem.h"
 #include "Engine/Dungeon/SwitchTriggerSystem.h"
+#include "Engine/ECS/LifetimeSystem.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/AnimationClock.h"
@@ -171,7 +172,7 @@ private:
     //    room, ...) that a new dungeon invalidates outright -- these are
     //    rebuilt via .emplace() every call, exactly as the old LoadNewGame()
     //    did.
-    //  - m_turn_coordinator/m_combat_log_bridge/m_loot_drop_system/
+    //  - m_turn_coordinator/m_lifetime_system/m_combat_log_bridge/m_loot_drop_system/
     //    m_experience_system/m_visual_effects/m_miss_flash_effect_system/
     //    m_on_hit_effect_system/m_status_effect_markers/m_switch_trigger_system
     //    hold no such per-dungeon data -- just references plus, for several of them, a
@@ -207,6 +208,16 @@ private:
     // the old OnRestartRequested's tail, now also used by every
     // TransitionToWorld call, not just a death restart.
     void RepublishHudStateAfterTransition();
+
+    // Called with the placed-piece index the player's tile currently
+    // resolves to (via m_room_map->GetRoom), both once right after a
+    // TransitionToWorld and every OnUpdate tick thereafter. Triggers
+    // m_spawn_wave_system's room-entry-gated first wave exactly on a real
+    // room change (never on every frame the player stays put, and safely
+    // idempotent on re-entry -- see SpawnWaveSystem::TriggerRoomEntered's
+    // own doc comment), then forwards to m_room_visibility->Update for fog
+    // of war, same as before this existed.
+    void EnterRoom(std::optional<std::uint32_t> room);
 
     // Dispatched from OnEvent's dungeon-scene Space handling when
     // FindTeleporterAt resolves a hit on the player's tile (see
@@ -389,6 +400,13 @@ private:
     // so there's no reason to reconstruct this alongside the world it
     // schedules turns for.
     std::optional<TurnCoordinator> m_turn_coordinator;
+
+    // Generic turn-counted "expire after N turns" system -- see
+    // LifetimeSystem.h. Holds only a Registry* (no per-dungeon state), so
+    // it's lazy-once/never-rebuilt like m_visual_effects; wired to
+    // m_turn_coordinator's turn-clock sentinel via SetOnTurnPassed right
+    // after m_turn_coordinator itself is constructed.
+    std::optional<LifetimeSystem> m_lifetime_system;
 
     // Decides non-player actors' turns (installed onto m_turn_coordinator via
     // SetNpcDecision in OnAttach). Holds only pointers into m_grid/m_registry/

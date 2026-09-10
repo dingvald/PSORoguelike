@@ -355,6 +355,37 @@ TEST_CASE("TurnCoordinator survives a lethal Poison tick destroying the acting e
     REQUIRE_FALSE(registry.IsValid(player));
 }
 
+TEST_CASE("TurnCoordinator's time sentinel fires SetOnTurnPassed once per full round without disrupting play",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    int turns_passed = 0;
+    coordinator.SetOnTurnPassed([&] { ++turns_passed; });
+
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::ActorComponent>(player);
+
+    coordinator.KeyBindings().Bind(1, std::make_unique<psr::WaitAction>());
+
+    coordinator.PressKey(1);
+    REQUIRE(coordinator.Step(0.016f) == psr::TurnStep::Resolved);
+    CHECK(turns_passed == 1);
+    CHECK(registry.GetComponent<psr::ActorComponent>(player).ap == 0);
+
+    // The sentinel and the player both spend a full action threshold's worth
+    // of energy each round, so they stay in lockstep -- one more full round
+    // should fire the callback exactly once more, not zero or twice.
+    coordinator.PressKey(1);
+    REQUIRE(coordinator.Step(0.016f) == psr::TurnStep::Resolved);
+    CHECK(turns_passed == 2);
+}
+
 TEST_CASE("TurnCoordinator returns PlayerDefeated instead of hanging when an NPC's attack kills the last player",
           "[TurnCoordinator]")
 {

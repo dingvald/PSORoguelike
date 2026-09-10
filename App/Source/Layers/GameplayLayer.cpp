@@ -43,6 +43,7 @@
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
+#include "Engine/ECS/LifetimeComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
@@ -128,6 +129,14 @@ namespace {
     // in the player's inventory, leaving that slot inert rather than erroring.
     constexpr const char* kMonomatePrefabId = "monomate";
     constexpr const char* kMonofluidPrefabId = "monofluid";
+
+    // Played over every freshly spawned enemy's tile (see on_enemy_spawned
+    // below), one in-game turn long (LifetimeComponent{1}) -- signals to the
+    // player that this enemy just appeared. App/Assets/Data/Entities/vfx/
+    // enemy_spawn.json is a placeholder (non-animated) prefab; the real
+    // animated artwork is content for the user to author via
+    // PrefabEditorLayer, same authoring path as the other vfx/* prefabs.
+    constexpr const char* kEnemySpawnEffectPrefabId = "vfx.enemy_spawn";
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9.
     std::optional<int> KeyCodeToHotbarSlot(int key_code)
@@ -301,6 +310,14 @@ void GameplayLayer::DestroyWorldEntities()
 {
     std::unordered_set<entt::entity> keep{m_player};
 
+    // The turn-clock sentinel is a plain EventHandlerComponent-bearing
+    // entity like any other (see Registry::CreateEntity), so without this it
+    // would be swept up below on the very first scene swap after
+    // TurnCoordinator's lazy-once construction, silently stopping every
+    // turn-counted LifetimeComponent from ever expiring again.
+    if (m_turn_coordinator)
+        keep.insert(m_turn_coordinator->TimeSentinel());
+
     if (const InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player))
         for (entt::entity item : inventory->items)
             keep.insert(item);
@@ -402,6 +419,11 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_turn_coordinator.emplace(m_registry);
         m_turn_coordinator->KeyBindings() = CreateDefaultKeyBindings(*m_grid, m_affixes, m_rng, GetMessageBus());
     }
+    if (!m_lifetime_system)
+    {
+        m_lifetime_system.emplace(m_registry);
+        m_turn_coordinator->SetOnTurnPassed([this] { m_lifetime_system->Tick(); });
+    }
 
     if (!m_combat_log_bridge)
     {
@@ -462,19 +484,30 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_damage_text_system.Subscribe(Entity(m_registry, entity));
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
         m_on_hit_effect_system->Subscribe(Entity(m_registry, entity));
+
+        if (const Position* position = m_registry.TryGetComponent<Position>(entity))
+        {
+            const auto effect_prefab_id = entt::hashed_string::value(kEnemySpawnEffectPrefabId);
+            if (m_registry.HasPrefab(effect_prefab_id))
+            {
+                const entt::entity effect = m_registry.CreateEntity(effect_prefab_id);
+                m_registry.Emplace<Position>(effect, Position{position->tile});
+                m_grid->AddEntity(position->tile, effect);
+                m_registry.Emplace<LifetimeComponent>(effect, LifetimeComponent{1});
+            }
+        }
     };
 
-    const DungeonInstantiation instantiation =
-        InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid, on_enemy_spawned);
+    const DungeonInstantiation instantiation = InstantiateDungeon(layout, m_pieces, -bounds.origin, m_registry, *m_grid);
 
     m_room_map.emplace(instantiation.room_map);
     m_room_visibility.emplace(layout.pieces.size(), instantiation.room_adjacency);
-    m_room_visibility->Update(m_room_map->GetRoom(instantiation.entrance_tile));
 
-    m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
-                                instantiation.pending_spawn_waves, on_enemy_spawned);
-    m_room_clear_door_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
-                                     instantiation.pending_spawn_waves, instantiation.room_cleared_doors);
+    m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.pending_spawn_waves, on_enemy_spawned);
+    m_room_clear_door_system.emplace(m_registry, *m_grid, instantiation.pending_spawn_waves,
+                                     instantiation.room_cleared_doors);
+
+    EnterRoom(m_room_map->GetRoom(instantiation.entrance_tile));
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
@@ -505,6 +538,13 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
 
     m_scene = target;
     RepublishHudStateAfterTransition();
+}
+
+void GameplayLayer::EnterRoom(std::optional<std::uint32_t> room)
+{
+    if (room && room != m_room_visibility->CurrentRoom())
+        m_spawn_wave_system->TriggerRoomEntered(*room);
+    m_room_visibility->Update(room);
 }
 
 void GameplayLayer::RepublishHudStateAfterTransition()
@@ -584,7 +624,7 @@ void GameplayLayer::OnUpdate(float delta_time)
     {
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         m_camera.SetTarget(player_tile);
-        m_room_visibility->Update(m_room_map->GetRoom(player_tile));
+        EnterRoom(m_room_map->GetRoom(player_tile));
     }
     m_camera.Update(delta_time);
 

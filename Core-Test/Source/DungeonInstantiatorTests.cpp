@@ -3,6 +3,7 @@
 #include "Engine/Actions/MoveEvent.h"
 #include "Engine/Dungeon/DoorComponent.h"
 #include "Engine/Dungeon/RoomClearDoorSystem.h"
+#include "Engine/Dungeon/SpawnWaveSystem.h"
 #include "Engine/Dungeon/SwitchComponent.h"
 #include "Engine/Dungeon/SwitchTriggerSystem.h"
 #include "Engine/ECS/ComponentMeta.h"
@@ -364,7 +365,7 @@ TEST_CASE("InstantiateDungeon leaves a dead end unstamped when fallback_prefab_i
     CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{1, 0})[0]));
 }
 
-TEST_CASE("InstantiateDungeon stamps a piece's only (wave 0) spawn immediately", "[DungeonInstantiator]")
+TEST_CASE("InstantiateDungeon defers every spawn wave, including wave 0", "[DungeonInstantiator]")
 {
     Registry registry;
     FloorMarker::Register(registry.GetMetaContext());
@@ -386,20 +387,21 @@ TEST_CASE("InstantiateDungeon stamps a piece's only (wave 0) spawn immediately",
     Grid grid(1, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    // Floor prefab + the wave-0 enemy both land on the same cell.
-    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
-    const entt::entity enemy = grid.GetEntities(Vec2{0, 0})[1];
-    CHECK(registry.HasComponent<EnemyMarker>(enemy));
-    REQUIRE(registry.HasComponent<SpawnWaveComponent>(enemy));
-    CHECK(registry.GetComponent<SpawnWaveComponent>(enemy).group_id == 0);
-    CHECK(registry.GetComponent<SpawnWaveComponent>(enemy).wave == 0);
+    // Only the floor prefab stamps -- the wave-0 enemy stays pending until
+    // SpawnWaveSystem::TriggerRoomEntered spawns it (see SpawnWaveSystemTests).
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{0, 0})[0]));
 
-    REQUIRE(result.initial_wave_counts.count(0) == 1);
-    CHECK(result.initial_wave_counts.at(0) == 1);
-    CHECK(result.pending_spawn_waves.empty());
+    REQUIRE(result.pending_spawn_waves.size() == 1);
+    const PendingSpawnWave& wave0 = result.pending_spawn_waves.front();
+    CHECK(wave0.group_id == 0);
+    CHECK(wave0.wave == 0);
+    REQUIRE(wave0.entries.size() == 1);
+    CHECK(wave0.entries.front().prefab_id == kEnemyPrefab);
+    CHECK(wave0.entries.front().world_cell == Vec2{0, 0});
 }
 
-TEST_CASE("InstantiateDungeon stamps only wave 0 and defers wave 1", "[DungeonInstantiator]")
+TEST_CASE("InstantiateDungeon defers both wave 0 and wave 1, in ascending order", "[DungeonInstantiator]")
 {
     Registry registry;
     FloorMarker::Register(registry.GetMetaContext());
@@ -426,48 +428,14 @@ TEST_CASE("InstantiateDungeon stamps only wave 0 and defers wave 1", "[DungeonIn
     Grid grid(1, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    // Only the floor prefab + wave-0 enemy stamp now -- wave 1 stays pending.
-    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
-    REQUIRE(result.initial_wave_counts.count(0) == 1);
-    CHECK(result.initial_wave_counts.at(0) == 1);
+    // Only the floor prefab stamps -- both waves stay pending.
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
 
-    REQUIRE(result.pending_spawn_waves.size() == 1);
-    const PendingSpawnWave& pending = result.pending_spawn_waves.front();
-    CHECK(pending.group_id == 0);
-    CHECK(pending.wave == 1);
-    REQUIRE(pending.entries.size() == 1);
-    CHECK(pending.entries.front().prefab_id == kEnemyPrefab);
-    CHECK(pending.entries.front().world_cell == Vec2{0, 0});
-}
-
-TEST_CASE("InstantiateDungeon invokes on_spawned for a first-wave spawn, not for cell prefabs", "[DungeonInstantiator]")
-{
-    Registry registry;
-    FloorMarker::Register(registry.GetMetaContext());
-    DoorMarker::Register(registry.GetMetaContext());
-    FallbackMarker::Register(registry.GetMetaContext());
-    EnemyMarker::Register(registry.GetMetaContext());
-    TestEntityLoader loader;
-    registry.RegisterPrefabs(loader);
-
-    PieceSpawn spawn;
-    spawn.cell_offset = Vec2{0, 0};
-    spawn.prefab_id = kEnemyPrefab;
-    spawn.wave = 0;
-
-    PieceLibrary library{{MakePieceWithSpawns(10, {spawn})}};
-    DungeonLayout layout;
-    layout.pieces.push_back(PlacedPiece{10, Vec2{0, 0}});
-
-    Grid grid(1, 1);
-    std::vector<entt::entity> spawned;
-    InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid,
-                       [&](entt::entity entity) { spawned.push_back(entity); });
-
-    // Only the wave-0 enemy triggers on_spawned -- the cell's own floor
-    // prefab is static dungeon furniture, not a creature.
-    REQUIRE(spawned.size() == 1);
-    CHECK(registry.HasComponent<EnemyMarker>(spawned.front()));
+    REQUIRE(result.pending_spawn_waves.size() == 2);
+    CHECK(result.pending_spawn_waves[0].group_id == 0);
+    CHECK(result.pending_spawn_waves[0].wave == 0);
+    CHECK(result.pending_spawn_waves[1].group_id == 0);
+    CHECK(result.pending_spawn_waves[1].wave == 1);
 }
 
 TEST_CASE("InstantiateDungeon tags every cell with its placed piece's index in room_map", "[DungeonInstantiator]")
@@ -520,7 +488,7 @@ TEST_CASE("InstantiateDungeon builds room_adjacency from layout.connections in b
     CHECK(result.room_adjacency[2].empty());
 }
 
-TEST_CASE("InstantiateDungeon leaves both spawn maps untouched for a piece with no spawns", "[DungeonInstantiator]")
+TEST_CASE("InstantiateDungeon leaves pending_spawn_waves empty for a piece with no spawns", "[DungeonInstantiator]")
 {
     Registry registry;
     FloorMarker::Register(registry.GetMetaContext());
@@ -536,7 +504,6 @@ TEST_CASE("InstantiateDungeon leaves both spawn maps untouched for a piece with 
     Grid grid(2, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    CHECK(result.initial_wave_counts.empty());
     CHECK(result.pending_spawn_waves.empty());
 }
 
@@ -614,8 +581,9 @@ TEST_CASE("InstantiateDungeon stamps a locked door for a RoomCleared lock, unloc
     REQUIRE(result.room_cleared_doors.count(1) == 1);
     CHECK(result.room_cleared_doors.at(1) == std::vector<entt::entity>{door});
 
-    RoomClearDoorSystem system(registry, grid, result.initial_wave_counts, result.pending_spawn_waves,
-                               result.room_cleared_doors);
+    RoomClearDoorSystem door_system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors);
+    SpawnWaveSystem spawn_system(registry, grid, result.pending_spawn_waves);
+    spawn_system.TriggerRoomEntered(1); // simulates the player entering the gated room
 
     // The gated room's one enemy is still alive -- door stays locked.
     CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == door);
@@ -653,8 +621,7 @@ TEST_CASE("RoomClearDoorSystem unlocks a RoomCleared door immediately when its r
     Grid grid(3, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    RoomClearDoorSystem system(registry, grid, result.initial_wave_counts, result.pending_spawn_waves,
-                               result.room_cleared_doors);
+    RoomClearDoorSystem system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors);
 
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
     CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null);

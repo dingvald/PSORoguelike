@@ -23,6 +23,19 @@ TEST_CASE("RoomVisibilityTracker marks the updated room Visible", "[RoomVisibili
     CHECK(tracker.GetVisibility(1) == RoomVisibility::Hidden);
 }
 
+TEST_CASE("RoomVisibilityTracker::CurrentRoom reflects the last room passed to Update", "[RoomVisibilityTracker]")
+{
+    RoomVisibilityTracker tracker(3);
+
+    CHECK_FALSE(tracker.CurrentRoom().has_value());
+
+    tracker.Update(1u);
+    CHECK(tracker.CurrentRoom() == 1u);
+
+    tracker.Update(std::nullopt);
+    CHECK_FALSE(tracker.CurrentRoom().has_value());
+}
+
 TEST_CASE("RoomVisibilityTracker downgrades the previous room to Explored once the player leaves it",
           "[RoomVisibilityTracker]")
 {

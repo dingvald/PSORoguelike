@@ -62,10 +62,22 @@ public:
 
     ActionMap<int>& KeyBindings() { return m_key_bindings; }
 
+    // The time-sentinel actor's own handle (see Step()'s comment) -- callers
+    // that selectively destroy world entities (GameplayLayer::
+    // DestroyWorldEntities) must keep it, the same way they keep the player,
+    // or the turn clock silently stops ticking after the next scene swap.
+    entt::entity TimeSentinel() const { return m_time_sentinel; }
+
     // AI seam: replaces how non-player actors decide their action (default:
     // every non-player actor Waits). The returned IAction* must stay valid
     // for at least the duration of the Step() call it's returned from.
     void SetNpcDecision(std::function<IAction*(Entity)> decide) { m_decide_npc_action = std::move(decide); }
+
+    // Installs the callback fired once every time the internal time-sentinel
+    // actor comes up in the queue -- see Step()'s own comment for what that
+    // means. This is the "one in-game turn has passed" signal a turn-counted
+    // (as opposed to wall-clock) lifetime system hooks into.
+    void SetOnTurnPassed(std::function<void()> callback) { m_on_turn_passed = std::move(callback); }
 
     // ITargetRequestSink: stashes request for Step() to surface as
     // TargetingRequested. A second request before the first is consumed
@@ -93,6 +105,17 @@ public:
     // yields AnimationsPending the instant one appears, below), so there's
     // never one here to advance.
     //
+    // Also owns a fixed-cadence "time sentinel" actor (m_time_sentinel,
+    // created in the constructor with a plain ActorComponent -- no bespoke
+    // tag type needed, since this class already knows its own handle
+    // directly), queued alongside every real actor. Whenever it comes up,
+    // Step() fires m_on_turn_passed (if set) and immediately re-queues it at
+    // WaitAction::kWaitCost, the same cost a real Wait would spend -- so it
+    // ticks exactly once per full round, a turn-counted (not wall-clock)
+    // clock a caller like LifetimeSystem can hook into. It never dispatches
+    // AfterTurnEvent, never resolves an IAction, and never causes Step() to
+    // return Resolved/AnimationsPending -- entirely transparent to callers.
+    //
     // Requires at least one live PlayerControlledComponent-tagged actor with
     // an ActorComponent to be queued before this is called: TurnQueue's
     // "time" is turns, not wall-clock seconds, so NextActor() always
@@ -117,6 +140,8 @@ private:
     Registry* m_registry;
     TurnQueue m_turn_queue;
     int m_live_player_count = 0;
+    entt::entity m_time_sentinel = entt::null;
+    std::function<void()> m_on_turn_passed;
     ActionMap<int> m_key_bindings;
     InputBuffer<int> m_input_buffer{/*initial_delay_seconds=*/0.3f, /*repeat_interval_seconds=*/0.1f};
     std::optional<int> m_pending_key;

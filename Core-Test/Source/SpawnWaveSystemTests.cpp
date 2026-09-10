@@ -42,17 +42,6 @@ public:
     }
 };
 
-// Creates a live enemy entity tagged for (group_id, wave) at world_cell,
-// mirroring the stamping DungeonInstantiator/SpawnWaveSystem itself do.
-entt::entity SpawnTrackedEnemy(Registry& registry, Grid& grid, Vec2 world_cell, std::uint32_t group_id, int wave)
-{
-    const entt::entity entity = registry.CreateEntity(kEnemyPrefab);
-    registry.Emplace<Position>(entity, Position{world_cell});
-    grid.AddEntity(world_cell, entity);
-    registry.Emplace<SpawnWaveComponent>(entity, SpawnWaveComponent{group_id, wave});
-    return entity;
-}
-
 } // namespace
 
 TEST_CASE("SpawnWaveSystem spawns the next wave only once every current-wave entity dies", "[SpawnWaveSystem]")
@@ -63,14 +52,18 @@ TEST_CASE("SpawnWaveSystem spawns the next wave only once every current-wave ent
     registry.RegisterPrefabs(loader);
 
     Grid grid(2, 1);
-    const entt::entity first = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
-    const entt::entity second = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
 
-    std::unordered_map<std::uint32_t, int> initial_counts{{0, 2}};
     std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{
+        0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}, PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
     pending.push_back(PendingSpawnWave{0, 1, {PendingSpawnEntry{Vec2{1, 0}, kEnemyPrefab}}});
 
-    SpawnWaveSystem system(registry, grid, initial_counts, pending);
+    SpawnWaveSystem system(registry, grid, pending);
+    system.TriggerRoomEntered(0);
+
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
+    const entt::entity first = grid.GetEntities(Vec2{0, 0})[0];
+    const entt::entity second = grid.GetEntities(Vec2{0, 0})[1];
 
     registry.DestroyEntity(first);
     // Only one of two wave-0 entities died -- wave 1 must not have spawned yet.
@@ -94,11 +87,14 @@ TEST_CASE("SpawnWaveSystem stays quiet once a group has no more pending waves", 
     registry.RegisterPrefabs(loader);
 
     Grid grid(1, 1);
-    const entt::entity only = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
+    std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
 
-    std::unordered_map<std::uint32_t, int> initial_counts{{0, 1}};
-    SpawnWaveSystem system(registry, grid, initial_counts, {});
+    SpawnWaveSystem system(registry, grid, pending);
+    system.TriggerRoomEntered(0);
 
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    const entt::entity only = grid.GetEntities(Vec2{0, 0})[0];
     registry.DestroyEntity(only);
 
     // No pending waves for group 0 -- nothing else should have spawned. (The
@@ -108,7 +104,7 @@ TEST_CASE("SpawnWaveSystem stays quiet once a group has no more pending waves", 
     CHECK(grid.GetEntities(Vec2{0, 0}).size() == 1);
 }
 
-TEST_CASE("SpawnWaveSystem invokes on_spawned for a later-wave spawn", "[SpawnWaveSystem]")
+TEST_CASE("SpawnWaveSystem invokes on_spawned for every wave it spawns", "[SpawnWaveSystem]")
 {
     Registry registry;
     EnemyMarker::Register(registry.GetMetaContext());
@@ -116,20 +112,21 @@ TEST_CASE("SpawnWaveSystem invokes on_spawned for a later-wave spawn", "[SpawnWa
     registry.RegisterPrefabs(loader);
 
     Grid grid(2, 1);
-    const entt::entity only = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
-
-    std::unordered_map<std::uint32_t, int> initial_counts{{0, 1}};
     std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
     pending.push_back(PendingSpawnWave{0, 1, {PendingSpawnEntry{Vec2{1, 0}, kEnemyPrefab}}});
 
     std::vector<entt::entity> spawned;
-    SpawnWaveSystem system(registry, grid, initial_counts, pending,
-                           [&](entt::entity entity) { spawned.push_back(entity); });
+    SpawnWaveSystem system(registry, grid, pending, [&](entt::entity entity) { spawned.push_back(entity); });
 
-    registry.DestroyEntity(only);
-
+    system.TriggerRoomEntered(0);
     REQUIRE(spawned.size() == 1);
-    CHECK(spawned.front() == grid.GetEntities(Vec2{1, 0})[0]);
+    CHECK(spawned.front() == grid.GetEntities(Vec2{0, 0})[0]);
+
+    registry.DestroyEntity(spawned.front());
+
+    REQUIRE(spawned.size() == 2);
+    CHECK(spawned.back() == grid.GetEntities(Vec2{1, 0})[0]);
 }
 
 TEST_CASE("SpawnWaveSystem skips an invalid prefab id in a pending wave", "[SpawnWaveSystem]")
@@ -140,16 +137,75 @@ TEST_CASE("SpawnWaveSystem skips an invalid prefab id in a pending wave", "[Spaw
     registry.RegisterPrefabs(loader);
 
     Grid grid(2, 1);
-    const entt::entity only = SpawnTrackedEnemy(registry, grid, Vec2{0, 0}, 0, 0);
-
-    std::unordered_map<std::uint32_t, int> initial_counts{{0, 1}};
     std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
     pending.push_back(PendingSpawnWave{0, 1, {PendingSpawnEntry{Vec2{1, 0}, /*prefab_id=*/999}}});
 
-    SpawnWaveSystem system(registry, grid, initial_counts, pending);
+    SpawnWaveSystem system(registry, grid, pending);
+    system.TriggerRoomEntered(0);
 
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    const entt::entity only = grid.GetEntities(Vec2{0, 0})[0];
     registry.DestroyEntity(only);
 
     // The pending wave's only entry has an unregistered prefab id -- nothing stamps.
     CHECK(grid.GetEntities(Vec2{1, 0}).empty());
+}
+
+TEST_CASE("SpawnWaveSystem::TriggerRoomEntered spawns a group's earliest wave once", "[SpawnWaveSystem]")
+{
+    Registry registry;
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    Grid grid(1, 1);
+    std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
+
+    SpawnWaveSystem system(registry, grid, pending);
+
+    system.TriggerRoomEntered(0);
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+
+    // Re-entering the room while wave 0 is still alive must not spawn again.
+    system.TriggerRoomEntered(0);
+    CHECK(grid.GetEntities(Vec2{0, 0}).size() == 1);
+}
+
+TEST_CASE("SpawnWaveSystem::TriggerRoomEntered is a no-op for a group with no spawns", "[SpawnWaveSystem]")
+{
+    Registry registry;
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    Grid grid(1, 1);
+    SpawnWaveSystem system(registry, grid, {});
+
+    system.TriggerRoomEntered(0);
+
+    CHECK(grid.GetEntities(Vec2{0, 0}).empty());
+}
+
+TEST_CASE("SpawnWaveSystem::TriggerRoomEntered on re-entry after a room clears does not re-spawn",
+          "[SpawnWaveSystem]")
+{
+    Registry registry;
+    EnemyMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    Grid grid(1, 1);
+    std::vector<PendingSpawnWave> pending;
+    pending.push_back(PendingSpawnWave{0, 0, {PendingSpawnEntry{Vec2{0, 0}, kEnemyPrefab}}});
+
+    SpawnWaveSystem system(registry, grid, pending);
+    system.TriggerRoomEntered(0);
+
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    registry.DestroyEntity(grid.GetEntities(Vec2{0, 0})[0]);
+
+    // No more pending waves for group 0 -- re-entering must not spawn anything.
+    system.TriggerRoomEntered(0);
+    CHECK(grid.GetEntities(Vec2{0, 0}).size() == 1); // stale dead handle, same reasoning as above
 }

@@ -3,7 +3,6 @@
 #include "Engine/Dungeon/DoorComponent.h"
 #include "Engine/Dungeon/SwitchComponent.h"
 #include "Engine/ECS/Position.h"
-#include "Engine/ECS/SpawnWaveComponent.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -63,7 +62,7 @@ namespace {
 } // namespace
 
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
-                                        Registry& registry, Grid& grid, std::function<void(entt::entity)> on_spawned)
+                                        Registry& registry, Grid& grid)
 {
     const auto stamp = [&](Vec2 grid_cell, std::uint32_t prefab_id) -> entt::entity
     {
@@ -167,31 +166,8 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
         }
 
         const std::uint32_t group_id = static_cast<std::uint32_t>(piece_index);
-        bool is_first_wave = true;
         for (auto& [wave_number, entries] : waves_by_number)
-        {
-            if (is_first_wave)
-            {
-                int spawned_count = 0;
-                for (const PendingSpawnEntry& entry : entries)
-                {
-                    const entt::entity entity = stamp(entry.world_cell, entry.prefab_id);
-                    if (entity == entt::null)
-                        continue;
-                    registry.Emplace<SpawnWaveComponent>(entity, SpawnWaveComponent{group_id, wave_number});
-                    if (on_spawned)
-                        on_spawned(entity);
-                    ++spawned_count;
-                }
-                if (spawned_count > 0)
-                    result.initial_wave_counts[group_id] = spawned_count;
-                is_first_wave = false;
-            }
-            else
-            {
-                result.pending_spawn_waves.push_back(PendingSpawnWave{group_id, wave_number, std::move(entries)});
-            }
-        }
+            result.pending_spawn_waves.push_back(PendingSpawnWave{group_id, wave_number, std::move(entries)});
     }
 
     result.entrance_tile = offset;
