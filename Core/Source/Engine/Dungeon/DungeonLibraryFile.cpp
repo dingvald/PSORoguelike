@@ -91,29 +91,6 @@ namespace {
         return refs;
     }
 
-    DungeonLockConfig ReadLockConfig(const rapidjson::Value& entry)
-    {
-        if (!entry.IsObject())
-            throw DungeonError("dungeon file: each lock config must be an object");
-        DungeonLockConfig lock;
-        lock.lock_type = ReadString(entry, "lock_type", "");
-        lock.count = ReadInt(entry, "count", lock.count);
-        return lock;
-    }
-
-    std::vector<DungeonLockConfig> ReadLockConfigs(const rapidjson::Value& dungeon_def)
-    {
-        std::vector<DungeonLockConfig> locks;
-        auto it = dungeon_def.FindMember("locks");
-        if (it == dungeon_def.MemberEnd())
-            return locks;
-        if (!it->value.IsArray())
-            throw DungeonError("dungeon file: 'locks' must be an array");
-        for (const auto& entry : it->value.GetArray())
-            locks.push_back(ReadLockConfig(entry));
-        return locks;
-    }
-
     rapidjson::Value StringValue(const std::string& text, rapidjson::Document::AllocatorType& allocator)
     {
         rapidjson::Value value;
@@ -142,21 +119,15 @@ namespace {
         return array;
     }
 
-    rapidjson::Value WriteLockConfig(const DungeonLockConfig& lock, rapidjson::Document::AllocatorType& allocator)
+    // Mirrors PieceLibraryFile.cpp's AddNameIdMember: label from
+    // NameIdRegistry when known, falling back to the raw id otherwise.
+    void AddNameIdMember(rapidjson::Value& object, const char* key, std::uint32_t id,
+                         rapidjson::Document::AllocatorType& allocator)
     {
-        rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("lock_type", StringValue(lock.lock_type, allocator), allocator);
-        object.AddMember("count", lock.count, allocator);
-        return object;
-    }
-
-    rapidjson::Value WriteLockConfigs(const std::vector<DungeonLockConfig>& locks,
-                                      rapidjson::Document::AllocatorType& allocator)
-    {
-        rapidjson::Value array(rapidjson::kArrayType);
-        for (const DungeonLockConfig& lock : locks)
-            array.PushBack(WriteLockConfig(lock, allocator), allocator);
-        return array;
+        if (std::optional<std::string> label = NameIdRegistry::Find(id))
+            object.AddMember(rapidjson::StringRef(key), StringValue(*label, allocator), allocator);
+        else
+            object.AddMember(rapidjson::StringRef(key), id, allocator);
     }
 
 } // namespace
@@ -171,7 +142,10 @@ Dungeon ReadDungeonBody(const rapidjson::Value& dungeon_def)
     dungeon.loopback_count_min = ReadInt(dungeon_def, "loopback_count_min", dungeon.loopback_count_min);
     dungeon.loopback_count_max = ReadInt(dungeon_def, "loopback_count_max", dungeon.loopback_count_max);
     dungeon.pieces = ReadPieceRefs(dungeon_def);
-    dungeon.locks = ReadLockConfigs(dungeon_def);
+    dungeon.lock_count = ReadInt(dungeon_def, "lock_count", dungeon.lock_count);
+    dungeon.unlocked_door_prefab_id = ReadNameId(dungeon_def, "unlocked_door_prefab_id", 0);
+    dungeon.locked_door_prefab_id = ReadNameId(dungeon_def, "locked_door_prefab_id", 0);
+    dungeon.switch_prefab_id = ReadNameId(dungeon_def, "switch_prefab_id", 0);
 
     if (dungeon.room_count_min > dungeon.room_count_max)
         throw DungeonError("dungeon file: 'room_count_min' must be <= 'room_count_max'");
@@ -191,7 +165,10 @@ rapidjson::Value WriteDungeonBody(const Dungeon& dungeon, rapidjson::Document::A
     object.AddMember("loopback_count_min", dungeon.loopback_count_min, allocator);
     object.AddMember("loopback_count_max", dungeon.loopback_count_max, allocator);
     object.AddMember("pieces", WritePieceRefs(dungeon.pieces, allocator), allocator);
-    object.AddMember("locks", WriteLockConfigs(dungeon.locks, allocator), allocator);
+    object.AddMember("lock_count", dungeon.lock_count, allocator);
+    AddNameIdMember(object, "unlocked_door_prefab_id", dungeon.unlocked_door_prefab_id, allocator);
+    AddNameIdMember(object, "locked_door_prefab_id", dungeon.locked_door_prefab_id, allocator);
+    AddNameIdMember(object, "switch_prefab_id", dungeon.switch_prefab_id, allocator);
     return object;
 }
 

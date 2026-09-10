@@ -32,6 +32,10 @@ PieceSchemaModel BuildPieceSchemaModel()
     category.enum_values = detail::EnsureEnumRegistered<PieceCategory>(ctx);
     model.fields.push_back(std::move(category));
 
+    FieldSchema preferred_unlock_condition{"preferred_unlock_condition", FieldKind::Enum};
+    preferred_unlock_condition.enum_values = detail::EnsureEnumRegistered<DoorUnlockCondition>(ctx);
+    model.fields.push_back(std::move(preferred_unlock_condition));
+
     model.fields.push_back(FieldSchema{"can_rotate", FieldKind::Boolean});
     model.fields.push_back(FieldSchema{"can_mirror", FieldKind::Boolean});
 

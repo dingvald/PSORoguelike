@@ -33,19 +33,25 @@ struct SocketConnection
     Vec2 cell_b; // world-space cell of piece_b's socket
 };
 
-// One lock-and-key gate: edge is a bridge connection on the entrance-to-exit
-// path (see DungeonStitcher.cpp's Phase 4) narratively gated by lock_type,
-// solvable by finding key_tag in the room at key_room_index -- guaranteed
-// reachable from the entrance without crossing `edge` or any
-// earlier-processed lock. No in-world lock/key entity is spawned by this
-// struct alone; it's an abstract, verified-solvable annotation for later
-// systems (items/interaction) to consume.
+// One lock gate: edge is a bridge connection on the entrance-to-exit path
+// (see DungeonStitcher.cpp's Phase 4) gating entry into inside_room_index --
+// always a Room/Vault/BossArena piece, since only those get a physical door
+// -- unlocked per that piece's own DungeonPiece::preferred_unlock_condition.
+// When unlock_condition is Switch, switch_room_index/switch_cell are a
+// generator-picked room and world cell -- guaranteed reachable from the
+// entrance without crossing `edge` or any earlier-processed lock -- where
+// DungeonInstantiator stamps a single switch entity; that room can be, and
+// often is, a different room than the one the door itself sits in (the whole
+// point of a switch puzzle). Unused for RoomCleared, which instead unlocks
+// once every entity spawned into inside_room_index has died (see
+// RoomClearDoorSystem).
 struct LockAnnotation
 {
     SocketConnection edge;
-    std::string lock_type;
-    std::string key_tag;
-    std::size_t key_room_index = 0;
+    std::size_t inside_room_index = 0;
+    DoorUnlockCondition unlock_condition = DoorUnlockCondition::RoomCleared;
+    std::size_t switch_room_index = 0;
+    Vec2 switch_cell;
 };
 
 // A socket left unconnected by generation -- a dead end. fallback_prefab_id
@@ -65,6 +71,14 @@ struct DungeonLayout
     std::vector<SocketConnection> connections;
     std::vector<LockAnnotation> locks;
     std::vector<DeadEndSocket> dead_ends;
+
+    // Copied once from the source Dungeon at generation time (see
+    // GenerateDungeon) so InstantiateDungeon never needs the original Dungeon
+    // definition, only this self-contained layout -- see Dungeon.h's own
+    // doc comment for what each stamps.
+    std::uint32_t unlocked_door_prefab_id = 0;
+    std::uint32_t locked_door_prefab_id = 0;
+    std::uint32_t switch_prefab_id = 0;
 };
 
 // Room-count/loopback-count targets are drawn uniformly from
@@ -81,9 +95,10 @@ struct DungeonLayout
 // tagged ones fit, with the capped piece's own remaining sockets collapsed
 // straight to fallback-stamped dead ends rather than fed back into Phase
 // 2/3 -- adds loopback connections for multiple paths (Phase 2), resolves
-// remaining unused sockets as dead ends (Phase 3), and places dungeon.locks
-// as solvable lock/key gates on bridge connections of the entrance-to-exit
-// path (Phase 4). Sockets are read directly off each piece's own
+// remaining unused sockets as dead ends (Phase 3), and places dungeon.lock_count
+// locks gating Room/Vault/BossArena entrances on bridge connections of the
+// entrance-to-exit path, each unlocked per its gated piece's own
+// preferred_unlock_condition (Phase 4). Sockets are read directly off each piece's own
 // DungeonPiece::sockets -- no ECS/Registry lookup involved, since a socket
 // is piece-authored data, not a stamped entity. Throws DungeonError if no
 // Entrance/Exit piece is available in dungeon.pieces (filtered against

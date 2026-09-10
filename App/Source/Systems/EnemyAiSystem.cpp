@@ -200,9 +200,9 @@ IAction* EnemyAiSystem::DecideStationarySpawner(Entity actor)
 
     int alive_count = 0;
     m_registry->Each<SpawnedByComponent>(
-        [&](entt::entity candidate)
+        [&](entt::entity /*candidate*/, const SpawnedByComponent& spawned_by)
         {
-            if (m_registry->GetComponent<SpawnedByComponent>(candidate).owner == actor.Handle())
+            if (spawned_by.owner == actor.Handle())
                 ++alive_count;
         });
     if (alive_count >= spawner->max_alive)
@@ -240,11 +240,11 @@ IAction* EnemyAiSystem::DecidePackFollower(Entity actor, const AiComponent& ai)
     {
         bool leader_nearby = false;
         m_registry->Each<RaceComponent>(
-            [&](entt::entity candidate)
+            [&](entt::entity candidate, const RaceComponent& race)
             {
                 if (leader_nearby || candidate == actor.Handle())
                     return;
-                if (m_registry->GetComponent<RaceComponent>(candidate).race_id != pack->pack_leader_race_id)
+                if (race.race_id != pack->pack_leader_race_id)
                     return;
 
                 const Position* candidate_position = m_registry->TryGetComponent<Position>(candidate);

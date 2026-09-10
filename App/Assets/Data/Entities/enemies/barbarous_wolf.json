@@ -1,0 +1,58 @@
+{
+    "schema_version": 1,
+    "components": {
+        "actor": {
+            "movement_speed": 80,
+            "act_speed": 80
+        },
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.natural_weapon"
+        },
+        "blocks_movement": {},
+        "health": {
+            "current_hp": 65,
+            "max_hp": 65
+        },
+        "stats": {
+            "atp": 1,
+            "ata": 1,
+            "mst": 0,
+            "dfp": 1,
+            "evp": 1,
+            "lck": 1
+        },
+        "race": {
+            "race_id": "native"
+        },
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 3,
+                "y": 3
+            },
+            "color_1": "#5b67b0ff",
+            "color_2": "#3a608fff",
+            "render_layer": 0,
+            "frames": 1,
+            "frame_time": 0.0
+        },
+        "drop_table": {
+            "entries": [],
+            "no_drop_weight": 0.0,
+            "meseta_weight": 0.0,
+            "meseta_min": 0,
+            "meseta_max": 0
+        },
+        "experience_value": {
+            "xp": 7
+        },
+        "ai": {
+            "behavior": "pack_follower",
+            "detection_range": 8
+        }
+    }
+}

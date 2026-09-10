@@ -34,11 +34,10 @@ DungeonSchemaModel BuildDungeonSchemaModel()
     pieces.children.push_back(std::move(piece_item));
     model.fields.push_back(std::move(pieces));
 
-    FieldSchema locks{"locks", FieldKind::Array};
-    FieldSchema lock_item{"item", FieldKind::Object};
-    lock_item.children = ReflectFields<DungeonLockConfig>(ctx);
-    locks.children.push_back(std::move(lock_item));
-    model.fields.push_back(std::move(locks));
+    model.fields.push_back(FieldSchema{"lock_count", FieldKind::Integer});
+    model.fields.push_back(FieldSchema{"unlocked_door_prefab_id", FieldKind::NameId});
+    model.fields.push_back(FieldSchema{"locked_door_prefab_id", FieldKind::NameId});
+    model.fields.push_back(FieldSchema{"switch_prefab_id", FieldKind::NameId});
 
     return model;
 }

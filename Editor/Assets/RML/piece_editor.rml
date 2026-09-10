@@ -47,6 +47,8 @@
                                 <div id="field-area-tag" class="field-row"></div>
                                 <h3>Category</h3>
                                 <div id="field-category" class="field-row"></div>
+                                <h3>Preferred Unlock Condition</h3>
+                                <div id="field-preferred-unlock-condition" class="field-row"></div>
                                 <div id="field-can-rotate" class="field-row"></div>
                                 <div id="field-can-mirror" class="field-row"></div>
                             </div>

@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "innate_weapon": {
-            "weapon_prefab_id": "weapons.booma_claws"
+            "weapon_prefab_id": "weapons.natural_weapon"
         },
         "blocks_movement": {},
         "ai": {
@@ -60,7 +60,6 @@
             "xp": 12
         },
         "actor": {
-            "ap": 0,
             "movement_speed": 65,
             "act_speed": 100
         }

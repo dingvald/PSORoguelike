@@ -54,7 +54,7 @@ template <> struct EnumNames<AffixStat>
 // minimal -- a single stat + flat amount, no effect-scripting -- since
 // nothing consumes an affix's effect yet (item generation/drop rolling is
 // M8.2, not yet started); this only needs to round-trip as data for now,
-// same reasoning as Dungeon's DungeonLockConfig.
+// same reasoning as HazardType above.
 struct Affix
 {
     std::uint32_t id = 0;

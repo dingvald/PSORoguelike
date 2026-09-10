@@ -17,7 +17,7 @@ namespace psr {
 // SectionId, not an open NameId like RaceComponent's races -- nothing
 // consumes a hazard yet (no hazard mechanic exists), so this only needs to
 // round-trip as data for now, same "just needs to round-trip" precedent
-// DungeonLockConfig/Affix::amount already set.
+// Affix::amount already sets.
 enum class HazardType
 {
     None,

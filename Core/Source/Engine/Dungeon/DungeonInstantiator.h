@@ -58,6 +58,12 @@ struct DungeonInstantiation
     // Every wave after each group's first, in ascending (group, wave) order,
     // not yet spawned -- SpawnWaveSystem consumes these as earlier waves die.
     std::vector<PendingSpawnWave> pending_spawn_waves;
+
+    // group_id (same placed-piece index as above) -> every locked door entity
+    // stamped for a RoomCleared-condition lock gating that room -- empty for
+    // any group without one. RoomClearDoorSystem consumes this to know which
+    // doors to unlock once a room's spawned enemies are all dead.
+    std::unordered_map<std::uint32_t, std::vector<entt::entity>> room_cleared_doors;
 };
 
 // Stamps every placed piece's cells into grid as live entities: each cell's
@@ -91,6 +97,16 @@ struct DungeonInstantiation
 // creature setup (e.g. joining the turn queue) that Core itself can't
 // perform, since the components involved (ActorComponent, EquipmentComponent)
 // are App-level -- see GameplayLayer::OnAttach.
+//
+// layout.locks is walked next: each LockAnnotation stamps
+// layout.locked_door_prefab_id at its edge's world cell (tagged with a
+// DoorComponent), and -- for a Switch-condition lock -- layout.switch_prefab_id
+// at its switch_cell (tagged with a SwitchComponent wired to the door). Every
+// remaining connected socket (layout.connections) bordering a Room/Vault/
+// BossArena piece on either side, not already claimed by a lock, stamps
+// layout.unlocked_door_prefab_id instead -- a plain always-open door with no
+// component of its own. A corridor-to-corridor connection stamps nothing, same
+// as before this feature existed.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                         Registry& registry, Grid& grid,
                                         std::function<void(entt::entity)> on_spawned = {});

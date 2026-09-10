@@ -1,0 +1,24 @@
+{
+    "schema_version": 1,
+    "components": {
+        "interactable": {
+            "interaction_type": "mission_select"
+        },
+        "renderable": {
+            "texture_id": "teleporter",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#000000ff",
+            "color_2": "#00e3cfff",
+            "render_layer": 1,
+            "frames": 3,
+            "frame_time": 0.20000000298023224
+        }
+    }
+}

@@ -58,5 +58,8 @@
             "max_occurrences": 1
         }
     ],
-    "locks": []
+    "lock_count": 0,
+    "unlocked_door_prefab_id": "",
+    "locked_door_prefab_id": "",
+    "switch_prefab_id": ""
 }

@@ -1,0 +1,28 @@
+/* Info popup chrome. theme.rcss + field_widgets.rcss (linked before this
+   file) supply .btn and the base palette -- only the popup-specific layout
+   lives here. */
+body {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    width: 360px;
+    height: 160px;
+    box-sizing: border-box;
+    padding: 20px;
+}
+
+#info-popup-message {
+    display: block;
+    margin-bottom: 20px;
+}
+
+#info-popup-ok {
+    display: block;
+    width: 80px;
+    margin: 0 auto;
+    text-align: center;
+}

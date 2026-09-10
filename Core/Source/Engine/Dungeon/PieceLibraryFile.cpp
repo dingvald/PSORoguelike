@@ -324,6 +324,8 @@ DungeonPiece ReadPieceBody(const rapidjson::Value& piece_def)
     piece.name = ReadString(piece_def, "name", piece.name);
     piece.area_tag = ReadString(piece_def, "area_tag", piece.area_tag);
     piece.category = ReadEnum<PieceCategory>(piece_def, "category", PieceCategory::Room, "category");
+    piece.preferred_unlock_condition = ReadEnum<DoorUnlockCondition>(
+        piece_def, "preferred_unlock_condition", DoorUnlockCondition::RoomCleared, "preferred_unlock_condition");
     piece.can_rotate = ReadBool(piece_def, "can_rotate", piece.can_rotate);
     piece.can_mirror = ReadBool(piece_def, "can_mirror", piece.can_mirror);
     piece.tags = ReadStringArray(piece_def, "tags");
@@ -339,6 +341,8 @@ rapidjson::Value WritePieceBody(const DungeonPiece& piece, rapidjson::Document::
     object.AddMember("name", StringValue(piece.name, allocator), allocator);
     object.AddMember("area_tag", StringValue(piece.area_tag, allocator), allocator);
     object.AddMember("category", StringValue(std::string{EnumName(piece.category)}, allocator), allocator);
+    object.AddMember("preferred_unlock_condition",
+                      StringValue(std::string{EnumName(piece.preferred_unlock_condition)}, allocator), allocator);
     object.AddMember("can_rotate", piece.can_rotate, allocator);
     object.AddMember("can_mirror", piece.can_mirror, allocator);
     object.AddMember("tags", WriteStringArray(piece.tags, allocator), allocator);

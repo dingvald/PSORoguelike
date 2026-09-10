@@ -9,8 +9,10 @@
 #include "Engine/Dungeon/DungeonLibrary.h"
 #include "Engine/Dungeon/PieceLibrary.h"
 #include "Engine/Dungeon/RoomMap.h"
+#include "Engine/Dungeon/RoomClearDoorSystem.h"
 #include "Engine/Dungeon/RoomVisibilityTracker.h"
 #include "Engine/Dungeon/SpawnWaveSystem.h"
+#include "Engine/Dungeon/SwitchTriggerSystem.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/AnimationClock.h"
@@ -162,16 +164,17 @@ private:
     // runs), so a Registry&/Grid&-holding system's references stay valid
     // forever, same reasoning m_turn_coordinator's KeyBindings() Grid&
     // binding already relies on:
-    //  - m_room_map/m_room_visibility/m_spawn_wave_system/m_enemy_ai_system/
-    //    m_projectile_advance_action/m_tab_target_system hold genuinely
-    //    per-dungeon *data* (this dungeon's room layout, pending spawn
-    //    waves, ...) that a new dungeon invalidates outright -- these are
+    //  - m_room_map/m_room_visibility/m_spawn_wave_system/
+    //    m_room_clear_door_system/m_enemy_ai_system/m_projectile_advance_action/
+    //    m_tab_target_system hold genuinely per-dungeon *data* (this
+    //    dungeon's room layout, pending spawn waves, which doors gate which
+    //    room, ...) that a new dungeon invalidates outright -- these are
     //    rebuilt via .emplace() every call, exactly as the old LoadNewGame()
     //    did.
     //  - m_turn_coordinator/m_combat_log_bridge/m_loot_drop_system/
     //    m_experience_system/m_visual_effects/m_miss_flash_effect_system/
-    //    m_on_hit_effect_system/m_status_effect_markers hold no such
-    //    per-dungeon data -- just references plus, for several of them, a
+    //    m_on_hit_effect_system/m_status_effect_markers/m_switch_trigger_system
+    //    hold no such per-dungeon data -- just references plus, for several of them, a
     //    Subscribe(player) call. Since the player entity itself survives a
     //    scene swap (kept by DestroyWorldEntities) but
     //    EventHandlerComponent has no Unsubscribe-by-instance (only
@@ -414,6 +417,13 @@ private:
     // non-movable and must be constructed in place.
     std::optional<SpawnWaveSystem> m_spawn_wave_system;
 
+    // Unlocks RoomCleared-condition doors once their room's spawned enemies
+    // all die -- see RoomClearDoorSystem.h. Same "re-created every
+    // TransitionToWorld, non-movable component-lifecycle listener" reasoning
+    // as m_spawn_wave_system just above (a fresh dungeon means fresh
+    // room/door state).
+    std::optional<RoomClearDoorSystem> m_room_clear_door_system;
+
     // Bridges the player's per-entity combat events onto the Layer
     // MessageBus for HudLayer to consume -- see CombatLogBridge.h. Holds
     // only pointers into m_registry/m_techniques/m_photon_arts (all
@@ -454,6 +464,13 @@ private:
     // it out from under this system -- the same hazard VisualEffectSystem's
     // own Update() guards against, see its doc comment below.
     std::optional<StatusEffectWorldMarkers> m_status_effect_markers;
+
+    // Activates Switch-condition doors' switches on walk-over -- see
+    // SwitchTriggerSystem.h. Holds only pointers into m_registry/m_grid
+    // (both stable-address across a scene swap) -- lazy-once/never-rebuilt,
+    // same reasoning as m_status_effect_markers/m_loot_drop_system;
+    // Subscribe(player) is player-only, issued once.
+    std::optional<SwitchTriggerSystem> m_switch_trigger_system;
 
     // Generic short-lived, prefab-authored, fading world-effect entities (see
     // VisualEffectSystem.h) -- the player-miss flash (m_miss_flash_effect_system

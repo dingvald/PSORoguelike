@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Dungeon/DoorUnlockCondition.h"
 #include "Engine/ECS/TypeReflection.h"
 #include "Engine/Math/Vec2.h"
 
@@ -262,6 +263,11 @@ struct DungeonPiece
     std::vector<PieceCell> cells;
     std::vector<PieceSocket> sockets;
     std::vector<PieceSpawn> spawns;
+
+    // Which unlock mechanic a lock gating entry into this piece should use, read by
+    // DungeonStitcher's Phase 4 off whichever piece ends up "inside" (gated behind) a
+    // chosen lock -- see DoorUnlockCondition.h.
+    DoorUnlockCondition preferred_unlock_condition = DoorUnlockCondition::RoomCleared;
 };
 
 } // namespace psr

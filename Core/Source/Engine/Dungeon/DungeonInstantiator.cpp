@@ -1,5 +1,7 @@
 #include "Engine/Dungeon/DungeonInstantiator.h"
 
+#include "Engine/Dungeon/DoorComponent.h"
+#include "Engine/Dungeon/SwitchComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/SpawnWaveComponent.h"
 
@@ -83,6 +85,51 @@ DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const Piece
             result.room_adjacency[connection.piece_a].push_back(static_cast<std::uint32_t>(connection.piece_b));
         if (connection.piece_b < result.room_adjacency.size())
             result.room_adjacency[connection.piece_b].push_back(static_cast<std::uint32_t>(connection.piece_a));
+    }
+
+    // Doors: layout.locks first (each claims its own edge's cell_a), then
+    // every remaining connected socket bordering a Room/Vault/BossArena piece
+    // gets an always-open door. handled_door_cells is small (bounded by the
+    // dungeon's own lock count) -- a linear scan is fine here, same reasoning
+    // FindDeadEnd's own doc comment gives for dead-end lookups below.
+    std::vector<Vec2> handled_door_cells;
+    for (const LockAnnotation& lock : layout.locks)
+    {
+        const Vec2 door_cell = lock.edge.cell_a + offset;
+        const entt::entity door_entity = stamp(door_cell, layout.locked_door_prefab_id);
+        if (door_entity == entt::null)
+            continue;
+
+        const auto group_id = static_cast<std::uint32_t>(lock.inside_room_index);
+        registry.Emplace<DoorComponent>(
+            door_entity, DoorComponent{lock.unlock_condition, layout.unlocked_door_prefab_id, group_id,
+                                       lock.unlock_condition == DoorUnlockCondition::Switch ? 1 : 0});
+        if (lock.unlock_condition == DoorUnlockCondition::RoomCleared)
+            result.room_cleared_doors[group_id].push_back(door_entity);
+        else
+        {
+            const entt::entity switch_entity = stamp(lock.switch_cell + offset, layout.switch_prefab_id);
+            if (switch_entity != entt::null)
+                registry.Emplace<SwitchComponent>(switch_entity, SwitchComponent{door_entity, false});
+        }
+        handled_door_cells.push_back(lock.edge.cell_a);
+    }
+
+    const auto is_room_like = [](PieceCategory category)
+    { return category == PieceCategory::Room || category == PieceCategory::Vault ||
+             category == PieceCategory::BossArena; };
+    for (const SocketConnection& connection : layout.connections)
+    {
+        if (std::find(handled_door_cells.begin(), handled_door_cells.end(), connection.cell_a) !=
+            handled_door_cells.end())
+            continue;
+
+        const DungeonPiece* piece_a = library.Find(layout.pieces[connection.piece_a].piece_id);
+        const DungeonPiece* piece_b = library.Find(layout.pieces[connection.piece_b].piece_id);
+        const bool borders_room = (piece_a && is_room_like(piece_a->category)) ||
+                                  (piece_b && is_room_like(piece_b->category));
+        if (borders_room)
+            stamp(connection.cell_a + offset, layout.unlocked_door_prefab_id);
     }
 
     for (std::size_t piece_index = 0; piece_index < layout.pieces.size(); ++piece_index)

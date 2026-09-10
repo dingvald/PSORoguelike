@@ -13,6 +13,7 @@
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RangedTechComponent.h"
+#include "Components/SelectedTargetComponent.h"
 #include "Components/SpawnedByComponent.h"
 #include "Components/SpawnerAiComponent.h"
 #include "Components/StatsComponent.h"

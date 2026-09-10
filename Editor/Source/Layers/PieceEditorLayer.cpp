@@ -127,6 +127,33 @@ namespace {
         return PieceCategory::Room;
     }
 
+    std::vector<std::string> UnlockConditionOptions()
+    {
+        std::vector<std::string> options;
+        for (const auto& [text, value] : EnumNames<DoorUnlockCondition>::kValues)
+        {
+            (void)value;
+            options.push_back(std::string{text});
+        }
+        return options;
+    }
+
+    std::string UnlockConditionToString(DoorUnlockCondition condition)
+    {
+        for (const auto& [text, value] : EnumNames<DoorUnlockCondition>::kValues)
+            if (value == condition)
+                return std::string{text};
+        return std::string{EnumNames<DoorUnlockCondition>::kValues.front().first};
+    }
+
+    DoorUnlockCondition UnlockConditionFromString(const std::string& text)
+    {
+        for (const auto& [name, value] : EnumNames<DoorUnlockCondition>::kValues)
+            if (name == text)
+                return value;
+        return DoorUnlockCondition::RoomCleared;
+    }
+
     // Human-readable, unique-per-orientation label -- doubles as the
     // BuildEnumField option key (see its "select->Add(option, option)"), so
     // no separate id<->transform table is needed.
@@ -515,6 +542,15 @@ void PieceEditorLayer::RefreshEditForm()
                                               m_draft.category = CategoryFromString(v);
                                               MarkDirty();
                                           }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-preferred-unlock-condition"))
+        keep(fieldwidgets::BuildEnumField(
+            *row, "preferred_unlock_condition", UnlockConditionOptions(),
+            UnlockConditionToString(m_draft.preferred_unlock_condition), [this](std::string v)
+            {
+                m_draft.preferred_unlock_condition = UnlockConditionFromString(v);
+                MarkDirty();
+            }));
 
     // Rebuilding the form (to refresh the preview dropdown's option set)
     // can't happen synchronously from within the very listener callback

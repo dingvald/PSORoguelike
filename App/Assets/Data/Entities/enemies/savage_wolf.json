@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "innate_weapon": {
-            "weapon_prefab_id": "weapons.booma_claws"
+            "weapon_prefab_id": "weapons.natural_weapon"
         },
         "blocks_movement": {},
         "ai": {
@@ -34,12 +34,14 @@
                 "y": 24
             },
             "uv": {
-                "x": 0,
-                "y": 0
+                "x": 3,
+                "y": 3
             },
             "color_1": "#6a6a6aff",
             "color_2": "#c9c9c9ff",
-            "render_layer": 1
+            "render_layer": 1,
+            "frames": 1,
+            "frame_time": 0.0
         },
         "drop_table": {
             "entries": [

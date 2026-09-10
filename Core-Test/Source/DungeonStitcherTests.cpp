@@ -224,58 +224,105 @@ TEST_CASE("GenerateDungeon is deterministic for a fixed seed", "[DungeonStitcher
     }
 }
 
-TEST_CASE("GenerateDungeon places a solvable lock: its key is reachable without crossing it", "[DungeonStitcher]")
+// Removing the locked edge must disconnect entrance (0) from exit -- shared
+// reachability helper for both lock-placement tests below.
+std::vector<bool> ReachableExcludingEdge(const DungeonLayout& layout, std::size_t excluded_a, std::size_t excluded_b)
 {
-    PieceLibrary library = MakeTestLibrary();
-    Dungeon dungeon = MakeTestDungeon(6, 8, 0, 0);
-    dungeon.locks.push_back(DungeonLockConfig{"red_key", 1});
+    std::vector<std::vector<std::size_t>> adj(layout.pieces.size());
+    for (const SocketConnection& connection : layout.connections)
+    {
+        if ((connection.piece_a == excluded_a && connection.piece_b == excluded_b) ||
+            (connection.piece_a == excluded_b && connection.piece_b == excluded_a))
+            continue;
+        adj[connection.piece_a].push_back(connection.piece_b);
+        adj[connection.piece_b].push_back(connection.piece_a);
+    }
+    std::vector<bool> visited(layout.pieces.size(), false);
+    std::vector<std::size_t> stack{0};
+    visited[0] = true;
+    while (!stack.empty())
+    {
+        std::size_t node = stack.back();
+        stack.pop_back();
+        for (std::size_t neighbor : adj[node])
+            if (!visited[neighbor])
+            {
+                visited[neighbor] = true;
+                stack.push_back(neighbor);
+            }
+    }
+    return visited;
+}
+
+// A library whose only fillable-chain piece (400, Room-category) carries
+// `condition` as its preferred_unlock_condition -- Entrance/Exit are never
+// eligible as a lock's gated piece, and Corridor is deliberately excluded
+// from the pool entirely so every internal piece in the generated chain is
+// this Room piece, making which edge Phase 4 picks deterministic regardless
+// of seed (any of them qualifies).
+PieceLibrary MakeLockableTestLibrary(DoorUnlockCondition condition)
+{
+    std::vector<DungeonPiece> pieces;
+    pieces.push_back(MakePiece(100, PieceCategory::Entrance, {{Vec2{0, 0}, EdgeDirection::East}}));
+    pieces.push_back(MakePiece(200, PieceCategory::Exit, {{Vec2{0, 0}, EdgeDirection::West}}));
+    DungeonPiece room = MakePiece(400, PieceCategory::Room,
+                                  {{Vec2{0, 0}, EdgeDirection::West}, {Vec2{1, 0}, EdgeDirection::East}});
+    room.preferred_unlock_condition = condition;
+    pieces.push_back(std::move(room));
+    return PieceLibrary{std::move(pieces)};
+}
+
+Dungeon MakeLockableTestDungeon()
+{
+    Dungeon dungeon;
+    dungeon.area_tag = "Forest";
+    dungeon.room_count_min = 6;
+    dungeon.room_count_max = 8;
+    dungeon.loopback_count_min = 0;
+    dungeon.loopback_count_max = 0;
+    dungeon.pieces.push_back(DungeonPieceRef{100, 1.0f, 1});
+    dungeon.pieces.push_back(DungeonPieceRef{200, 1.0f, 1});
+    dungeon.pieces.push_back(DungeonPieceRef{400, 1.0f, 0});
+    dungeon.lock_count = 1;
+    return dungeon;
+}
+
+TEST_CASE("GenerateDungeon places a solvable Switch lock: its switch is reachable without crossing it",
+          "[DungeonStitcher]")
+{
+    PieceLibrary library = MakeLockableTestLibrary(DoorUnlockCondition::Switch);
+    Dungeon dungeon = MakeLockableTestDungeon();
 
     DungeonLayout layout = GenerateDungeon(dungeon, library, 2024);
 
     REQUIRE(layout.locks.size() == 1);
     const LockAnnotation& lock = layout.locks.front();
-
-    // Removing the locked edge must disconnect entrance (0) from exit.
-    std::vector<std::vector<std::size_t>> adjacency(layout.pieces.size());
-    std::vector<std::pair<std::size_t, std::size_t>> edges;
-    for (const SocketConnection& connection : layout.connections)
-        edges.emplace_back(connection.piece_a, connection.piece_b);
-
-    auto reachable_excluding = [&](std::size_t excluded_a, std::size_t excluded_b)
-    {
-        std::vector<std::vector<std::size_t>> adj(layout.pieces.size());
-        for (const auto& [a, b] : edges)
-        {
-            if ((a == excluded_a && b == excluded_b) || (a == excluded_b && b == excluded_a))
-                continue;
-            adj[a].push_back(b);
-            adj[b].push_back(a);
-        }
-        std::vector<bool> visited(layout.pieces.size(), false);
-        std::vector<std::size_t> stack{0};
-        visited[0] = true;
-        while (!stack.empty())
-        {
-            std::size_t node = stack.back();
-            stack.pop_back();
-            for (std::size_t neighbor : adj[node])
-                if (!visited[neighbor])
-                {
-                    visited[neighbor] = true;
-                    stack.push_back(neighbor);
-                }
-        }
-        return visited;
-    };
+    REQUIRE(lock.unlock_condition == DoorUnlockCondition::Switch);
 
     std::size_t exit_index = 0;
     for (std::size_t i = 0; i < layout.pieces.size(); ++i)
         if (layout.pieces[i].piece_id == 200)
             exit_index = i;
 
-    std::vector<bool> without_lock = reachable_excluding(lock.edge.piece_a, lock.edge.piece_b);
+    std::vector<bool> without_lock = ReachableExcludingEdge(layout, lock.edge.piece_a, lock.edge.piece_b);
     REQUIRE_FALSE(without_lock[exit_index]);
-    REQUIRE(without_lock[lock.key_room_index]);
+    REQUIRE(without_lock[lock.switch_room_index]);
+}
+
+TEST_CASE("GenerateDungeon places a RoomCleared lock gating the actually-unreachable side", "[DungeonStitcher]")
+{
+    PieceLibrary library = MakeLockableTestLibrary(DoorUnlockCondition::RoomCleared);
+    Dungeon dungeon = MakeLockableTestDungeon();
+
+    DungeonLayout layout = GenerateDungeon(dungeon, library, 2024);
+
+    REQUIRE(layout.locks.size() == 1);
+    const LockAnnotation& lock = layout.locks.front();
+    REQUIRE(lock.unlock_condition == DoorUnlockCondition::RoomCleared);
+
+    std::vector<bool> without_lock = ReachableExcludingEdge(layout, lock.edge.piece_a, lock.edge.piece_b);
+    REQUIRE_FALSE(without_lock[lock.inside_room_index]);
+    REQUIRE(layout.pieces[lock.inside_room_index].piece_id == 400);
 }
 
 TEST_CASE("GenerateDungeon caps a dead-end Corridor socket with a Room from the pool", "[DungeonStitcher]")

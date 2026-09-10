@@ -97,7 +97,6 @@ void DungeonEditorLayer::OnAttach()
 void DungeonEditorLayer::OnDetach()
 {
     m_card_listeners.clear();
-    m_lock_row_listeners.clear();
     m_piece_row_listeners.clear();
     m_form_listeners.clear();
     m_preview_chrome_listeners.clear();
@@ -121,6 +120,7 @@ void DungeonEditorLayer::OnDetach()
 void DungeonEditorLayer::BuildPrefabCaches()
 {
     m_renderables.clear();
+    m_prefab_options.clear();
     try
     {
         Registry registry;
@@ -144,6 +144,7 @@ void DungeonEditorLayer::BuildPrefabCaches()
                 visual.has_renderable = true;
             }
             m_renderables.emplace(prefab_id, visual);
+            m_prefab_options.emplace_back(prefab_id, entry.id);
         }
     }
     catch (const std::exception& error)
@@ -178,13 +179,6 @@ void DungeonEditorLayer::LoadDocuments()
                         m_draft.pieces.push_back(DungeonPieceRef{});
                         MarkDirty();
                         RefreshPieceRefRows();
-                    });
-    WireButtonClick("add-lock",
-                    [this]
-                    {
-                        m_draft.locks.push_back(DungeonLockConfig{});
-                        MarkDirty();
-                        RefreshLockRows();
                     });
     WireButtonClick("back-to-list",
                     [this]
@@ -394,7 +388,6 @@ void DungeonEditorLayer::OpenForEdit(const std::string& id)
         return;
     m_draft = *found;
     m_piece_ref_collapsed.clear();
-    m_lock_collapsed.clear();
 
     m_draft_id = id;
     m_original_id = id;
@@ -415,7 +408,6 @@ void DungeonEditorLayer::BeginNewDungeon()
 {
     m_draft = Dungeon{};
     m_piece_ref_collapsed.clear();
-    m_lock_collapsed.clear();
 
     m_draft_id.clear();
     m_original_id.clear();
@@ -520,8 +512,42 @@ void DungeonEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-lock-count"))
+        keep(fieldwidgets::BuildIntField(*row, "lock_count", m_draft.lock_count,
+                                         [this](int v)
+                                         {
+                                             m_draft.lock_count = v;
+                                             MarkDirty();
+                                         }));
+
+    std::vector<std::pair<std::uint32_t, std::string>> prefab_options = {{0, "-- None --"}};
+    prefab_options.insert(prefab_options.end(), m_prefab_options.begin(), m_prefab_options.end());
+
+    if (Rml::Element* row = m_editor->GetElementById("field-unlocked-door-prefab"))
+        keep(fieldwidgets::BuildIdEnumField(*row, "unlocked_door_prefab_id", prefab_options,
+                                            m_draft.unlocked_door_prefab_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_draft.unlocked_door_prefab_id = id;
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-locked-door-prefab"))
+        keep(fieldwidgets::BuildIdEnumField(*row, "locked_door_prefab_id", prefab_options,
+                                            m_draft.locked_door_prefab_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_draft.locked_door_prefab_id = id;
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-switch-prefab"))
+        keep(fieldwidgets::BuildIdEnumField(*row, "switch_prefab_id", prefab_options, m_draft.switch_prefab_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_draft.switch_prefab_id = id;
+                                                MarkDirty();
+                                            }));
+
     RefreshPieceRefRows();
-    RefreshLockRows();
     RefreshDirtyDisplay();
 }
 
@@ -627,92 +653,6 @@ void DungeonEditorLayer::RefreshPieceRefRows()
 
     for (auto& listener : result.listeners)
         m_piece_row_listeners.push_back(std::move(listener));
-}
-
-void DungeonEditorLayer::RefreshLockRows()
-{
-    if (!m_editor)
-        return;
-    m_lock_row_listeners.clear();
-
-    Rml::Element* list = m_editor->GetElementById("lock-list");
-    if (!list)
-        return;
-
-    const auto SummaryFor = [](const std::string& lock_type) -> std::string
-    { return lock_type.empty() ? "(untyped lock)" : lock_type; };
-
-    m_lock_collapsed.resize(m_draft.locks.size(), true);
-
-    std::vector<std::string> summaries;
-    std::vector<std::string> bodies;
-    for (const DungeonLockConfig& lock : m_draft.locks)
-    {
-        summaries.push_back(EscapeRml(SummaryFor(lock.lock_type)));
-        bodies.push_back("<div class=\"lock-type field-row\"></div><div class=\"lock-count field-row\"></div>");
-    }
-
-    fieldwidgets::CardList result = fieldwidgets::BuildCardList(
-        *list, summaries, bodies, m_lock_collapsed, "<div class=\"list-empty\">No locks configured.</div>",
-        [this](std::size_t index)
-        {
-            if (index < m_draft.locks.size())
-                m_draft.locks.erase(m_draft.locks.begin() + static_cast<std::ptrdiff_t>(index));
-            if (index < m_lock_collapsed.size())
-                m_lock_collapsed.erase(m_lock_collapsed.begin() + static_cast<std::ptrdiff_t>(index));
-            MarkDirty();
-            RefreshLockRows();
-        },
-        [this](std::size_t from, std::size_t to)
-        {
-            m_pending_action = [this, from, to]
-            {
-                fieldwidgets::MoveElement(m_draft.locks, from, to);
-                fieldwidgets::MoveElement(m_lock_collapsed, from, to);
-                MarkDirty();
-                RefreshLockRows();
-            };
-        },
-        [this](std::size_t index, bool collapsed)
-        {
-            if (index < m_lock_collapsed.size())
-                m_lock_collapsed[index] = collapsed;
-        });
-
-    const auto keep = [this](fieldwidgets::Listeners listeners)
-    {
-        for (auto& listener : listeners)
-            m_lock_row_listeners.push_back(std::move(listener));
-    };
-
-    for (std::size_t i = 0; i < result.cards.size() && i < m_draft.locks.size(); ++i)
-    {
-        const std::size_t index = i;
-        const DungeonLockConfig& lock = m_draft.locks[i];
-        Rml::Element* summary_label = result.cards[i]->QuerySelector(".component-title");
-
-        if (Rml::Element* row = result.cards[i]->QuerySelector(".lock-type"))
-            keep(fieldwidgets::BuildStringField(*row, "lock_type", lock.lock_type,
-                                                [this, index, summary_label, SummaryFor](std::string v)
-                                                {
-                                                    if (index < m_draft.locks.size())
-                                                        m_draft.locks[index].lock_type = v;
-                                                    MarkDirty();
-                                                    if (summary_label)
-                                                        summary_label->SetInnerRML(EscapeRml(SummaryFor(v)));
-                                                }));
-        if (Rml::Element* row = result.cards[i]->QuerySelector(".lock-count"))
-            keep(fieldwidgets::BuildIntField(*row, "count", lock.count,
-                                             [this, index](int v)
-                                             {
-                                                 if (index < m_draft.locks.size())
-                                                     m_draft.locks[index].count = v;
-                                                 MarkDirty();
-                                             }));
-    }
-
-    for (auto& listener : result.listeners)
-        m_lock_row_listeners.push_back(std::move(listener));
 }
 
 void DungeonEditorLayer::SaveDraft()
@@ -904,10 +844,11 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
 
     // Debug overlay: outline every cell, tint dead-end sockets amber (their
     // fallback prefab's sprite, if any, was already drawn in the sprite pass
-    // above -- this just marks the cell as a dead end on top of it), tint the
-    // key room for each lock cyan, and outline locked connections red -- so
-    // the loopback/dead-end/lock-key structure is visually inspectable while
-    // tuning the draft's params.
+    // above -- this just marks the cell as a dead end on top of it), tint a
+    // Switch-condition lock's switch room cyan (a RoomCleared lock has no
+    // separate room to tint), and outline locked connections red -- so the
+    // loopback/dead-end/lock structure is visually inspectable while tuning
+    // the draft's params.
     SDL_SetRenderDrawBlendMode(&renderer, SDL_BLENDMODE_BLEND);
     for (const PlacedPiece& placed : m_preview->pieces)
     {
@@ -925,15 +866,15 @@ void DungeonEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int
 
     for (const LockAnnotation& lock : m_preview->locks)
     {
-        if (lock.key_room_index < m_preview->pieces.size())
+        if (lock.unlock_condition == DoorUnlockCondition::Switch && lock.switch_room_index < m_preview->pieces.size())
         {
-            const DungeonPiece* piece = m_pieces.Find(m_preview->pieces[lock.key_room_index].piece_id);
+            const DungeonPiece* piece = m_pieces.Find(m_preview->pieces[lock.switch_room_index].piece_id);
             if (piece)
                 for (const PieceCell& cell_data : piece->cells)
                 {
-                    const PlacedPiece& key_placed = m_preview->pieces[lock.key_room_index];
-                    const SDL_FRect box =
-                        cell_box(key_placed.world_offset + ApplyPieceTransform(cell_data.offset, key_placed.transform));
+                    const PlacedPiece& switch_placed = m_preview->pieces[lock.switch_room_index];
+                    const SDL_FRect box = cell_box(switch_placed.world_offset +
+                                                   ApplyPieceTransform(cell_data.offset, switch_placed.transform));
                     SDL_SetRenderDrawColor(&renderer, 92, 200, 255, 60);
                     SDL_RenderFillRect(&renderer, &box);
                 }

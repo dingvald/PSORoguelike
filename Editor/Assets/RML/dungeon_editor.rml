@@ -68,11 +68,17 @@
                     <div id="locks-card" class="inspector-card list-item">
                         <div class="inspector-card-header">
                             <span class="collapse-toggle">v</span>
-                            <span class="component-title">Locks</span>
-                            <span id="add-lock" class="btn">Add Lock</span>
+                            <span class="component-title">Locks &amp; Doors</span>
                         </div>
                         <div class="inspector-card-body list-item-body">
-                            <div id="lock-list" class="ref-scroll"></div>
+                            <h3>Lock Count</h3>
+                            <div id="field-lock-count" class="field-row"></div>
+                            <h3>Unlocked Door Prefab</h3>
+                            <div id="field-unlocked-door-prefab" class="field-row"></div>
+                            <h3>Locked Door Prefab</h3>
+                            <div id="field-locked-door-prefab" class="field-row"></div>
+                            <h3>Switch Prefab</h3>
+                            <div id="field-switch-prefab" class="field-row"></div>
                         </div>
                     </div>
                 </div>

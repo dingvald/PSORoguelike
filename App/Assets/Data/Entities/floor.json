@@ -1,0 +1,21 @@
+{
+    "schema_version": 1,
+    "components": {
+        "renderable": {
+            "texture_id": "floor",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#7a7a7aff",
+            "color_2": "#ffffffff",
+            "render_layer": 0,
+            "frames": 1,
+            "frame_time": 0.0
+        }
+    }
+}

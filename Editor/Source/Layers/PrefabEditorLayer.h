@@ -227,7 +227,6 @@ private:
     DropTableComponent m_drop_table;
     OnHitEffectComponent m_on_hit_effect;
     ExperienceValueComponent m_experience_value;
-    AiComponent m_ai;
     SpawnerAiComponent m_spawner_ai;
     std::string m_spawner_ai_prefab_name;
     PackFollowerComponent m_pack_follower;

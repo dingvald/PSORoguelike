@@ -605,22 +605,6 @@ namespace {
         return object;
     }
 
-    AiComponent ReadAiBody(const rapidjson::Value& body)
-    {
-        AiComponent ai;
-        ai.behavior = ReadEnum<AiBehavior>(body, "behavior", ai.behavior);
-        ai.detection_range = ReadInt(body, "detection_range", ai.detection_range);
-        return ai;
-    }
-
-    rapidjson::Value WriteAiBody(const AiComponent& ai, rapidjson::Document::AllocatorType& allocator)
-    {
-        rapidjson::Value object(rapidjson::kObjectType);
-        object.AddMember("behavior", StringValue(std::string{EnumName(ai.behavior)}, allocator), allocator);
-        object.AddMember("detection_range", ai.detection_range, allocator);
-        return object;
-    }
-
     SpawnerAiComponent ReadSpawnerAiBody(const rapidjson::Value& body)
     {
         SpawnerAiComponent spawner;
@@ -1218,7 +1202,6 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_experience_value = components.HasMember("experience_value")
                              ? ReadExperienceValueBody(components["experience_value"])
                              : ExperienceValueComponent{};
-    m_ai = components.HasMember("ai") ? ReadAiBody(components["ai"]) : AiComponent{};
     m_spawner_ai =
         components.HasMember("spawner_ai") ? ReadSpawnerAiBody(components["spawner_ai"]) : SpawnerAiComponent{};
     m_spawner_ai_prefab_name = LabelFor(m_spawner_ai.spawn_prefab_id);
@@ -2116,8 +2099,6 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteOnHitEffectBody(m_on_hit_effect, allocator);
         else if (key == "experience_value")
             body = WriteExperienceValueBody(m_experience_value, allocator);
-        else if (key == "ai")
-            body = WriteAiBody(m_ai, allocator);
         else if (key == "spawner_ai")
             body = WriteSpawnerAiBody(m_spawner_ai, allocator);
         else if (key == "pack_follower")

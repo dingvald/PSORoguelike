@@ -91,7 +91,6 @@ private:
     // -- Edit mode --
     void RefreshEditForm();
     void RefreshPieceRefRows();
-    void RefreshLockRows();
     void MarkDirty();
     void RefreshDirtyDisplay();
     void RefreshErrorDisplay();
@@ -125,7 +124,6 @@ private:
     fieldwidgets::Listeners m_card_listeners; // static Details/Pieces/Locks inspector-card collapse toggles
     fieldwidgets::Listeners m_form_listeners; // id/name/area_tag/room/loopback fields
     fieldwidgets::Listeners m_piece_row_listeners;
-    fieldwidgets::Listeners m_lock_row_listeners;
     fieldwidgets::Listeners m_preview_chrome_listeners; // #preview-window border/zoom/resize chrome
 
     // Reorder (drag-drop) finalizes here, one frame after the drag gesture
@@ -141,6 +139,11 @@ private:
     };
     std::unordered_map<std::uint32_t, PrefabVisual> m_renderables;
 
+    // (prefab_id, authored id string) pairs, same source BuildPrefabCaches
+    // already loads -- feeds the door/switch prefab-id dropdown fields
+    // (BuildIdEnumField), mirroring PieceEditorLayer's own m_palette role.
+    std::vector<std::pair<std::uint32_t, std::string>> m_prefab_options;
+
     // -- List state --
     PieceLibrary m_pieces;
     DungeonLibrary m_dungeons;
@@ -154,15 +157,14 @@ private:
     bool m_dirty = false;
     std::string m_error;
 
-    // Per-entry collapse state for the piece-ref/lock card lists, parallel to
-    // m_draft.pieces/m_draft.locks -- kept in sync (via BuildCardList's
-    // on_toggle) so RefreshPieceRefRows/RefreshLockRows rebuilding the whole
-    // list (e.g. to add a new entry) doesn't reset every other card back to
-    // collapsed. Resized to match its vector's current size at the top of
-    // each refresh; new/out-of-range entries default to collapsed (the
-    // pre-existing default for a freshly added entry).
+    // Per-entry collapse state for the piece-ref card list, parallel to
+    // m_draft.pieces -- kept in sync (via BuildCardList's on_toggle) so
+    // RefreshPieceRefRows rebuilding the whole list (e.g. to add a new
+    // entry) doesn't reset every other card back to collapsed. Resized to
+    // match its vector's current size at the top of each refresh;
+    // new/out-of-range entries default to collapsed (the pre-existing
+    // default for a freshly added entry).
     std::vector<bool> m_piece_ref_collapsed;
-    std::vector<bool> m_lock_collapsed;
 
     // -- Preview state --
     std::uint64_t m_preview_seed = 1;

@@ -1,0 +1,12 @@
+<rml>
+    <head>
+        <title>Info</title>
+        <link type="text/rcss" href="theme.rcss"/>
+        <link type="text/rcss" href="field_widgets.rcss"/>
+        <link type="text/rcss" href="info_popup.rcss"/>
+    </head>
+    <body>
+        <div id="info-popup-message"></div>
+        <span id="info-popup-ok" class="btn">OK</span>
+    </body>
+</rml>

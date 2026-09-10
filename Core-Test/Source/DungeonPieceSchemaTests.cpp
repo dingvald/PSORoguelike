@@ -65,6 +65,11 @@ TEST_CASE("BuildPieceSchemaModel reflects the piece's top-level and cell/prefab 
     REQUIRE(category->kind == psr::FieldKind::Enum);
     REQUIRE(!category->enum_values.empty());
 
+    const psr::FieldSchema* preferred_unlock_condition = find("preferred_unlock_condition");
+    REQUIRE(preferred_unlock_condition != nullptr);
+    REQUIRE(preferred_unlock_condition->kind == psr::FieldKind::Enum);
+    REQUIRE(!preferred_unlock_condition->enum_values.empty());
+
     const psr::FieldSchema* can_rotate = find("can_rotate");
     REQUIRE(can_rotate != nullptr);
     REQUIRE(can_rotate->kind == psr::FieldKind::Boolean);
@@ -145,6 +150,7 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     piece.name = "L Corridor";
     piece.area_tag = "Forest";
     piece.category = psr::PieceCategory::Corridor;
+    piece.preferred_unlock_condition = psr::DoorUnlockCondition::Switch;
     piece.can_rotate = true;
     piece.can_mirror = true;
 
@@ -194,6 +200,7 @@ TEST_CASE("SavePiece + LoadPieceLibrary round-trips an irregular, non-rectangula
     REQUIRE(loaded.name == "L Corridor");
     REQUIRE(loaded.area_tag == "Forest");
     REQUIRE(loaded.category == psr::PieceCategory::Corridor);
+    REQUIRE(loaded.preferred_unlock_condition == psr::DoorUnlockCondition::Switch);
     REQUIRE(loaded.can_rotate == true);
     REQUIRE(loaded.can_mirror == true);
     REQUIRE(loaded.cells.size() == 3);

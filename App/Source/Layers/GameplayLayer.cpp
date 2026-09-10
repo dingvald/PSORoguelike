@@ -425,6 +425,11 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_status_effect_markers.emplace(m_registry, *m_grid, m_status_effects);
         m_status_effect_markers->Subscribe(Entity(m_registry, m_player));
     }
+    if (!m_switch_trigger_system)
+    {
+        m_switch_trigger_system.emplace(m_registry, *m_grid);
+        m_switch_trigger_system->Subscribe(Entity(m_registry, m_player));
+    }
 
     // Piece-authored PieceSpawn entries are creatures, not static dungeon
     // furniture -- DungeonInstantiator/SpawnWaveSystem only stamp them with
@@ -468,6 +473,8 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
 
     m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
                                 instantiation.pending_spawn_waves, on_enemy_spawned);
+    m_room_clear_door_system.emplace(m_registry, *m_grid, instantiation.initial_wave_counts,
+                                     instantiation.pending_spawn_waves, instantiation.room_cleared_doors);
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);

@@ -39,6 +39,18 @@
                 {
                     "item_prefab_id": "armor.frame",
                     "weight": 0.4000000059604645
+                },
+                {
+                    "item_prefab_id": 3888333583,
+                    "weight": 0.5
+                },
+                {
+                    "item_prefab_id": 4254092246,
+                    "weight": 0.5
+                },
+                {
+                    "item_prefab_id": 816572809,
+                    "weight": 0.5
                 }
             ],
             "no_drop_weight": 1.0,

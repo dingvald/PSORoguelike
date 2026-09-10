@@ -77,22 +77,20 @@ TEST_CASE("BuildDungeonSchemaModel reflects the dungeon's top-level and nested f
     REQUIRE(has_weight);
     REQUIRE(has_max_occurrences);
 
-    const psr::FieldSchema* locks = find("locks");
-    REQUIRE(locks != nullptr);
-    REQUIRE(locks->kind == psr::FieldKind::Array);
-    bool has_lock_type = false, has_count = false;
-    for (const psr::FieldSchema& field : locks->ElementSchema().children)
-    {
-        if (field.name == "lock_type")
-            has_lock_type = true;
-        if (field.name == "count")
-            has_count = true;
-    }
-    REQUIRE(has_lock_type);
-    REQUIRE(has_count);
+    REQUIRE(find("lock_count") != nullptr);
+
+    const psr::FieldSchema* unlocked_door = find("unlocked_door_prefab_id");
+    REQUIRE(unlocked_door != nullptr);
+    REQUIRE(unlocked_door->kind == psr::FieldKind::NameId);
+    const psr::FieldSchema* locked_door = find("locked_door_prefab_id");
+    REQUIRE(locked_door != nullptr);
+    REQUIRE(locked_door->kind == psr::FieldKind::NameId);
+    const psr::FieldSchema* switch_prefab = find("switch_prefab_id");
+    REQUIRE(switch_prefab != nullptr);
+    REQUIRE(switch_prefab->kind == psr::FieldKind::NameId);
 }
 
-TEST_CASE("SaveDungeon + LoadDungeonLibrary round-trips piece refs and lock configs", "[DungeonSchema]")
+TEST_CASE("SaveDungeon + LoadDungeonLibrary round-trips piece refs and lock/door fields", "[DungeonSchema]")
 {
     psr::Dungeon dungeon;
     dungeon.name = "Forest Mission";
@@ -103,7 +101,10 @@ TEST_CASE("SaveDungeon + LoadDungeonLibrary round-trips piece refs and lock conf
     dungeon.loopback_count_max = 3;
     dungeon.pieces.push_back(psr::DungeonPieceRef{111, 2.5f, 4});
     dungeon.pieces.push_back(psr::DungeonPieceRef{222, 1.0f, 0});
-    dungeon.locks.push_back(psr::DungeonLockConfig{"red_key", 2});
+    dungeon.lock_count = 2;
+    dungeon.unlocked_door_prefab_id = 333;
+    dungeon.locked_door_prefab_id = 444;
+    dungeon.switch_prefab_id = 555;
 
     TempDirectory temp;
     const std::filesystem::path path = temp.path / "forest_mission.json";
@@ -124,9 +125,10 @@ TEST_CASE("SaveDungeon + LoadDungeonLibrary round-trips piece refs and lock conf
     REQUIRE(loaded.pieces[0].piece_id == 111);
     REQUIRE(loaded.pieces[0].weight == 2.5f);
     REQUIRE(loaded.pieces[0].max_occurrences == 4);
-    REQUIRE(loaded.locks.size() == 1);
-    REQUIRE(loaded.locks[0].lock_type == "red_key");
-    REQUIRE(loaded.locks[0].count == 2);
+    REQUIRE(loaded.lock_count == 2);
+    REQUIRE(loaded.unlocked_door_prefab_id == 333);
+    REQUIRE(loaded.locked_door_prefab_id == 444);
+    REQUIRE(loaded.switch_prefab_id == 555);
 }
 
 TEST_CASE("ReadDungeonBody throws DungeonError when room_count_min exceeds room_count_max", "[DungeonSchema]")

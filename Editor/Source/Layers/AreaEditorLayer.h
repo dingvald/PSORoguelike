@@ -80,7 +80,7 @@ private:
     // (fieldwidgets::BuildIdEnumField over m_dungeons) that commits by
     // resolving the picked id back to its Dungeon::id_string. Same
     // add/remove/drag-reorder-via-m_pending_action shape as
-    // DungeonEditorLayer::RefreshLockRows.
+    // DungeonEditorLayer::RefreshPieceRefRows.
     void RefreshDungeonSequenceRows();
 
     // -- RmlUi wiring --

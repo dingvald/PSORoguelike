@@ -232,6 +232,9 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
     (void)entrance_ref;
 
     DungeonLayout layout;
+    layout.unlocked_door_prefab_id = dungeon.unlocked_door_prefab_id;
+    layout.locked_door_prefab_id = dungeon.locked_door_prefab_id;
+    layout.switch_prefab_id = dungeon.switch_prefab_id;
     std::unordered_set<std::int64_t> occupied;
     std::unordered_map<std::uint32_t, int> occurrence_count;
     std::vector<bool> is_tree_edge; // parallel to layout.connections
@@ -446,56 +449,90 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
             layout.dead_ends.push_back(DeadEndSocket{unconnected[i].piece_index, unconnected[i].world_cell,
                                                      unconnected[i].edge, unconnected[i].fallback_prefab_id});
 
-    // Phase 4: lock & key. Candidate lock edges are tree edges only -- a
-    // loopback edge is never a bridge (both endpoints were already connected
-    // through the tree before the loopback was added), so it can never gate
-    // entrance-to-exit reachability.
+    // Phase 4: locks. Candidate lock edges are tree edges only -- a loopback
+    // edge is never a bridge (both endpoints were already connected through
+    // the tree before the loopback was added), so it can never gate
+    // entrance-to-exit reachability. A candidate edge is further only valid
+    // if the side it would gate (unreachable once the edge is excluded) is a
+    // Room/Vault/BossArena piece -- only those get a physical door (see
+    // DungeonInstantiator), and only those author a meaningful
+    // preferred_unlock_condition.
     std::vector<std::size_t> tree_edge_indices;
     for (std::size_t i = 0; i < is_tree_edge.size(); ++i)
         if (is_tree_edge[i])
             tree_edge_indices.push_back(i);
 
     std::vector<bool> locked(layout.connections.size(), false);
-    std::size_t lock_serial = 0;
-    for (const DungeonLockConfig& lock_config : dungeon.locks)
+    for (int i = 0; i < dungeon.lock_count; ++i)
     {
-        for (int i = 0; i < lock_config.count; ++i)
+        std::vector<std::size_t> shuffled = tree_edge_indices;
+        std::shuffle(shuffled.begin(), shuffled.end(), rng);
+
+        std::optional<std::size_t> chosen_edge;
+        std::size_t inside_index = 0;
+        const DungeonPiece* inside_piece = nullptr;
+        for (std::size_t edge_index : shuffled)
         {
-            std::vector<std::size_t> shuffled = tree_edge_indices;
-            std::shuffle(shuffled.begin(), shuffled.end(), rng);
+            if (locked[edge_index])
+                continue;
+            std::vector<bool> excluded = locked;
+            excluded[edge_index] = true;
+            std::vector<bool> reachable = ReachableFrom(0, layout.pieces.size(), layout.connections, excluded);
+            if (reachable[exit_index])
+                continue;
 
-            std::optional<std::size_t> chosen_edge;
-            for (std::size_t edge_index : shuffled)
-            {
-                if (locked[edge_index])
-                    continue;
-                std::vector<bool> excluded = locked;
-                excluded[edge_index] = true;
-                std::vector<bool> reachable = ReachableFrom(0, layout.pieces.size(), layout.connections, excluded);
-                if (!reachable[exit_index])
-                {
-                    chosen_edge = edge_index;
-                    break;
-                }
-            }
-            if (!chosen_edge)
-                continue; // best-effort: no valid bridge left for this lock instance
+            const SocketConnection& candidate_edge = layout.connections[edge_index];
+            const std::size_t candidate_inside =
+                reachable[candidate_edge.piece_a] ? candidate_edge.piece_b : candidate_edge.piece_a;
+            const DungeonPiece* candidate_piece = library.Find(layout.pieces[candidate_inside].piece_id);
+            if (!candidate_piece || (candidate_piece->category != PieceCategory::Room &&
+                                     candidate_piece->category != PieceCategory::Vault &&
+                                     candidate_piece->category != PieceCategory::BossArena))
+                continue;
 
-            locked[*chosen_edge] = true;
-            std::vector<bool> reachable_for_key = ReachableFrom(0, layout.pieces.size(), layout.connections, locked);
+            chosen_edge = edge_index;
+            inside_index = candidate_inside;
+            inside_piece = candidate_piece;
+            break;
+        }
+        if (!chosen_edge)
+            continue; // best-effort: no valid bridge left for this lock instance
+
+        locked[*chosen_edge] = true;
+
+        LockAnnotation annotation;
+        annotation.edge = layout.connections[*chosen_edge];
+        annotation.inside_room_index = inside_index;
+        annotation.unlock_condition = inside_piece->preferred_unlock_condition;
+
+        if (annotation.unlock_condition == DoorUnlockCondition::Switch)
+        {
+            std::vector<bool> reachable_for_switch =
+                ReachableFrom(0, layout.pieces.size(), layout.connections, locked);
             std::vector<std::size_t> reachable_rooms;
-            for (std::size_t room = 0; room < reachable_for_key.size(); ++room)
-                if (reachable_for_key[room])
+            for (std::size_t room = 0; room < reachable_for_switch.size(); ++room)
+                if (reachable_for_switch[room])
                     reachable_rooms.push_back(room);
 
-            LockAnnotation annotation;
-            annotation.edge = layout.connections[*chosen_edge];
-            annotation.lock_type = lock_config.lock_type;
-            annotation.key_tag = lock_config.lock_type + "_" + std::to_string(lock_serial++);
-            annotation.key_room_index =
+            annotation.switch_room_index =
                 reachable_rooms[std::uniform_int_distribution<std::size_t>(0, reachable_rooms.size() - 1)(rng)];
-            layout.locks.push_back(std::move(annotation));
+
+            const PlacedPiece& switch_placed = layout.pieces[annotation.switch_room_index];
+            const DungeonPiece* switch_piece = library.Find(switch_placed.piece_id);
+            if (switch_piece && !switch_piece->cells.empty())
+            {
+                const std::size_t cell_index =
+                    std::uniform_int_distribution<std::size_t>(0, switch_piece->cells.size() - 1)(rng);
+                annotation.switch_cell = switch_placed.world_offset +
+                    ApplyPieceTransform(switch_piece->cells[cell_index].offset, switch_placed.transform);
+            }
+            else
+            {
+                annotation.switch_cell = switch_placed.world_offset;
+            }
         }
+
+        layout.locks.push_back(std::move(annotation));
     }
 
     return layout;

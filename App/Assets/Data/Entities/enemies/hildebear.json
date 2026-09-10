@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "innate_weapon": {
-            "weapon_prefab_id": "weapons.booma_claws"
+            "weapon_prefab_id": "weapons.natural_weapon"
         },
         "blocks_movement": {},
         "ai": {
