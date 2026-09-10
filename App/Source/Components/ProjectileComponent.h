@@ -3,6 +3,7 @@
 #include "Combat/EffectFamily.h"
 #include "Combat/Element.h"
 #include "Components/StatsComponent.h"
+#include "Components/WeaponComponent.h" // RaceBonusEntry
 #include "Engine/Math/Vec2.h"
 
 #include <cstdint>
@@ -22,7 +23,7 @@ namespace psr {
 // snapshot of the casting technique/caster taken at spawn time -- the actual
 // hit roll (hit chance, crit, variance) happens fresh at impact, against
 // whatever occupies the tile the projectile stops on, same as
-// AttackAction's own lunge-then-resolve pattern.
+// WeaponAttackAction's own lunge-then-resolve pattern.
 struct ProjectileComponent
 {
     std::vector<Vec2> path;
@@ -41,6 +42,21 @@ struct ProjectileComponent
 
     std::uint32_t hit_effect_prefab_id = 0;
     float hit_effect_duration = 0.3f;
+
+    // true: a weapon's ranged attack (WeaponAttackAction) -- ResolveProjectileImpact
+    // computes physical (ATP-vs-DFP, race-bonus, crit) damage via
+    // attacker_stats/race_bonuses instead of the default Technique-style
+    // MST-based magic formula. false (default): unchanged Technique
+    // projectile behavior.
+    bool physical_damage = false;
+    std::vector<RaceBonusEntry> race_bonuses; // only meaningful when physical_damage
+
+    // Extra energy debited from the target's TurnQueue schedule on a landed
+    // hit -- see WeaponComponent::hit_stun_energy's own doc comment for the
+    // units. 0 (default) for every existing Technique projectile. Never
+    // paired with knockback -- a ranged hit stuns but never pushes (see
+    // ResolveProjectileImpact.cpp).
+    int hit_stun_energy = 0;
 };
 
 } // namespace psr

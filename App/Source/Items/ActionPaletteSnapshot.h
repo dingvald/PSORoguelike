@@ -7,10 +7,10 @@ namespace psr {
 class Registry;
 class TechniqueLibrary;
 class PhotonArtLibrary;
-struct TechniquesScreenMessage;
+struct ActionPaletteMessage;
 
 // Resolves player's KnownTechniquesComponent and equipped weapon's
-// photon_art_ids into a fully-resolved TechniquesScreenMessage for HudLayer
+// photon_art_ids into a fully-resolved ActionPaletteMessage for HudLayer
 // to render -- same "pure function, not a method on GameplayLayer or the
 // state" shape CharacterScreenSnapshot.h's BuildCharacterScreenMessage
 // already uses, for the same "layers/states never reference each other"
@@ -18,8 +18,7 @@ struct TechniquesScreenMessage;
 // filesystem path under ApplicationFilepaths::TexturesPath/"Techniques"/
 // "<id_string>.png", left empty if that file doesn't exist on disk (an
 // unauthored icon degrades to no <img> rather than a broken reference).
-TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::entity player,
-                                                      const TechniqueLibrary& techniques,
-                                                      const PhotonArtLibrary& photon_arts);
+ActionPaletteMessage BuildActionPaletteMessage(Registry& registry, entt::entity player,
+                                               const TechniqueLibrary& techniques, const PhotonArtLibrary& photon_arts);
 
 } // namespace psr

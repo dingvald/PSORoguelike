@@ -15,7 +15,7 @@ enum class GameStateId
     GameOver,
     CharacterScreen,
     Animation,
-    TechniquesScreen,
+    ActionPalette,
     MissionSelect,
     Shop,
     Storage,

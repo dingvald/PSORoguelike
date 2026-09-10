@@ -19,14 +19,16 @@ namespace psr {
 // Returns whether anything changed.
 bool AssignItemToHotbarSlot(Entity actor, int inventory_index, int hotbar_slot);
 
-// Binds id (a Technique or Photon Art NameId) into actor's Technique/PhotonArt
-// hotbar slot hotbar_slot -- published from the Techniques/Photon Arts screen
-// (see TechniquesScreenSlotAssignedMessage), same "id is the key, not an
-// index" shape that screen's rows already have (see
-// TechniquesScreenMessage.h's own doc comment). Validates server-side rather
+// Binds id (a Technique or Photon Art NameId, ignored for NormalAttack) into
+// actor's Technique/PhotonArt/NormalAttack hotbar slot hotbar_slot --
+// published from the Action Palette screen (see
+// ActionPaletteSlotAssignedMessage), same "id is the key, not an index"
+// shape that screen's Technique/PhotonArt rows already have (see
+// ActionPaletteMessage.h's own doc comment). Validates server-side rather
 // than trusting the message's content: type must be Technique (and actor's
-// KnownTechniquesComponent must actually contain id) or PhotonArt (and the
-// equipped weapon's WeaponComponent::photon_art_ids must contain id) --
+// KnownTechniquesComponent must actually contain id), PhotonArt (and the
+// equipped weapon's WeaponComponent::photon_art_ids must contain id), or
+// NormalAttack (and the actor must have a live equipped weapon) --
 // anything else (Item/Empty, or an id the actor doesn't know/isn't granted)
 // is a no-op. Free/instant, same reasoning as AssignItemToHotbarSlot. Returns
 // whether anything changed.

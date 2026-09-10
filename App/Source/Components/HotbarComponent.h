@@ -12,7 +12,13 @@ enum class HotbarSlotType
     Empty,
     Technique,
     PhotonArt,
-    Item
+    Item,
+
+    // The equipped weapon's own basic attack (WeaponAttackAction) -- id is
+    // unused/0, since "Normal Attack" always means "whatever is currently
+    // equipped," not a fixed id. See GameplayLayer::TryActivateSlot and
+    // Items/Hotbar.h's AssignAbilityToHotbarSlot.
+    NormalAttack
 };
 
 // One quick-use slot: type plus a NameId into TechniqueLibrary/PhotonArtLibrary

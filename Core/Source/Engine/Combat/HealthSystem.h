@@ -11,7 +11,7 @@ namespace psr {
 // dispatching AfterDamageEvent back at the event's source on the target's
 // behalf, and then dispatching DeathEvent (also at the target) if that
 // reduced current_hp to 0. The sole writer of HealthComponent::current_hp --
-// AttackAction/PhotonArtAction/TechniqueAction/StatusEffectApplication all
+// WeaponAttackAction/PhotonArtAction/TechniqueAction/StatusEffectApplication all
 // resolve damage down to an amount and dispatch IncomingDamageEvent at the
 // target rather than touching HealthComponent themselves.
 //

@@ -446,7 +446,7 @@ body {
     font-weight: bold;
 }
 
-#techniques-screen {
+#action-palette {
     display: none;
     position: absolute;
     top: 0;
@@ -459,14 +459,14 @@ body {
     align-items: center;
 }
 
-#techniques-screen-title {
+#action-palette-title {
     font-size: 1.6em;
     font-weight: bold;
     color: #3aa0ff;
     margin-bottom: 0.6em;
 }
 
-#techniques-screen-columns {
+#action-palette-columns {
     display: flex;
     flex-direction: row;
     width: 100%;
@@ -476,7 +476,8 @@ body {
 }
 
 .technique-row,
-.photon-art-row {
+.photon-art-row,
+.normal-attack-row {
     display: block;
     padding: 0.3em 0.2em;
     font-size: 0.85em;
@@ -484,13 +485,15 @@ body {
 }
 
 .technique-row:hover,
-.photon-art-row:hover {
+.photon-art-row:hover,
+.normal-attack-row:hover {
     color: #fff;
     background-color: rgba(58, 160, 255, 80);
 }
 
 .technique-row.focused,
-.photon-art-row.focused {
+.photon-art-row.focused,
+.normal-attack-row.focused {
     color: #fff;
     border-left: 3px #3aa0ff;
 }
@@ -502,13 +505,13 @@ body {
     vertical-align: middle;
 }
 
-#techniques-screen-hint {
+#action-palette-hint {
     margin-top: 0.4em;
     font-size: 0.9em;
     color: #999;
 }
 
-#techniques-screen-hint.awaiting-hotbar-slot {
+#action-palette-hint.awaiting-hotbar-slot {
     color: #3aa0ff;
     font-weight: bold;
 }

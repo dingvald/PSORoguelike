@@ -26,7 +26,7 @@ class TechniqueLibrary;
 //   (diagonal included) at a time, via MoveAction -- see StepToward. No
 //   separate "am I in range, should I attack instead" check exists:
 //   MoveAction's own bump-into-hostile fallback already turns a step into an
-//   adjacent hostile's tile into an AttackAction, so chasing into range is
+//   adjacent hostile's tile into a WeaponAttackAction, so chasing into range is
 //   attacking in range.
 // - FleeWhenHit: behaves exactly like ChaseAndAttack until this entity's own
 //   HealthComponent shows any damage taken (current_hp < max_hp), then steps

@@ -24,7 +24,7 @@ namespace psr {
 // carry EquipmentComponent/TPComponent/StatusEffectComponent/HealthComponent
 // is created. affixes/status_effects/grid must outlive registry's use of
 // them (same contract as Registry::SetAffixLibrary). GetStatusEffectLibrary()
-// is called unconditionally on every landed hit (see AttackAction/
+// is called unconditionally on every landed hit (see WeaponAttackAction/
 // PhotonArtAction/TechniqueAction's MaybeApplyElementalStatus call) and by
 // Shock's cancellation check, so every combat-action test needs this even
 // when it exercises no status effect directly -- a missing

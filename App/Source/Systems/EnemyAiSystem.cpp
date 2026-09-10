@@ -58,8 +58,8 @@ namespace {
     // Same occupancy check MoveAction::Perform itself does: a tile is a
     // viable step if it's empty of BlocksMovementComponent occupants, or its
     // (sole expected) blocking occupant is a hostile with HealthComponent --
-    // MoveAction's own bump fallback is what turns stepping there into an
-    // AttackAction.
+    // MoveAction's own bump fallback is what turns stepping there into a
+    // WeaponAttackAction.
     bool IsViableStep(Grid& grid, Registry& registry, Entity actor, Vec2 target_tile)
     {
         if (!grid.Contains(target_tile))

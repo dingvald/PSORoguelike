@@ -61,8 +61,23 @@ std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 
     }
     case WeaponRangeShape::Cone3:
     {
-        const Vec2 perpendicular{-direction.y, direction.x};
-        for (Vec2 tile : {origin + direction, origin + direction + perpendicular, origin + direction - perpendicular})
+        std::vector<Vec2> candidates{origin + direction};
+        if (direction.x != 0 && direction.y != 0)
+        {
+            // Diagonal direction: flank with its two cardinal components
+            // (e.g. numpad 9 -> numpad 8 and numpad 6), rather than the
+            // perpendicular-vector math below, which only produces the
+            // correct flanking tiles when direction is itself cardinal.
+            candidates.push_back(origin + Vec2{direction.x, 0});
+            candidates.push_back(origin + Vec2{0, direction.y});
+        }
+        else
+        {
+            const Vec2 perpendicular{-direction.y, direction.x};
+            candidates.push_back(origin + direction + perpendicular);
+            candidates.push_back(origin + direction - perpendicular);
+        }
+        for (Vec2 tile : candidates)
             if (grid.Contains(tile))
                 tiles.push_back(tile);
         break;

@@ -11,7 +11,7 @@
 namespace psr {
 
 // Casts a specific weapon-granted Photon Art (photon_art_id, resolved into
-// photon_arts). Stateless w.r.t. the target -- unlike AttackAction/MoveAction
+// photon_arts). Stateless w.r.t. the target -- unlike WeaponAttackAction/MoveAction
 // (which take a fixed direction at construction), the target this resolves
 // against comes from actor's own SelectedTargetComponent at Perform() time
 // (written by TargetSelectionState just before TurnCoordinator::
@@ -26,7 +26,7 @@ namespace psr {
 // -- the same TPComponent pool TechniqueAction spends, per docs/GDD.md's
 // "PP vs. TP (revised -- collapsed to one pool)" section. Otherwise TP is spent and the turn is
 // consumed (kPhotonArtCost) regardless of whether the cast connects --
-// unlike AttackAction's free-swing-into-empty-air case, the player
+// unlike WeaponAttackAction's free-swing-into-empty-air case, the player
 // explicitly chose this target through an interactive selection flow, so
 // there's no "accidental miss" to refund.
 class PhotonArtAction : public IAction

@@ -1,6 +1,6 @@
 #include "Systems/EnemyAiSystem.h"
 
-#include "Actions/AttackAction.h"
+#include "Actions/WeaponAttackAction.h"
 #include "Actions/MoveAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Actions/WaitAction.h"
@@ -91,7 +91,7 @@ TEST_CASE("EnemyAiSystem's step into an adjacent hostile falls back to an attack
     // Zero-cost move-that-became-a-bump: the fallback is the actual attack.
     CHECK(result.cost == 0);
     REQUIRE(result.fallback != nullptr);
-    CHECK(dynamic_cast<psr::AttackAction*>(result.fallback.get()) != nullptr);
+    CHECK(dynamic_cast<psr::WeaponAttackAction*>(result.fallback.get()) != nullptr);
     // Never actually stepped onto the target's tile.
     CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{0, 0});
 }

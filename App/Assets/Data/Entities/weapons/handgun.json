@@ -1,0 +1,40 @@
+{
+    "schema_version": 1,
+    "components": {
+        "item": {},
+        "weapon": {
+            "range_shape": "line",
+            "range": 6,
+            "hits_per_turn": 1,
+            "grind_level": 0,
+            "prefix_affix_id": 0,
+            "suffix_affix_id": 0,
+            "race_bonuses": [],
+            "photon_art_ids": [],
+            "element": "none",
+            "status_effect_id": 0,
+            "status_chance_percent": 0,
+            "targeting_mode": "directional",
+            "fires_projectile": true,
+            "projectile_pierces": false,
+            "projectile_speed": 8,
+            "projectile_prefab_id": "vfx.handgun_bolt",
+            "hit_stun_energy": 15
+        },
+        "stats": {
+            "atp": 30,
+            "ata": 45,
+            "mst": 0,
+            "dfp": 0,
+            "evp": 0,
+            "lck": 0
+        },
+        "on_hit_effect": {
+            "effect_prefab_id": "vfx.generic_hit",
+            "duration": 0.3
+        },
+        "value": {
+            "base_price": 150
+        }
+    }
+}

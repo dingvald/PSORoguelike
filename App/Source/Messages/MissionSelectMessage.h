@@ -8,7 +8,7 @@ namespace psr {
 // Resolved Mission Select contents for HudLayer to render -- one row per
 // authored Dungeon, fully resolved (no entity handles, no DungeonLibrary
 // reference), same "fully resolved" contract CharacterScreenMessage/
-// TechniquesScreenMessage already use. Published by MissionSelectState::
+// ActionPaletteMessage already use. Published by MissionSelectState::
 // OnEnter (see Missions/MissionSelectSnapshot.h's BuildMissionSelectMessage).
 struct MissionSelectMessage
 {

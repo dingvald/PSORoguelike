@@ -1,12 +1,15 @@
-#include "Actions/AttackAction.h"
+#include "Actions/WeaponAttackAction.h"
 
 #include "Combat/AttackEvent.h"
 #include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
 #include "Components/ActorComponent.h"
+#include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
+#include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/TweenComponent.h"
@@ -21,14 +24,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
 #include <cstddef>
 
 namespace {
 
-// AttackAction no longer applies damage inline -- it queues a lunge-and-
-// return Tween pair with the hit-resolution loop captured as the lunge's
-// on_completion (see AttackAction.cpp's own doc comment). A single huge
+// WeaponAttackAction no longer applies damage inline -- it queues a lunge-
+// and-return Tween pair with the hit-resolution loop captured as the lunge's
+// on_completion (see WeaponAttackAction.cpp's own doc comment). A single huge
 // delta_time cascades UpdateTweens through both queued Tweens (and fires the
 // damage callback) in a bounded loop, standing in for AnimationState's real
 // per-frame drive.
@@ -92,7 +94,7 @@ psr::Entity MakeDefender(psr::Registry& registry, psr::Grid& grid, psr::Vec2 til
 
 } // namespace
 
-TEST_CASE("AttackAction with no weapon equipped is a free no-op", "[AttackAction]")
+TEST_CASE("WeaponAttackAction with no weapon equipped is a free no-op", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -103,13 +105,13 @@ TEST_CASE("AttackAction with no weapon equipped is a free no-op", "[AttackAction
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
 }
 
-TEST_CASE("AttackAction against an empty tile is a free no-op", "[AttackAction]")
+TEST_CASE("WeaponAttackAction against an empty tile is a free no-op", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -122,13 +124,13 @@ TEST_CASE("AttackAction against an empty tile is a free no-op", "[AttackAction]"
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
 }
 
-TEST_CASE("AttackAction does not damage a non-hostile occupant", "[AttackAction]")
+TEST_CASE("WeaponAttackAction does not damage a non-hostile occupant", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -144,14 +146,14 @@ TEST_CASE("AttackAction does not damage a non-hostile occupant", "[AttackAction]
     // Same side (both player-controlled) -- not hostile per IsHostile.
     psr::Entity ally = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/20, /*player=*/true);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
     REQUIRE(ally.Get<psr::HealthComponent>().current_hp == 20);
 }
 
-TEST_CASE("AttackAction eventually destroys a hostile SingleTarget occupant", "[AttackAction]")
+TEST_CASE("WeaponAttackAction eventually destroys a hostile SingleTarget occupant", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -167,23 +169,22 @@ TEST_CASE("AttackAction eventually destroys a hostile SingleTarget occupant", "[
     psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
     const entt::entity enemy_handle = enemy.Handle();
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
 
     bool destroyed = false;
     for (int attempt = 0; attempt < 50 && !destroyed; ++attempt)
     {
         psr::ActionResult result = action.Perform(actor);
-        REQUIRE(result.cost == psr::AttackAction::kAttackCost); // a hostile target was always found in range
+        REQUIRE(result.cost == psr::WeaponAttackAction::kWeaponAttackCost); // a hostile target was always found
         DrainAttackTween(registry);
         if (!registry.IsValid(enemy_handle))
             destroyed = true;
     }
 
     REQUIRE(destroyed);
-    REQUIRE(grid.GetEntities({2, 1}).empty());
 }
 
-TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform", "[AttackAction]")
+TEST_CASE("WeaponAttackAction with hits_per_turn > 1 rolls multiple hits per Perform", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -200,11 +201,11 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     // isolates "multiple hits landed in one Perform" from the death path.
     psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
     DrainAttackTween(registry);
 
-    REQUIRE(result.cost == psr::AttackAction::kAttackCost);
+    REQUIRE(result.cost == psr::WeaponAttackAction::kWeaponAttackCost);
     // ATP 80 vs DFP 0 -> floor((80-0)/5*0.9*variance) caps a single hit at 15
     // (variance <= 1.1); five guaranteed hits clearing more than that proves
     // multiple hits landed in one Perform().
@@ -212,7 +213,7 @@ TEST_CASE("AttackAction with hits_per_turn > 1 rolls multiple hits per Perform",
     REQUIRE(damage_dealt > 15);
 }
 
-TEST_CASE("AttackAction's cost is scaled by the actor's ActorComponent::act_speed", "[AttackAction]")
+TEST_CASE("WeaponAttackAction's cost is scaled by the actor's ActorComponent::act_speed", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -228,14 +229,14 @@ TEST_CASE("AttackAction's cost is scaled by the actor's ActorComponent::act_spee
 
     MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
     DrainAttackTween(registry);
 
-    REQUIRE(result.cost == psr::AttackAction::kAttackCost * 2);
+    REQUIRE(result.cost == psr::WeaponAttackAction::kWeaponAttackCost * 2);
 }
 
-TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
+TEST_CASE("WeaponAttackAction applies a matching race bonus", "[WeaponAttackAction]")
 {
     psr::AffixLibrary affixes;
     const std::uint32_t matching_race = 111;
@@ -258,7 +259,7 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
         psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
         enemy.Emplace<psr::RaceComponent>(psr::RaceComponent{defender_race});
 
-        psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+        psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
         action.Perform(actor);
         DrainAttackTween(registry);
         return 10000 - enemy.Get<psr::HealthComponent>().current_hp;
@@ -270,7 +271,8 @@ TEST_CASE("AttackAction applies a matching race bonus", "[AttackAction]")
     REQUIRE(damage_with_bonus > damage_without_bonus);
 }
 
-TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit, and on a kill", "[AttackAction]")
+TEST_CASE("WeaponAttackAction dispatches AfterDamageEvent to the actor on a landed hit, and on a kill",
+          "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -296,7 +298,7 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
                 saw_defeat = true;
         });
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     for (int attempt = 0; attempt < 50 && registry.IsValid(enemy_handle); ++attempt)
     {
         action.Perform(actor);
@@ -308,7 +310,7 @@ TEST_CASE("AttackAction dispatches AfterDamageEvent to the actor on a landed hit
     REQUIRE(saw_defeat);
 }
 
-TEST_CASE("AttackAction is a free no-op when the weapon carrier lacks WeaponComponent", "[AttackAction]")
+TEST_CASE("WeaponAttackAction is a free no-op when the weapon carrier lacks WeaponComponent", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -321,14 +323,14 @@ TEST_CASE("AttackAction is a free no-op when the weapon carrier lacks WeaponComp
     entt::entity not_a_weapon = registry.CreateEntity(); // no WeaponComponent
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{not_a_weapon});
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
 }
 
 TEST_CASE("EquipmentComponent's handler contributes weapon data and effective stats to BeforeAttackEvent",
-          "[AttackAction][EquipmentComponent]")
+          "[WeaponAttackAction][EquipmentComponent]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -352,7 +354,7 @@ TEST_CASE("EquipmentComponent's handler contributes weapon data and effective st
     REQUIRE(event.attacker_stats.ata == 60);
 }
 
-TEST_CASE("AttackAction no-ops for zero cost when the actor is Shocked", "[AttackAction][StatusEffect]")
+TEST_CASE("WeaponAttackAction no-ops for zero cost when the actor is Shocked", "[WeaponAttackAction][StatusEffect]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -372,15 +374,15 @@ TEST_CASE("AttackAction no-ops for zero cost when the actor is Shocked", "[Attac
 
     psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     psr::ActionResult result = action.Perform(actor);
 
     REQUIRE(result.cost == 0);
     REQUIRE(enemy.Get<psr::HealthComponent>().current_hp == 10); // untouched -- the attack never happened
 }
 
-TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-chance landed hit",
-          "[AttackAction][StatusEffect]")
+TEST_CASE("WeaponAttackAction applies the weapon's elemental status on a guaranteed-chance landed hit",
+          "[WeaponAttackAction][StatusEffect]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
@@ -406,7 +408,7 @@ TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-ch
     // only rolls on a non-lethal hit.
     psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
 
-    psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
     action.Perform(actor);
     DrainAttackTween(registry);
 
@@ -416,73 +418,145 @@ TEST_CASE("AttackAction applies the weapon's elemental status on a guaranteed-ch
     CHECK(status->active.front().status_effect_id == burn.id);
 }
 
-TEST_CASE("AttackAction can chain extra attacks for a player, up to kMaxAttacksPerTurn, via ActionResult::fallback",
-          "[AttackAction]")
+TEST_CASE("WeaponAttackAction knocks a landed-hit target back 1 tile away from the attacker", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
     psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
-    std::mt19937 rng{3};
+    std::mt19937 rng{1};
 
     psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
-    // High HP so the enemy survives every chained swing across every
-    // attempt below -- isolates "how many attacks chained" from the death
-    // path (already covered by other tests in this file).
-    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/1000000, /*player=*/false);
+    // High HP so the target survives to be pushed -- isolates knockback from
+    // the death path.
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
+    const entt::entity enemy_handle = enemy.Handle();
 
-    std::size_t max_queue_seen = 0;
-    for (int attempt = 0; attempt < 500; ++attempt)
-    {
-        psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
-        psr::ActionResult result = psr::ResolveAction(action, actor);
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
+    action.Perform(actor);
+    DrainAttackTween(registry);
 
-        // Only the last ActionResult in the fallback chain's cost is ever
-        // meant to be applied (see ActionExecutor.h) -- a chained extra
-        // attack must not inflate the turn cost.
-        REQUIRE(result.cost == psr::AttackAction::kAttackCost);
-
-        const std::size_t queue_size = actor.Get<psr::TweenComponent>().queue.size();
-        REQUIRE(queue_size % 2 == 0); // each chained AttackAction queues exactly a lunge/return pair
-        REQUIRE(queue_size <= 2 * psr::AttackAction::kMaxAttacksPerTurn);
-        max_queue_seen = std::max(max_queue_seen, queue_size);
-
-        DrainAttackTween(registry);
-    }
-
-    // With kExtraAttackChance == 0.25, seeing the cap hit at least once across
-    // 500 attempts is effectively certain -- proves chaining actually
-    // happens, not just that it's capped.
-    REQUIRE(max_queue_seen == 2 * psr::AttackAction::kMaxAttacksPerTurn);
+    REQUIRE(enemy.Get<psr::Position>().tile == psr::Vec2{3, 1});
+    REQUIRE(grid.GetEntities({2, 1}).empty());
+    REQUIRE_FALSE(grid.GetEntities({3, 1}).empty());
+    REQUIRE(grid.GetEntities({3, 1}).front() == enemy_handle);
 }
 
-TEST_CASE("AttackAction never chains extra attacks for a non-player actor", "[AttackAction]")
+TEST_CASE("WeaponAttackAction does not knock a target into a blocked destination tile", "[WeaponAttackAction]")
 {
     psr::Registry registry;
     psr::Grid grid{5, 5};
     psr::AffixLibrary affixes;
     psr::StatusEffectLibrary status_effects;
     psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
-    std::mt19937 rng{3};
+    std::mt19937 rng{1};
 
-    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/false);
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
     entt::entity weapon = MakeWeapon(registry);
     actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
 
-    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/1000000, /*player=*/true);
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
 
-    for (int attempt = 0; attempt < 50; ++attempt)
+    // A wall on the tile the knockback would push into.
+    entt::entity wall = registry.CreateEntity();
+    registry.Emplace<psr::BlocksMovementComponent>(wall);
+    grid.AddEntity({3, 1}, wall);
+
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
+    action.Perform(actor);
+    DrainAttackTween(registry);
+
+    REQUIRE(enemy.Get<psr::Position>().tile == psr::Vec2{2, 1}); // knockback silently skipped
+}
+
+TEST_CASE("WeaponAttackAction is a free no-op when a fixed-direction (bump) call targets a fires_projectile weapon",
+          "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry, psr::WeaponRangeShape::Line, /*range=*/5);
+    registry.GetComponent<psr::WeaponComponent>(weapon).fires_projectile = true;
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
+
+    // A fixed direction, as MoveAction's bump fallback always constructs.
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(enemy.Get<psr::HealthComponent>().current_hp == 10); // untouched -- bump never fires a ranged weapon
+    REQUIRE_FALSE(registry.Any<psr::ProjectileComponent>()); // no projectile was ever spawned
+}
+
+TEST_CASE("WeaponAttackAction with no fixed direction resolves via SelectedTargetComponent", "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
+    const entt::entity enemy_handle = enemy.Handle();
+
+    // No fixed direction -- this is how GameplayLayer::TryActivateSlot's
+    // hotbar Normal Attack slot invokes it, after TargetSelectionState has
+    // already written SelectedTargetComponent.
+    psr::WeaponAttackAction action(grid, affixes, rng);
+
+    bool destroyed = false;
+    for (int attempt = 0; attempt < 50 && !destroyed; ++attempt)
     {
-        psr::AttackAction action(grid, affixes, psr::Vec2{1, 0}, rng);
-        psr::ActionResult result = psr::ResolveAction(action, actor);
-
-        REQUIRE(result.cost == psr::AttackAction::kAttackCost);
-        REQUIRE(actor.Get<psr::TweenComponent>().queue.size() == 2);
-
+        action.Perform(actor);
         DrainAttackTween(registry);
+        if (!registry.IsValid(enemy_handle))
+            destroyed = true;
     }
+
+    REQUIRE(destroyed);
+}
+
+TEST_CASE("WeaponAttackAction with no fixed direction and a fires_projectile weapon charges cost without a "
+          "registered projectile prefab",
+          "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry, psr::WeaponRangeShape::Line, /*range=*/5);
+    registry.GetComponent<psr::WeaponComponent>(weapon).fires_projectile = true;
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 1}});
+
+    // No prefab registered for projectile_prefab_id (0, the default) --
+    // registry.HasPrefab(0) is false, so no ProjectileComponent entity can
+    // spawn, but the cast still commits (same "cost is charged once the gate
+    // passes" convention TechniqueAction's own projectile branch uses).
+    psr::WeaponAttackAction action(grid, affixes, rng);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::WeaponAttackAction::kWeaponAttackCost);
+    REQUIRE_FALSE(registry.Any<psr::ProjectileComponent>());
 }

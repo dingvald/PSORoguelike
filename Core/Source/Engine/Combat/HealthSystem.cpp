@@ -18,8 +18,13 @@ namespace {
         health.current_hp = std::clamp(health.current_hp - event.amount, 0, health.max_hp);
         const bool defeated = health.current_hp == 0;
 
-        AfterDamageEvent after{
-            target, event.amount, event.is_critical, defeated, event.hit_effect_prefab_id, event.hit_effect_duration};
+        AfterDamageEvent after{target,
+                               event.amount,
+                               event.is_critical,
+                               defeated,
+                               event.hit_effect_prefab_id,
+                               event.hit_effect_duration,
+                               event.hit_stun_energy};
         event.source.Dispatch(after);
 
         if (defeated)

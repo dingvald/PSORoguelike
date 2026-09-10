@@ -12,7 +12,7 @@ struct RunProgress;
 // interaction handling when the player is standing on the hub's teleporter
 // entity (see Hub/HubInteraction.h), popped by this state itself on
 // Space-with-nothing-focused-changing/Escape. Mirrors CharacterScreenState/
-// TechniquesScreenState's exact push/publish-on-enter/close-on-Escape shape
+// ActionPaletteState's exact push/publish-on-enter/close-on-Escape shape
 // -- nothing here is a turn-costing IAction (entering a mission is a scene
 // swap, not a queued action), so no RequestClose() is needed.
 class MissionSelectState : public GameState
