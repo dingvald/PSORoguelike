@@ -5,6 +5,7 @@
 #include "Components/InventoryComponent.h"
 #include "Components/TPComponent.h"
 #include "Engine/Combat/HealEvent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Items/ItemUseEvent.h"
@@ -53,8 +54,16 @@ ActionResult UseItemAction::Perform(Entity actor)
     if (const PrefabIdComponent* prefab_id = registry.TryGetComponent<PrefabIdComponent>(item))
         item_prefab_id = prefab_id->value;
 
-    inventory->items.erase(inventory->items.begin() + m_inventory_index);
-    registry.DestroyEntity(item);
+    ItemComponent* item_component = registry.TryGetComponent<ItemComponent>(item);
+    if (item_component && item_component->quantity > 1)
+    {
+        --item_component->quantity;
+    }
+    else
+    {
+        inventory->items.erase(inventory->items.begin() + m_inventory_index);
+        registry.DestroyEntity(item);
+    }
 
     AfterItemUseEvent event{item_prefab_id};
     actor.Dispatch(event);

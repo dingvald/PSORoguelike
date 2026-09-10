@@ -14,7 +14,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -25,7 +25,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -36,7 +36,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -47,7 +47,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -58,7 +58,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },

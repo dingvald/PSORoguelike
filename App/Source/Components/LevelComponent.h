@@ -8,11 +8,14 @@ namespace psr {
 // TabTargetComponent), so this is deliberately not schema-registered. xp is
 // progress toward level+1, not a lifetime total -- ExperienceSystem consumes
 // it (and carries any remainder forward) on each level-up rather than
-// tracking a running grand total.
+// tracking a running grand total. total_xp is that running grand total,
+// purely additive (never consumed on level-up), kept only for the Character
+// screen's "Total EXP" display.
 struct LevelComponent
 {
     int level = 1;
     int xp = 0;
+    int total_xp = 0;
 };
 
 } // namespace psr

@@ -43,6 +43,17 @@
                 <div id="field-accent-texture-id" class="field-row"></div>
                 <h3>Unlock Predecessor Tag</h3>
                 <div id="field-unlock-predecessor-tag" class="field-row"></div>
+
+                <div id="dungeon-sequence-card" class="inspector-card list-item">
+                    <div class="inspector-card-header">
+                        <span class="collapse-toggle">v</span>
+                        <span class="component-title">Dungeon Sequence</span>
+                        <span id="add-dungeon-sequence-entry" class="btn">Add Dungeon</span>
+                    </div>
+                    <div class="inspector-card-body list-item-body">
+                        <div id="dungeon-sequence-list" class="ref-scroll"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </body>

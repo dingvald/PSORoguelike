@@ -4,9 +4,11 @@
 
 namespace psr {
 
-// Published by GameplayLayer::OnMissionExitReached once the player steps
-// into a dungeon's Exit piece and the scene swaps back to the hub.
-// HudLayer logs it via the existing event-log path -- no new UI chrome.
+// Published by GameplayLayer::OnTeleporterActivated when the player activates
+// a dungeon's Exit teleporter (TeleporterDestination::AdvanceLevel) -- once
+// per dungeon completed, whether that advances to the next level in the same
+// Area or ends the mission back at the hub. HudLayer logs it via the existing
+// event-log path -- no new UI chrome.
 struct MissionCompletedMessage
 {
     std::string dungeon_id_string;

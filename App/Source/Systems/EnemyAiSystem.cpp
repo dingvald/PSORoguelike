@@ -3,7 +3,6 @@
 #include "Actions/MoveAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Combat/Hostility.h"
-#include "Combat/TargetResolution.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -120,25 +119,32 @@ IAction* EnemyAiSystem::Decide(Entity actor)
 
 IAction* EnemyAiSystem::StepToward(Entity actor, Vec2 self_tile, Vec2 delta)
 {
-    const Vec2 primary = SnapToCardinalDirection(delta);
+    const Vec2 diagonal{delta.x > 0 ? 1 : (delta.x < 0 ? -1 : 0), delta.y > 0 ? 1 : (delta.y < 0 ? -1 : 0)};
 
-    if (IsViableStep(*m_grid, *m_registry, actor, self_tile + primary))
+    if (IsViableStep(*m_grid, *m_registry, actor, self_tile + diagonal))
     {
-        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, primary, *m_rng);
+        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, diagonal, *m_rng);
         return m_pending_decision.get();
     }
 
-    // Primary axis blocked (a wall, typically) -- try the other axis before
-    // giving up, so a straight corridor perpendicular to the target doesn't
-    // stall every single turn.
-    if (delta.x != 0 && delta.y != 0)
+    // Diagonal step blocked (a wall corner, typically) -- degrade to a single-
+    // axis step along whichever axis has the larger delta, then the other, so
+    // a corridor that blocks the exact diagonal doesn't stall the chase every
+    // single turn.
+    const bool x_dominant = std::abs(delta.x) >= std::abs(delta.y);
+    const Vec2 first_axis = x_dominant ? Vec2{diagonal.x, 0} : Vec2{0, diagonal.y};
+    const Vec2 second_axis = x_dominant ? Vec2{0, diagonal.y} : Vec2{diagonal.x, 0};
+
+    if (first_axis != Vec2{0, 0} && IsViableStep(*m_grid, *m_registry, actor, self_tile + first_axis))
     {
-        const Vec2 secondary = primary.x != 0 ? Vec2{0, delta.y > 0 ? 1 : -1} : Vec2{delta.x > 0 ? 1 : -1, 0};
-        if (IsViableStep(*m_grid, *m_registry, actor, self_tile + secondary))
-        {
-            m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, secondary, *m_rng);
-            return m_pending_decision.get();
-        }
+        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, first_axis, *m_rng);
+        return m_pending_decision.get();
+    }
+
+    if (second_axis != Vec2{0, 0} && IsViableStep(*m_grid, *m_registry, actor, self_tile + second_axis))
+    {
+        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, second_axis, *m_rng);
+        return m_pending_decision.get();
     }
 
     return nullptr;

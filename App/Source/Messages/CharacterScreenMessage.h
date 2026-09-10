@@ -32,6 +32,11 @@ struct CharacterScreenMessage
         // context menu offer "Use" only when it applies.
         bool is_consumable = false;
 
+        // ItemComponent::quantity -- 1 for a non-stackable item or an
+        // untouched single pickup. HudLayer appends " xN" to display_name
+        // when this is greater than 1.
+        int quantity = 1;
+
         // One "(empty)" placeholder per ArmorComponent::mod_slot_count on
         // this item, empty for non-armor items or armor with no mod slots.
         // Display-only for now -- there's no mechanic yet for inserting a
@@ -42,6 +47,16 @@ struct CharacterScreenMessage
 
     struct StatsSummary
     {
+        // Mirrors LevelComponent -- level/xp/total_xp copied as-is, xp_to_next
+        // resolved from GrowthCurve::Find(level + 1) so HudLayer never needs
+        // its own GrowthCurve reference. 0 means the player is past the
+        // authored curve (no further leveling) -- HudLayer renders that case
+        // as "MAX" rather than "X / 0".
+        int level = 1;
+        int xp = 0;
+        int xp_to_next = 0;
+        int total_xp = 0;
+
         int hp = 0;
         int max_hp = 0;
         int tp = 0;
@@ -65,6 +80,12 @@ struct CharacterScreenMessage
     std::array<std::optional<ItemEntry>, 5> equipment;
 
     StatsSummary stats;
+
+    // CurrencyComponent::meseta -- rendered as a non-selectable row pinned to
+    // the bottom of the Inventory panel (see HudLayer::OnCharacterScreenState),
+    // not one of the `inventory` entries above, so it never consumes a slot
+    // index or shows up in CharacterScreenRowCount.
+    int meseta = 0;
 };
 
 } // namespace psr

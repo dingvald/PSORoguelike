@@ -30,7 +30,7 @@ template <> struct EnumNames<InteractionType>
     }};
 };
 
-// Marks a placed hub entity (shopkeeper, storage terminal, teleprompter) as
+// Marks a placed hub entity (shopkeeper, storage terminal, teleporter) as
 // something the player can open by walking onto its tile and pressing Space
 // -- see Hub/HubInteraction.h's FindInteractableAt. Deliberately doesn't
 // carry BlocksMovementComponent itself (that's an independent, per-prefab

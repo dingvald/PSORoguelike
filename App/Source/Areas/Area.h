@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace psr {
 
@@ -63,6 +64,14 @@ struct Area
     std::uint32_t wall_texture_id = 0;
     std::uint32_t accent_texture_id = 0;
     std::string unlock_predecessor_tag; // empty = unlocked from the start, no predecessor
+
+    // The ordered sequence of Dungeon::id_strings that make up this area
+    // (PSO-analogous "Forest 1, Forest 2, ..."), consumed by
+    // Missions::NextDungeonInArea to resolve what an exit teleporter should
+    // advance to. Empty or a single entry both mean "one dungeon, no
+    // sequencing" -- today's pre-M4.6 behavior. Plain id strings, not hashed
+    // NameId refs, same convention as unlock_predecessor_tag.
+    std::vector<std::string> dungeon_id_strings;
 };
 
 } // namespace psr

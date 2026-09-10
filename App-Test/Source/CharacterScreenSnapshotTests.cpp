@@ -1,8 +1,10 @@
 #include "Items/CharacterScreenSnapshot.h"
 
 #include "Components/ConsumableComponent.h"
+#include "Components/CurrencyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/LevelComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/WeaponComponent.h"
@@ -12,11 +14,13 @@
 #include "Items/AffixLibrary.h"
 #include "Items/Equip.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Progression/GrowthCurve.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
 psr::AffixLibrary g_no_affixes;
+psr::GrowthCurve g_no_growth_curve;
 } // namespace
 
 TEST_CASE("BuildCharacterScreenMessage tags inventory entries with their equip_slot/is_consumable", "[CharacterScreenSnapshot]")
@@ -37,7 +41,7 @@ TEST_CASE("BuildCharacterScreenMessage tags inventory entries with their equip_s
 
     registry.Emplace<psr::InventoryComponent>(player, psr::InventoryComponent{{weapon, armor, potion, trinket}, 20});
 
-    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes);
+    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, g_no_growth_curve);
 
     REQUIRE(message.inventory.size() == 4);
 
@@ -68,7 +72,7 @@ TEST_CASE("BuildCharacterScreenMessage fills mod_slot_labels from ArmorComponent
 
     registry.Emplace<psr::InventoryComponent>(player, psr::InventoryComponent{{armor, no_slots_armor}, 20});
 
-    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes);
+    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, g_no_growth_curve);
 
     REQUIRE(message.inventory[0].mod_slot_labels.size() == 2);
     REQUIRE(message.inventory[0].mod_slot_labels[0] == "(empty)");
@@ -86,7 +90,7 @@ TEST_CASE("BuildCharacterScreenMessage resolves equipment slot entries the same 
     registry.Emplace<psr::WeaponComponent>(weapon);
     registry.Emplace<psr::EquipmentComponent>(player, psr::EquipmentComponent{weapon});
 
-    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes);
+    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, g_no_growth_curve);
 
     REQUIRE(message.equipment[static_cast<std::size_t>(psr::EquipmentSlot::Weapon)].has_value());
     REQUIRE(message.equipment[static_cast<std::size_t>(psr::EquipmentSlot::Weapon)]->equip_slot ==
@@ -113,7 +117,7 @@ TEST_CASE("BuildCharacterScreenMessage populates HP/TP and effective stats", "[C
     registry.Emplace<psr::WeaponComponent>(weapon, weapon_component);
     registry.Emplace<psr::EquipmentComponent>(player, psr::EquipmentComponent{weapon});
 
-    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes);
+    const psr::CharacterScreenMessage message = psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, g_no_growth_curve);
 
     REQUIRE(message.stats.hp == 30);
     REQUIRE(message.stats.max_hp == 50);
@@ -121,4 +125,38 @@ TEST_CASE("BuildCharacterScreenMessage populates HP/TP and effective stats", "[C
     REQUIRE(message.stats.max_tp == 20);
     REQUIRE(message.stats.atp == 14); // base 10 + grind 2*2
     REQUIRE(message.stats.lck == 3);
+}
+
+TEST_CASE("BuildCharacterScreenMessage populates meseta and level/xp fields", "[CharacterScreenSnapshot]")
+{
+    psr::Registry registry;
+    entt::entity player = registry.CreateEntity();
+
+    registry.Emplace<psr::CurrencyComponent>(player, psr::CurrencyComponent{500});
+    registry.Emplace<psr::LevelComponent>(player, psr::LevelComponent{3, 40, 340});
+
+    psr::GrowthCurve growth_curve;
+    growth_curve.levels.push_back(psr::GrowthCurveLevel{4, 100});
+
+    const psr::CharacterScreenMessage message =
+        psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, growth_curve);
+
+    REQUIRE(message.meseta == 500);
+    REQUIRE(message.stats.level == 3);
+    REQUIRE(message.stats.xp == 40);
+    REQUIRE(message.stats.xp_to_next == 100);
+    REQUIRE(message.stats.total_xp == 340);
+}
+
+TEST_CASE("BuildCharacterScreenMessage's xp_to_next is 0 past the authored growth curve", "[CharacterScreenSnapshot]")
+{
+    psr::Registry registry;
+    entt::entity player = registry.CreateEntity();
+
+    registry.Emplace<psr::LevelComponent>(player, psr::LevelComponent{99, 0, 12345});
+
+    const psr::CharacterScreenMessage message =
+        psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, g_no_growth_curve);
+
+    REQUIRE(message.stats.xp_to_next == 0);
 }

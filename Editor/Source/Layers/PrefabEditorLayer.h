@@ -19,6 +19,7 @@
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/Layer.h"
 #include "Engine/Render/TextureAtlas.h"
@@ -27,6 +28,7 @@
 #include "UI/ColorPickerPopup.h"
 #include "UI/FieldPickers.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 #include "UI/PreviewCanvas.h"
 #include "UI/PreviewWindowChrome.h"
 #include "UI/TexturePickerPopup.h"
@@ -37,8 +39,10 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace Rml {
@@ -57,9 +61,9 @@ class RmlEventListener;
 // under App/Assets/Data/Entities/ that PieceEditorLayer's palette stamps into
 // piece cells (see Core/Engine/Dungeon/DungeonPiece.h). One form section per
 // currently-registered *authorable* component with editor support
-// (RenderableComponent, StatsComponent, ActorComponent, RaceComponent,
-// HealthComponent, WeaponComponent, ArmorComponent, ModComponent,
-// RarityComponent, ConsumableComponent) -- not a
+// (RenderableComponent, StatsComponent, ActorComponent, AiComponent,
+// RaceComponent, HealthComponent, WeaponComponent, ArmorComponent,
+// ModComponent, RarityComponent, ConsumableComponent) -- not a
 // bespoke enemy/item-specific editor; M8.1's weapon/armor/mod authoring
 // stayed folded into these same Inspector-card sections rather than a
 // separate "Item editor layer", same call M5.2 already made for entities.
@@ -145,8 +149,10 @@ private:
     Rml::ElementDocument* m_editor = nullptr;
     Rml::ElementDocument* m_color_picker_document = nullptr;
     Rml::ElementDocument* m_texture_picker_document = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
     ColorPickerPopup m_color_picker;
     TexturePickerPopup m_texture_picker;
+    InfoPopup m_info_popup;
     FieldPickers m_pickers;
 
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;         // static toolbar buttons
@@ -188,20 +194,38 @@ private:
     std::vector<std::string> m_component_order;
     bool HasComponent(std::string_view key) const;
 
+    // (id, display name) options for every currently-known prefab, sourced
+    // from m_prefab_ids (loaded/refreshed by RefreshPrefabList) -- backs any
+    // field that references another prefab by id (drop table entries,
+    // on-hit-effect) with a real dropdown instead of a typed NameId text box,
+    // the same BuildIdEnumField treatment the weapon card's affix/status
+    // effect pickers already get.
+    std::vector<std::pair<std::uint32_t, std::string>> PrefabIdOptions() const;
+
+    // Which component cards are collapsed, keyed by component key (stable
+    // across RefreshEditForm's full markup rebuild, unlike a per-card index)
+    // -- populated as the user toggles cards, consulted when regenerating
+    // card_markup so add/remove/reorder doesn't reset every card back to
+    // whatever state the freshly-generated markup hardcodes. Absent from
+    // this set means expanded (the pre-existing default for a newly added
+    // component).
+    std::set<std::string> m_collapsed_components;
+
     RenderableComponent m_renderable;
     std::string m_renderable_texture_name;
     StatsComponent m_stats;
     ActorComponent m_actor;
+    AiComponent m_ai;
     RaceComponent m_race;
     std::string m_race_name;
     HealthComponent m_health;
     WeaponComponent m_weapon;
     ArmorComponent m_armor;
+    ItemComponent m_item;
     RarityComponent m_rarity;
     ConsumableComponent m_consumable;
     DropTableComponent m_drop_table;
     OnHitEffectComponent m_on_hit_effect;
-    std::string m_on_hit_effect_prefab_name;
     ExperienceValueComponent m_experience_value;
     AiComponent m_ai;
     SpawnerAiComponent m_spawner_ai;

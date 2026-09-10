@@ -4,6 +4,7 @@
 #include "Items/Affix.h"
 #include "Items/AffixLibrary.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 
 #include <functional>
 #include <memory>
@@ -72,6 +73,8 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
+    InfoPopup m_info_popup;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable affix-list rows
     fieldwidgets::Listeners m_form_listeners;

@@ -48,8 +48,14 @@ project "Editor"
       "../App/Source/Combat/**.h",
       "../App/Source/Combat/**.cpp",
       -- AffixEditorLayer/PrefabEditorLayer read/write Affix content directly.
+      -- CharacterScreenSnapshot.cpp (in this glob) now calls
+      -- GrowthCurve::Find, so Progression/ must be compiled too, or that
+      -- call is an undefined symbol at link time (same reasoning as Combat/
+      -- below).
       "../App/Source/Items/**.h",
       "../App/Source/Items/**.cpp",
+      "../App/Source/Progression/**.h",
+      "../App/Source/Progression/**.cpp",
       -- ShopStockEditorLayer reads/writes the shop's ShopStock content directly.
       "../App/Source/Shop/**.h",
       "../App/Source/Shop/**.cpp",

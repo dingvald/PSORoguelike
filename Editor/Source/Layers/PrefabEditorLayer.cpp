@@ -13,6 +13,7 @@
 #include "Engine/Persistence/JsonFile.h"
 #include "Items/AffixLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 #include "UI/SpriteQuad.h"
@@ -42,6 +43,7 @@ namespace {
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "prefab_editor.rml";
     const std::filesystem::path kColorPickerDocument = EditorFilepaths::RmlDocumentsPath / "color_picker.rml";
     const std::filesystem::path kTexturePickerDocument = EditorFilepaths::RmlDocumentsPath / "texture_picker.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
     const std::filesystem::path kVertexShaderPath = "TileSprite.vert.spv";
     const std::filesystem::path kFragmentShaderPath = "TileSprite.frag.spv";
 
@@ -406,6 +408,22 @@ namespace {
         return fallback;
     }
 
+    AiComponent ReadAiBody(const rapidjson::Value& body)
+    {
+        AiComponent ai;
+        ai.behavior = ReadEnum<AiBehavior>(body, "behavior", ai.behavior);
+        ai.detection_range = ReadInt(body, "detection_range", ai.detection_range);
+        return ai;
+    }
+
+    rapidjson::Value WriteAiBody(const AiComponent& ai, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("behavior", StringValue(std::string{EnumName(ai.behavior)}, allocator), allocator);
+        object.AddMember("detection_range", ai.detection_range, allocator);
+        return object;
+    }
+
     std::vector<RaceBonusEntry> ReadRaceBonuses(const rapidjson::Value& object, const char* key)
     {
         std::vector<RaceBonusEntry> bonuses;
@@ -527,9 +545,18 @@ namespace {
         return rapidjson::Value(rapidjson::kObjectType);
     }
 
-    rapidjson::Value WriteItemBody(rapidjson::Document::AllocatorType&)
+    ItemComponent ReadItemBody(const rapidjson::Value& body)
     {
-        return rapidjson::Value(rapidjson::kObjectType);
+        ItemComponent item;
+        item.max_stack = ReadInt(body, "max_stack", item.max_stack);
+        return item;
+    }
+
+    rapidjson::Value WriteItemBody(const ItemComponent& item, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("max_stack", item.max_stack, allocator);
+        return object;
     }
 
     RarityComponent ReadRarityBody(const rapidjson::Value& body)
@@ -721,8 +748,7 @@ namespace {
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-         {"item", "Item", "#e8c15d",
-          "<div class=\"list-empty\">No fields -- presence marks this prefab as a pickupable item.</div>"},
+         {"item", "Item", "#e8c15d", "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"},
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
@@ -837,6 +863,7 @@ void PrefabEditorLayer::OnDetach()
 
     m_color_picker.Unbind();
     m_texture_picker.Unbind();
+    m_info_popup.Unbind();
 
     if (m_color_picker_document)
     {
@@ -847,6 +874,11 @@ void PrefabEditorLayer::OnDetach()
     {
         m_texture_picker_document->Close();
         m_texture_picker_document = nullptr;
+    }
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
     }
     if (m_editor)
     {
@@ -862,6 +894,7 @@ void PrefabEditorLayer::LoadDocuments()
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
         m_color_picker_document = gui_context->LoadDocument(kColorPickerDocument.string().c_str());
         m_texture_picker_document = gui_context->LoadDocument(kTexturePickerDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
@@ -873,6 +906,8 @@ void PrefabEditorLayer::LoadDocuments()
         m_color_picker.Bind(*m_color_picker_document);
     if (m_texture_picker_document)
         m_texture_picker.Bind(*m_texture_picker_document);
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     m_pickers.open_color_picker = [this](Color color, std::function<void(Color)> on_pick)
     { m_color_picker.Open(color, std::move(on_pick)); };
@@ -951,10 +986,19 @@ void PrefabEditorLayer::WirePreviewInteraction()
     up->Attach(*target);
     m_preview_listeners.push_back(std::move(up));
 
-    auto scroll = std::make_unique<RmlEventListener>("mousescroll",
-                                                     [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
-    scroll->Attach(*target);
-    m_preview_listeners.push_back(std::move(scroll));
+    // Scoped to #grid-panel itself, not the wider #edit-body: HandlePreviewMouseScroll
+    // unconditionally StopPropagation()s to consume the wheel event for
+    // pan/zoom, which would otherwise also swallow wheel scrolling over the
+    // side column's overflowing inspector cards (mirrors
+    // PieceEditorLayer::WireGridInteraction's own grid-panel-only scroll
+    // scoping).
+    if (Rml::Element* panel = m_editor->GetElementById("grid-panel"))
+    {
+        auto scroll = std::make_unique<RmlEventListener>(
+            "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
+        scroll->Attach(*panel);
+        m_preview_listeners.push_back(std::move(scroll));
+    }
 }
 
 void PrefabEditorLayer::HandlePreviewMouseDown(Rml::Event& event)
@@ -1125,6 +1169,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_draft_document = std::move(document);
     if (!m_draft_document.IsObject())
         m_draft_document.SetObject();
+    m_collapsed_components.clear();
 
     if (!m_draft_document.HasMember("components"))
         m_draft_document.AddMember("components", rapidjson::Value(rapidjson::kObjectType),
@@ -1153,6 +1198,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 
     m_actor = components.HasMember("actor") ? ReadActorBody(components["actor"]) : ActorComponent{};
 
+    m_ai = components.HasMember("ai") ? ReadAiBody(components["ai"]) : AiComponent{};
+
     m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
     m_race_name = LabelFor(m_race.race_id);
 
@@ -1160,6 +1207,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
+    m_item = components.HasMember("item") ? ReadItemBody(components["item"]) : ItemComponent{};
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
     m_consumable =
         components.HasMember("consumable") ? ReadConsumableBody(components["consumable"]) : ConsumableComponent{};
@@ -1167,7 +1215,6 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         components.HasMember("drop_table") ? ReadDropTableBody(components["drop_table"]) : DropTableComponent{};
     m_on_hit_effect = components.HasMember("on_hit_effect") ? ReadOnHitEffectBody(components["on_hit_effect"])
                                                             : OnHitEffectComponent{};
-    m_on_hit_effect_prefab_name = LabelFor(m_on_hit_effect.effect_prefab_id);
     m_experience_value = components.HasMember("experience_value")
                              ? ReadExperienceValueBody(components["experience_value"])
                              : ExperienceValueComponent{};
@@ -1195,6 +1242,14 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
 bool PrefabEditorLayer::HasComponent(std::string_view key) const
 {
     return std::find(m_component_order.begin(), m_component_order.end(), key) != m_component_order.end();
+}
+
+std::vector<std::pair<std::uint32_t, std::string>> PrefabEditorLayer::PrefabIdOptions() const
+{
+    std::vector<std::pair<std::uint32_t, std::string>> options = {{0, "-- Select Prefab --"}};
+    for (const std::string& id : m_prefab_ids)
+        options.emplace_back(entt::hashed_string::value(id.c_str()), id);
+    return options;
 }
 
 void PrefabEditorLayer::MarkDirty()
@@ -1249,11 +1304,14 @@ void PrefabEditorLayer::RefreshEditForm()
         const ComponentKind* kind = FindComponentKind(key);
         if (!kind)
             continue;
-        card_markup += "<div class=\"inspector-card list-item\"><div class=\"inspector-card-header\">"
+        const bool collapsed = m_collapsed_components.contains(key);
+        card_markup += "<div class=\"inspector-card list-item" + std::string(collapsed ? " collapsed" : "") +
+                       "\"><div class=\"inspector-card-header\">"
                        "<span class=\"drag-handle\">|||</span>"
                        "<span class=\"component-icon\" style=\"background-color: " +
-                       std::string(kind->icon_color) + ";\"></span>" + "<span class=\"collapse-toggle\">-</span>" +
-                       "<span class=\"component-title\">" + std::string(kind->title) + "</span>" +
+                       std::string(kind->icon_color) + ";\"></span>" + "<span class=\"collapse-toggle\">" +
+                       (collapsed ? "+" : "-") + "</span>" + "<span class=\"component-title\">" +
+                       std::string(kind->title) + "</span>" +
                        "<span class=\"btn row-card-remove\">x</span></div>"
                        "<div class=\"inspector-card-body list-item-body\">" +
                        std::string(kind->body_html) + "</div></div>";
@@ -1275,7 +1333,22 @@ void PrefabEditorLayer::RefreshEditForm()
     {
         Rml::Element* card = cards[i];
         handles.push_back(card->QuerySelector(".drag-handle"));
-        keep(fieldwidgets::WireCollapseToggle(*card));
+        if (i < m_component_order.size())
+        {
+            const std::string key = m_component_order[i];
+            keep(fieldwidgets::WireCollapseToggle(*card, /*use_chevron=*/false,
+                                                  [this, key](bool collapsed)
+                                                  {
+                                                      if (collapsed)
+                                                          m_collapsed_components.insert(key);
+                                                      else
+                                                          m_collapsed_components.erase(key);
+                                                  }));
+        }
+        else
+        {
+            keep(fieldwidgets::WireCollapseToggle(*card));
+        }
 
         if (Rml::Element* remove_button = card->QuerySelector(".row-card-remove"))
         {
@@ -1432,6 +1505,22 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_actor.act_speed = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ai-behavior"))
+        keep(fieldwidgets::BuildEnumField(*row, "behavior", EnumOptions<AiBehavior>(),
+                                          std::string{EnumName(m_ai.behavior)},
+                                          [this](std::string v)
+                                          {
+                                              m_ai.behavior = EnumFromString(v, AiBehavior::ChaseAndAttack);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-ai-detection-range"))
+        keep(fieldwidgets::BuildIntField(*row, "detection_range", m_ai.detection_range,
+                                         [this](int v)
+                                         {
+                                             m_ai.detection_range = v;
+                                             MarkDirty();
+                                         }));
+
     if (Rml::Element* row = m_editor->GetElementById("field-race-id"))
         keep(fieldwidgets::BuildNameIdField(*row, "race_id", m_race.race_id, m_race_name,
                                             [this](std::uint32_t id, std::string name)
@@ -1558,6 +1647,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                               m_armor.mod_slot_count = std::stoi(v);
                                               MarkDirty();
                                           }));
+    if (Rml::Element* row = m_editor->GetElementById("field-item-max-stack"))
+        keep(fieldwidgets::BuildIntField(*row, "max_stack", m_item.max_stack,
+                                         [this](int v)
+                                         {
+                                             m_item.max_stack = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-stars"))
         keep(fieldwidgets::BuildIntField(*row, "stars", m_rarity.stars,
                                          [this](int v)
@@ -1627,16 +1723,11 @@ void PrefabEditorLayer::RefreshEditForm()
                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-on-hit-effect-prefab"))
-        keep(fieldwidgets::BuildNameIdField(*row, "effect_prefab_id", m_on_hit_effect.effect_prefab_id,
-                                            m_on_hit_effect_prefab_name,
-                                            [this](std::uint32_t id, std::string name)
+        keep(fieldwidgets::BuildIdEnumField(*row, "effect_prefab_id", PrefabIdOptions(),
+                                            m_on_hit_effect.effect_prefab_id,
+                                            [this](std::uint32_t id)
                                             {
                                                 m_on_hit_effect.effect_prefab_id = id;
-                                                if (!name.empty())
-                                                {
-                                                    NameIdRegistry::Register(id, name);
-                                                    m_on_hit_effect_prefab_name = std::move(name);
-                                                }
                                                 MarkDirty();
                                             }));
     if (Rml::Element* row = m_editor->GetElementById("field-on-hit-effect-duration"))
@@ -1949,18 +2040,15 @@ void PrefabEditorLayer::RefreshDropEntryRows()
     {
         const std::size_t index = i;
         if (Rml::Element* row = result.rows[i]->QuerySelector(".entry-item"))
-            for (auto& listener :
-                 fieldwidgets::BuildNameIdField(*row, "item_prefab_id", m_drop_table.entries[i].item_prefab_id,
-                                                LabelFor(m_drop_table.entries[i].item_prefab_id),
-                                                [this, index](std::uint32_t id, std::string name)
-                                                {
-                                                    if (index >= m_drop_table.entries.size())
-                                                        return;
-                                                    m_drop_table.entries[index].item_prefab_id = id;
-                                                    if (!name.empty())
-                                                        NameIdRegistry::Register(id, name);
-                                                    MarkDirty();
-                                                }))
+            for (auto& listener : fieldwidgets::BuildIdEnumField(*row, "item_prefab_id", PrefabIdOptions(),
+                                                                 m_drop_table.entries[i].item_prefab_id,
+                                                                 [this, index](std::uint32_t id)
+                                                                 {
+                                                                     if (index >= m_drop_table.entries.size())
+                                                                         return;
+                                                                     m_drop_table.entries[index].item_prefab_id = id;
+                                                                     MarkDirty();
+                                                                 }))
                 m_drop_entry_row_listeners.push_back(std::move(listener));
         if (Rml::Element* row = result.rows[i]->QuerySelector(".entry-weight"))
             for (auto& listener : fieldwidgets::BuildFloatField(*row, "weight", m_drop_table.entries[i].weight,
@@ -2004,6 +2092,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteStatsBody(m_stats, allocator);
         else if (key == "actor")
             body = WriteActorBody(m_actor, allocator);
+        else if (key == "ai")
+            body = WriteAiBody(m_ai, allocator);
         else if (key == "race")
             body = WriteRaceBody(m_race, allocator);
         else if (key == "health")
@@ -2015,7 +2105,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
         else if (key == "mod")
             body = WriteModBody(allocator);
         else if (key == "item")
-            body = WriteItemBody(allocator);
+            body = WriteItemBody(m_item, allocator);
         else if (key == "rarity")
             body = WriteRarityBody(m_rarity, allocator);
         else if (key == "consumable")
@@ -2068,6 +2158,10 @@ void PrefabEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Prefab, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

@@ -9,6 +9,7 @@
 #include <atomic>
 #include <fstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -77,6 +78,11 @@ TEST_CASE("BuildAreaSchemaModel reflects every field with the expected field kin
     const psr::FieldSchema* predecessor = find("unlock_predecessor_tag");
     REQUIRE(predecessor != nullptr);
     CHECK(predecessor->kind == psr::FieldKind::String);
+
+    const psr::FieldSchema* dungeon_id_strings = find("dungeon_id_strings");
+    REQUIRE(dungeon_id_strings != nullptr);
+    CHECK(dungeon_id_strings->kind == psr::FieldKind::Array);
+    CHECK(dungeon_id_strings->ElementSchema().kind == psr::FieldKind::String);
 }
 
 TEST_CASE("SaveArea + LoadAreaLibrary round-trips every field", "[AreaSchema]")
@@ -90,6 +96,7 @@ TEST_CASE("SaveArea + LoadAreaLibrary round-trips every field", "[AreaSchema]")
     area.wall_texture_id = 333;
     area.accent_texture_id = 444;
     area.unlock_predecessor_tag = "";
+    area.dungeon_id_strings = {"forest_1", "forest_2"};
 
     TempDirectory temp;
     const std::filesystem::path path = temp.path / "forest.json";
@@ -108,6 +115,7 @@ TEST_CASE("SaveArea + LoadAreaLibrary round-trips every field", "[AreaSchema]")
     CHECK(loaded.wall_texture_id == 333);
     CHECK(loaded.accent_texture_id == 444);
     CHECK(loaded.unlock_predecessor_tag.empty());
+    CHECK(loaded.dungeon_id_strings == std::vector<std::string>{"forest_1", "forest_2"});
 
     CHECK(library.Find(loaded.id) == &library.All().front());
     CHECK(library.FindByTag("Forest") == &library.All().front());

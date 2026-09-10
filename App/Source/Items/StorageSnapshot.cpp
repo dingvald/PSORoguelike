@@ -3,6 +3,7 @@
 #include "Components/InventoryComponent.h"
 #include "Components/StorageComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Items/Equip.h"
 #include "Items/ItemDisplayName.h"
@@ -24,6 +25,8 @@ namespace {
         CharacterScreenMessage::ItemEntry entry;
         entry.display_name = FormatItemDisplayName(registry, item, affixes);
         entry.equip_slot = ResolveEquipSlot(registry, item);
+        if (const ItemComponent* item_component = registry.TryGetComponent<ItemComponent>(item))
+            entry.quantity = item_component->quantity;
         if (const ArmorComponent* armor = registry.TryGetComponent<ArmorComponent>(item))
             entry.mod_slot_labels.assign(static_cast<std::size_t>(armor->mod_slot_count), "(empty)");
         return entry;

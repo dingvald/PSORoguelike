@@ -10,6 +10,7 @@
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Engine/Render/AnimationClock.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 #include "UI/PreviewCanvas.h"
 #include "UI/PreviewWindowChrome.h"
 
@@ -116,6 +117,8 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
+    InfoPopup m_info_popup;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable dungeon-list rows
     std::vector<std::unique_ptr<RmlEventListener>> m_preview_listeners; // #edit-body pan/zoom listeners
@@ -150,6 +153,16 @@ private:
     bool m_is_new = false;
     bool m_dirty = false;
     std::string m_error;
+
+    // Per-entry collapse state for the piece-ref/lock card lists, parallel to
+    // m_draft.pieces/m_draft.locks -- kept in sync (via BuildCardList's
+    // on_toggle) so RefreshPieceRefRows/RefreshLockRows rebuilding the whole
+    // list (e.g. to add a new entry) doesn't reset every other card back to
+    // collapsed. Resized to match its vector's current size at the top of
+    // each refresh; new/out-of-range entries default to collapsed (the
+    // pre-existing default for a freshly added entry).
+    std::vector<bool> m_piece_ref_collapsed;
+    std::vector<bool> m_lock_collapsed;
 
     // -- Preview state --
     std::uint64_t m_preview_seed = 1;

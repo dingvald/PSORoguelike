@@ -7,6 +7,7 @@ namespace psr {
 class Registry;
 class AffixLibrary;
 struct CharacterScreenMessage;
+struct GrowthCurve;
 
 // Resolves player's InventoryComponent/EquipmentComponent into a fully-
 // resolved CharacterScreenMessage for HudLayer to render (see
@@ -18,6 +19,6 @@ struct CharacterScreenMessage;
 // because ComputeEffectiveStats needs an Entity, whose constructor requires
 // a non-const Registry&.
 CharacterScreenMessage BuildCharacterScreenMessage(Registry& registry, entt::entity player,
-                                                   const AffixLibrary& affixes);
+                                                   const AffixLibrary& affixes, const GrowthCurve& growth_curve);
 
 } // namespace psr

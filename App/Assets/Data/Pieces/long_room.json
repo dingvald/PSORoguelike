@@ -14,7 +14,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "box_wood"
@@ -28,7 +28,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -39,7 +39,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -50,7 +50,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -61,7 +61,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -72,7 +72,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -83,7 +83,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -94,7 +94,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -105,7 +105,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -116,7 +116,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -127,7 +127,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -138,7 +138,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "box_wood"
@@ -152,7 +152,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -163,7 +163,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -174,7 +174,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -185,7 +185,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "box_wood"
@@ -199,7 +199,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -210,7 +210,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -221,7 +221,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -232,7 +232,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -243,7 +243,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -254,7 +254,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -265,7 +265,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -276,7 +276,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -287,7 +287,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -298,7 +298,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -309,7 +309,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "box_wood"
@@ -323,7 +323,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -334,7 +334,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -345,7 +345,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -356,7 +356,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -367,7 +367,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -378,7 +378,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -389,7 +389,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -400,7 +400,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -411,7 +411,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -422,7 +422,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -433,7 +433,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -444,7 +444,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -455,7 +455,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -466,7 +466,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -477,7 +477,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -488,7 +488,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -499,7 +499,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -510,7 +510,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -521,7 +521,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -532,7 +532,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -543,7 +543,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -554,7 +554,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -565,7 +565,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -576,7 +576,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -587,7 +587,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -598,7 +598,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -609,7 +609,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -620,7 +620,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -631,7 +631,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -642,7 +642,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -653,7 +653,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -664,7 +664,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -675,7 +675,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1038,7 +1038,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1049,7 +1049,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1060,7 +1060,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1071,7 +1071,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1082,7 +1082,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -1093,7 +1093,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         }
@@ -1198,7 +1198,7 @@
                 "x": 14,
                 "y": 12
             },
-            "prefab_id": "enemies.booma",
+            "prefab_id": "enemies.barbarous_wolf",
             "wave": 0
         }
     ]

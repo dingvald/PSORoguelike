@@ -4,18 +4,16 @@ Follow the [C++ Core Guidelines](https://github.com/isocpp/CppCoreGuidelines/blo
 
 ## Conventions
 
-- **Language:** C++23. All engine code in `namespace psr`.
+- **Language:** C++23, all engine code in `namespace psr`.
 - **Headers:** `#pragma once`, no include guards.
-- **Types / functions / methods:** `PascalCase`.
-- **Members:** `m_snake_case`; plain `snake_case` for local/`Impl` struct fields.
-- **Constants / `constexpr`:** `kPascalCase`.
-- **`const`:** west const (`const Application&`). **Braces:** Allman. **Indent:** 4 spaces, no tabs.
-- **File-local constants/helpers:** unnamed `namespace {}`.
-- **`I` prefix** (e.g. `IChunkGenerator`) is reserved for pure abstract interfaces (all-pure-virtual, no default method bodies). A base class with default bodies (e.g. `Layer`) stays unprefixed.
+- **Naming:** types/functions/methods `PascalCase`; members `m_snake_case`; local/`Impl`-struct fields plain `snake_case`; constants/`constexpr` `kPascalCase`.
+- **Style:** west const (`const Application&`), Allman braces, 4-space indent, no tabs.
+- File-local constants/helpers go in an unnamed `namespace {}`.
+- `I` prefix (e.g. `IChunkGenerator`) is reserved for pure abstract interfaces (all-pure-virtual, no default bodies); a base class with default bodies (e.g. `Layer`) stays unprefixed.
 
 ## Comments
 
-Do not write comments. No doc comments, no explanatory comments, no restating what the code does — identifiers should carry that load. The only exception is a single short line for a genuinely non-obvious constraint (e.g. the `new`/`delete` + `Rml::Shutdown()` ordering note below) — never a multi-line block.
+Do not write comments — no doc comments, no explanations, no restating what the code does; identifiers should carry that load. Exception: a single short line for a genuinely non-obvious constraint (e.g. the `new`/`delete` + `Rml::Shutdown()` ordering note below) — never a multi-line block.
 
 ## Ownership
 
@@ -35,10 +33,8 @@ Not gated on build; run manually. Tooling details in [Scripts/README.md](Scripts
 
 ## Collaboration & Design Principles
 
-Forward-looking rules for new work — not a mandate to retroactively refactor existing code, though flag violations if directly encountered.
+Forward-looking rules for new work, not a mandate to retroactively refactor existing code — flag violations if directly encountered.
 
-1. **Division of labor.** Claude implements engine systems and editor features that support data-driven content; the user owns game content creation via the editor tools and C++ API. Claude does not author real game content (areas, enemies, items, balance, etc.) on its own initiative. Exceptions: minimal throwaway test fixtures to exercise a new system in automated tests are fine — that's scaffolding to prove the engine works, not content authoring — and if the user explicitly requests content, Claude should write it rather than defer.
-
-2. **Every feature needs a UI/editor answer.** When implementing an engine feature, explicitly consider both the internal components/systems *and* what UI or editor support it needs to be usable by the content creator. Decide and state whether the feature needs new editor tooling — don't leave content-facing features editor-less by default.
-
-3. **Data-driven where it pays off; `Core` stays theme-agnostic.** `Core` (the engine) should not bake in assumptions about game theme — it drives arbitrary content, the same way UnnamedRoguelike's engine does. `App`, unlike that sibling project, is explicitly PSO-inspired by design (see [docs/GDD.md](docs/GDD.md)) and is allowed to encode PSO-flavored vocabulary (class names, area themes, item types) directly. Still prefer data-driven authoring (JSON schemas, config-authored behavior) over hard-coded values wherever it lets content be added without a code change.
+1. **Division of labor.** Claude implements engine systems and editor features that support data-driven content; the user owns game content creation (areas, enemies, items, balance, etc.) via the editor tools and C++ API. Claude does not author real game content on its own initiative. Exceptions: minimal throwaway test fixtures to exercise a new system are fine (scaffolding to prove the engine works, not content authoring), and content the user explicitly requests.
+2. **Every feature needs a UI/editor answer.** When implementing an engine feature, consider both the internal components/systems and what UI or editor support it needs to be usable by the content creator — decide and state whether new editor tooling is needed; don't leave content-facing features editor-less by default.
+3. **Data-driven where it pays off; `Core` stays theme-agnostic.** `Core` should not bake in game-theme assumptions — it drives arbitrary content, like UnnamedRoguelike's engine. `App`, unlike that sibling project, is explicitly PSO-inspired (see [docs/GDD.md](docs/GDD.md)) and may encode PSO-flavored vocabulary (class names, area themes, item types) directly. Still prefer data-driven authoring (JSON schemas, config-authored behavior) over hard-coded values wherever it lets content be added without a code change.

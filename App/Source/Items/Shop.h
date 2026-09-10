@@ -8,12 +8,17 @@ struct ShopStock;
 
 // Buys stock.entries[stock_index]: debits actor's CurrencyComponent by its
 // buy_price, creates a fresh instance (Registry::CreateEntity(prefab_id))
-// and pushes it into actor's InventoryComponent. Free/instant, no IAction,
-// same reasoning as Items/Equip.h (only reachable while the turn loop is
-// already paused, see ShopState). A no-op if stock_index is out of range,
-// the prefab id doesn't resolve to a registered prefab, the actor can't
-// afford it, or its InventoryComponent is already at capacity. Returns
-// whether anything changed.
+// and pushes it into actor's InventoryComponent. If the item is stackable
+// (see ItemComponent::max_stack) and a matching stack already exists, merges
+// into it instead of opening a new slot -- same "exactly one slot per
+// stackable type" rule PickupAction/Storage enforce -- so buying several
+// counts as one purchase per unit rather than one slot per purchase.
+// Free/instant, no IAction, same reasoning as Items/Equip.h (only reachable
+// while the turn loop is already paused, see ShopState). A no-op if
+// stock_index is out of range, the prefab id doesn't resolve to a registered
+// prefab, the actor can't afford it, the matching stack is already full, or
+// InventoryComponent is already at capacity. Returns whether anything
+// changed.
 bool BuyItem(Entity actor, const ShopStock& stock, int stock_index);
 
 // Sells actor's InventoryComponent::items[inventory_index]: credits

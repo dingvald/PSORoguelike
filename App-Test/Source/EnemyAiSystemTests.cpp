@@ -121,10 +121,10 @@ TEST_CASE("EnemyAiSystem waits when no hostile target is within detection_range"
     CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{0, 0});
 }
 
-TEST_CASE("EnemyAiSystem waits (does not loop) when both candidate directions are walled off", "[EnemyAiSystem]")
+TEST_CASE("EnemyAiSystem waits (does not loop) when every candidate direction is walled off", "[EnemyAiSystem]")
 {
     psr::Registry registry;
-    psr::Grid grid(3, 3);
+    psr::Grid grid(5, 5);
     psr::AffixLibrary affixes;
     std::mt19937 rng{0};
     psr::TechniqueLibrary techniques;
@@ -135,13 +135,19 @@ TEST_CASE("EnemyAiSystem waits (does not loop) when both candidate directions ar
     registry.Emplace<psr::AiComponent>(actor, psr::AiComponent{psr::AiBehavior::ChaseAndAttack, 8});
     grid.AddEntity(psr::Vec2{1, 1}, actor);
 
-    // Target diagonally beyond (2,2): both single-step candidates toward it
-    // from (1,1) are (2,1) and (1,2) -- wall both off (BlocksMovementComponent,
-    // no HealthComponent, matching wall.json's own shape).
+    // Target two tiles diagonally beyond (3,3): the three single-step
+    // candidates toward it from (1,1) are the diagonal (2,2), and the two
+    // cardinal fallbacks (2,1)/(1,2) -- wall all three off
+    // (BlocksMovementComponent, no HealthComponent, matching wall.json's own
+    // shape), so 8-direction chase has nowhere left to try.
     const entt::entity target = registry.CreateEntity();
     registry.Emplace<psr::PlayerControlledComponent>(target);
-    registry.Emplace<psr::Position>(target, psr::Position{psr::Vec2{2, 2}});
-    grid.AddEntity(psr::Vec2{2, 2}, target);
+    registry.Emplace<psr::Position>(target, psr::Position{psr::Vec2{3, 3}});
+    grid.AddEntity(psr::Vec2{3, 3}, target);
+
+    const entt::entity wall_diagonal = registry.CreateEntity();
+    registry.Emplace<psr::BlocksMovementComponent>(wall_diagonal);
+    grid.AddEntity(psr::Vec2{2, 2}, wall_diagonal);
 
     const entt::entity wall_a = registry.CreateEntity();
     registry.Emplace<psr::BlocksMovementComponent>(wall_a);
@@ -454,4 +460,32 @@ TEST_CASE("EnemyAiSystem's RangedTechAtDistance closes distance when not aligned
     psr::IAction* action = ai.Decide(psr::Entity(registry, actor));
     REQUIRE(dynamic_cast<psr::TechniqueAction*>(action) == nullptr);
     REQUIRE(dynamic_cast<psr::MoveAction*>(action) != nullptr);
+}
+
+TEST_CASE("EnemyAiSystem steps diagonally toward a diagonally-offset hostile target", "[EnemyAiSystem]")
+{
+    psr::Registry registry;
+    psr::Grid grid(5, 5);
+    psr::AffixLibrary affixes;
+    psr::TechniqueLibrary techniques;
+    std::mt19937 rng{0};
+    psr::EnemyAiSystem ai{grid, registry, affixes, techniques, rng};
+
+    const entt::entity actor = registry.CreateEntity();
+    registry.Emplace<psr::Position>(actor, psr::Position{psr::Vec2{1, 1}});
+    registry.Emplace<psr::AiComponent>(actor, psr::AiComponent{psr::AiBehavior::ChaseAndAttack, 8});
+    grid.AddEntity(psr::Vec2{1, 1}, actor);
+
+    const entt::entity target = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(target);
+    registry.Emplace<psr::Position>(target, psr::Position{psr::Vec2{3, 3}});
+    grid.AddEntity(psr::Vec2{3, 3}, target);
+
+    psr::IAction* action = ai.Decide(psr::Entity(registry, actor));
+    REQUIRE(dynamic_cast<psr::MoveAction*>(action) != nullptr);
+
+    const psr::ActionResult result = action->Perform(psr::Entity(registry, actor));
+
+    CHECK(result.cost == psr::MoveAction::kMoveCost);
+    CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{2, 2});
 }

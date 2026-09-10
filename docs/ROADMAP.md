@@ -157,7 +157,7 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | Uncapped frame rate (no vsync or frame limiter) | High | M18 |
 | One AI behavior; no boss encounter framework | High | M17 |
 | Entities are always 1x1; no multi-tile entities or bosses | High | M5.4 / M17.3 |
-| An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters | Medium | M4.6 |
+| ~~An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters~~ — resolved (Mission Select still lists every dungeon individually, see 4.6's own note) | Medium | M4.6 |
 | ~~Area/biome schema (M3.2) never built, so no per-area theming~~ — resolved | High | M3 |
 | No character creation, no classes, no difficulty tiers | High | M10 |
 | Mag companion not started | Medium | M9 |
@@ -609,23 +609,39 @@ verification** (same caveat as M3.2 above -- landed in the same unverified pass)
   (unconditionally unlocked with no matching `Area`; unconditionally unlocked for an `Area` with
   no predecessor; locked until a predecessor-area dungeon is completed, unlocked after) and
   updated `MissionSelectSnapshotTests.cpp` for the new `AreaLibrary` parameter.
-- **4.6 Multi-level dungeons & teleporters.** Not started. Today a `Dungeon` asset generates one
-  stitched layout, Entrance to Exit, and reaching the Exit ends the mission — an "area" and "the
-  one dungeon authored for it" are the same thing. The GDD's PSO-inspired structure wants an area
-  to be a numbered sequence of levels instead (Forest 1, Forest 2; Caves 1-3; and so on), where
-  reaching a level's Exit steps into the next level's freshly-generated layout rather than closing
-  the mission, and only the final level's Exit (or its boss, once M17.3 lands) completes it.
-  Engine: an ordered list of `Dungeon` ids per area (naturally a field alongside M4.5's unlock
-  order, on whatever asset ends up owning area sequencing — M3.2's area schema or a new
-  `AreaProgression` wrapper), plus a `TeleporterComponent`-carrying piece/prefab, authored
-  alongside Entrance/Exit, that on interaction tears down the current level's world state and
-  instantiates the next (or previous, for a backtracking teleporter) level's generated layout —
-  reusing `DungeonInstantiator`'s existing world-swap plumbing rather than the Exit piece's
-  current "end mission" behavior. Editor: an ordered per-area level list (mirrors M4.5's ordering
-  field) on the Dungeon/area editor, and a Teleporter piece category authorable like
-  Entrance/Exit on the Piece editor. UI: a level indicator ("Forest 1/2") on the HUD or the
-  transition card M13.4 already plans for area entry. Depends on M3.2 the same way M4.5 does —
-  there is no "area" to sequence levels within until that schema exists.
+- **4.6 Multi-level dungeons & teleporters.** Engine + editor **done**; Mission Select still lists
+  every `Dungeon` individually (see below). Previously a `Dungeon` asset generated one stitched
+  layout, Entrance to Exit, and reaching the Exit auto-triggered mission completion on room entry.
+  `Area` (M3.2) now carries `dungeon_id_strings`, an ordered list of `Dungeon::id_string`s making
+  up that area's sequence (Forest 1, Forest 2; Caves 1-3; ...) — a plain string list, same
+  "plain tag, not a hashed ref" convention `unlock_predecessor_tag` already set. A new
+  `TeleporterComponent` (`App/Source/Components/TeleporterComponent.h`, `destination`:
+  `return_to_hub` or `advance_level`) is stamped into the Entrance/Exit pieces' cells as ordinary
+  entity prefabs (`dungeon.entrance_teleporter`/`dungeon.exit_teleporter`) — no new
+  `PieceCategory` needed, since Entrance/Exit already exist and the teleporter is just another
+  stamped prefab like `hub.teleporter`. Standing on one and pressing Space (mirrors the hub's
+  `InteractableComponent` UX, dispatched via `Missions/TeleporterInteraction.h`'s
+  `FindTeleporterAt`) calls `GameplayLayer::OnTeleporterActivated` directly instead of opening a
+  modal screen: `return_to_hub` bails out with no completion credit (same as the `H` abandon key);
+  `advance_level` credits the current dungeon completed, publishes `MissionCompletedMessage`, and
+  transitions to whatever `Missions::AreaProgression.h`'s `NextDungeonInArea` resolves (the next
+  dungeon in the sequence, or the hub if this was the last one) — reusing
+  `TransitionToWorld`/`DungeonInstantiator`'s existing world-swap plumbing exactly as planned. This
+  fully replaces the old room-category auto-trigger (`GameplayLayer::OnMissionExitReached`,
+  `m_room_categories`, `m_mission_exit_handled` are gone). Editor: the Area editor's new "Dungeon
+  Sequence" card (a reorderable row list, `AreaEditorLayer::RefreshDungeonSequenceRows`, mirroring
+  `DungeonEditorLayer`'s own piece-ref/lock lists) authors the ordered list; the teleporter
+  prefabs themselves need no new Piece-editor code, since cell-prefab stamping was already
+  generic. UI: a "Press SPACE to return to the Hub"/"...proceed to the next level" HUD prompt
+  (`TeleporterPromptMessage`, dungeon-scene sibling of `HubInteractionPromptMessage`) — the
+  "Forest 1/2" level-indicator/transition-card UI from the original note is still open, deferred
+  to M13.4/whichever milestone lands a HUD area-progress readout. **Known gap:** Mission Select
+  (`MissionSelectSnapshot`/`IsDungeonUnlocked`) still gates and lists every `Dungeon` individually,
+  not one row per `Area` — once an author gives an `Area` more than one `dungeon_id_strings`
+  entry, every level in the sequence stays directly selectable from Mission Select rather than
+  only the first. Reworking Mission Select to show one row per `Area` (selecting its first level)
+  and gating later levels on sequence position instead of `unlock_predecessor_tag` is follow-up
+  work, not yet scheduled to a milestone.
 
 ## M5 — Entity & Stat Framework
 
@@ -2224,7 +2240,9 @@ scope — every row points at a bullet above.
 - [ ] Mag companion (9.1)
 - [ ] Stat materials (8.3)
 - [ ] Environmental hazards and real in-world locks and keys (17.6)
-- [ ] Multi-level areas (Forest 1/2, Caves 1-3) and teleporters between them (4.6)
+- [x] Multi-level areas (Forest 1/2, Caves 1-3) and teleporters between them (4.6) — engine +
+      editor done; Mission Select still lists every dungeon individually rather than one row per
+      area (see 4.6's own note)
 - [ ] Visual consistency pass across the modal screens (16.8)
 - [ ] `ContentWatcher` actually wired into `App`, which was built and never connected (1.3)
 - [ ] Build portability, so a session without Windows can still verify its own work (18.2)

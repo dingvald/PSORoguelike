@@ -70,6 +70,7 @@ void ExperienceSystem::OnDamage(Entity player, AfterDamageEvent& event)
     LevelComponent& level = *level_ptr;
 
     level.xp += xp_value->xp;
+    level.total_xp += xp_value->xp;
     m_message_bus->Publish(
         CombatLogEntryMessage{"Player gained [c=#f6470a]" + std::to_string(xp_value->xp) + "[/c] XP"});
 

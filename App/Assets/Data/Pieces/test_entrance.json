@@ -3,6 +3,9 @@
     "name": "test_entrance",
     "area_tag": "",
     "category": "entrance",
+    "can_rotate": true,
+    "can_mirror": false,
+    "tags": [],
     "cells": [
         {
             "offset": {
@@ -11,7 +14,10 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
+                },
+                {
+                    "prefab_id": "dungeon.entrance_teleporter"
                 }
             ]
         },
@@ -22,7 +28,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -33,7 +39,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -44,7 +50,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -55,7 +61,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -66,7 +72,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -77,7 +83,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -88,7 +94,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -99,7 +105,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -110,7 +116,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -121,7 +127,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "wall"
@@ -135,7 +141,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "wall"
@@ -149,7 +155,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "wall"
@@ -163,7 +169,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "wall"
@@ -177,7 +183,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 },
                 {
                     "prefab_id": "wall"
@@ -191,7 +197,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -202,7 +208,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -213,7 +219,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -224,7 +230,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -235,7 +241,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -246,7 +252,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -257,7 +263,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -268,7 +274,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -279,7 +285,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -290,7 +296,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -301,7 +307,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -312,7 +318,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -323,7 +329,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -334,7 +340,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -345,7 +351,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -356,7 +362,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -367,7 +373,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -378,7 +384,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -389,7 +395,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -400,7 +406,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         },
@@ -631,7 +637,7 @@
             },
             "prefabs": [
                 {
-                    "prefab_id": "test"
+                    "prefab_id": "floor"
                 }
             ]
         }
@@ -647,9 +653,10 @@
                 "door"
             ],
             "connects_to_tags": [
-                "door"
+                "hallway"
             ],
             "fallback_prefab_id": 0
         }
-    ]
+    ],
+    "spawns": []
 }

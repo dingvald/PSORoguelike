@@ -1,13 +1,17 @@
 #pragma once
 
+#include "Combat/StatusEffectLibrary.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibrary.h"
 #include "Engine/Layer.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Rml {
@@ -74,6 +78,8 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
+    InfoPopup m_info_popup;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable list rows
     fieldwidgets::Listeners m_form_listeners;
@@ -88,6 +94,17 @@ private:
     // -- List state --
     TechniqueLibrary m_techniques;
     std::string m_pending_delete_id;
+
+    // Read-only, loaded once in OnAttach -- back the status_effect_id and
+    // projectile/hit-effect prefab id pickers' BuildIdEnumField dropdowns
+    // (mirrors PrefabEditorLayer's own weapon-card status_effect_id and
+    // drop-table/on-hit-effect prefab id treatment).
+    StatusEffectLibrary m_status_effects;
+    std::vector<std::string> m_prefab_ids;
+
+    // (id, display name) options for every currently-known prefab, sourced
+    // from m_prefab_ids.
+    std::vector<std::pair<std::uint32_t, std::string>> PrefabIdOptions() const;
 
     // -- Edit state --
     Technique m_draft;

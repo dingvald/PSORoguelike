@@ -24,6 +24,7 @@
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/TPComponent.h"
+#include "Components/TeleporterComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/Combat/DeathSystem.h"
 #include "Engine/Combat/HealthSystem.h"
@@ -72,6 +73,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     SpawnerAiComponent::Register(reg);
     StatsComponent::Register(reg);
     TPComponent::Register(reg);
+    TeleporterComponent::Register(reg);
     ValueComponent::Register(reg);
     WeaponComponent::Register(reg);
 

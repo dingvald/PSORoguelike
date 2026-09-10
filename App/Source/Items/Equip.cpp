@@ -34,27 +34,23 @@ std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::en
     return std::nullopt;
 }
 
-namespace {
-
-    entt::entity& SlotRef(EquipmentComponent& equipment, EquipmentSlot slot)
+entt::entity& SlotRef(EquipmentComponent& equipment, EquipmentSlot slot)
+{
+    switch (slot)
     {
-        switch (slot)
-        {
-        case EquipmentSlot::Weapon:
-            return equipment.weapon;
-        case EquipmentSlot::Head:
-            return equipment.head;
-        case EquipmentSlot::Torso:
-            return equipment.torso;
-        case EquipmentSlot::Hands:
-            return equipment.hands;
-        case EquipmentSlot::Legs:
-            return equipment.legs;
-        }
-        return equipment.weapon; // unreachable for a valid enum value
+    case EquipmentSlot::Weapon:
+        return equipment.weapon;
+    case EquipmentSlot::Head:
+        return equipment.head;
+    case EquipmentSlot::Torso:
+        return equipment.torso;
+    case EquipmentSlot::Hands:
+        return equipment.hands;
+    case EquipmentSlot::Legs:
+        return equipment.legs;
     }
-
-} // namespace
+    return equipment.weapon; // unreachable for a valid enum value
+}
 
 bool EquipItem(Entity actor, int inventory_index)
 {

@@ -386,7 +386,7 @@ BuildTextureField(Rml::Element& row, const std::string& label, std::uint32_t ini
     return out;
 }
 
-Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron)
+Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron, std::function<void(bool)> on_toggle)
 {
     Rml::Element* toggle = item.QuerySelector(".collapse-toggle");
     if (!toggle)
@@ -395,7 +395,7 @@ Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron)
     Rml::Element* item_ptr = &item;
     Listeners out;
     auto listener = std::make_unique<RmlClickListener>(
-        [item_ptr, toggle, use_chevron]
+        [item_ptr, toggle, use_chevron, on_toggle = std::move(on_toggle)]
         {
             const bool now_collapsed = !item_ptr->IsClassSet("collapsed");
             item_ptr->SetClass("collapsed", now_collapsed);
@@ -403,6 +403,8 @@ Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron)
                 toggle->SetInnerRML(now_collapsed ? "&gt;" : "v");
             else
                 toggle->SetInnerRML(now_collapsed ? "+" : "-");
+            if (on_toggle)
+                on_toggle(now_collapsed);
         });
     listener->Attach(*toggle);
     out.push_back(std::move(listener));
@@ -532,9 +534,10 @@ RowList BuildRowList(Rml::Element& container, const std::vector<std::string>& co
 }
 
 CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& summaries,
-                       const std::vector<std::string>& bodies, const std::string& empty_message,
-                       std::function<void(std::size_t)> on_remove,
-                       std::function<void(std::size_t, std::size_t)> request_reorder)
+                       const std::vector<std::string>& bodies, const std::vector<bool>& collapsed,
+                       const std::string& empty_message, std::function<void(std::size_t)> on_remove,
+                       std::function<void(std::size_t, std::size_t)> request_reorder,
+                       std::function<void(std::size_t, bool)> on_toggle)
 {
     CardList result;
     if (summaries.empty())
@@ -545,11 +548,16 @@ CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& 
 
     std::string markup;
     for (std::size_t i = 0; i < summaries.size() && i < bodies.size(); ++i)
-        markup += "<div class=\"inspector-card list-item collapsed\"><div class=\"inspector-card-header\">"
-                  "<span class=\"drag-handle\">|||</span><span class=\"collapse-toggle\">&gt;</span>"
-                  "<span class=\"component-title\">" +
-                  summaries[i] + "</span><span class=\"btn row-card-remove\">x</span></div>"
-                  "<div class=\"inspector-card-body list-item-body\">" + bodies[i] + "</div></div>";
+    {
+        const bool is_collapsed = i < collapsed.size() ? collapsed[i] : true;
+        markup += "<div class=\"inspector-card list-item" + std::string(is_collapsed ? " collapsed" : "") +
+                  "\"><div class=\"inspector-card-header\">"
+                  "<span class=\"drag-handle\">|||</span><span class=\"collapse-toggle\">" +
+                  (is_collapsed ? "&gt;" : "v") + "</span>" + "<span class=\"component-title\">" + summaries[i] +
+                  "</span><span class=\"btn row-card-remove\">x</span></div>"
+                  "<div class=\"inspector-card-body list-item-body\">" +
+                  bodies[i] + "</div></div>";
+    }
     container.SetInnerRML(markup);
 
     Rml::ElementList element_cards;
@@ -567,10 +575,14 @@ CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& 
         if (!card)
             continue;
 
-        for (auto& listener : WireCollapseToggle(*card, /*use_chevron=*/true))
+        const std::size_t index = i;
+        for (auto& listener :
+             WireCollapseToggle(*card, /*use_chevron=*/true,
+                                on_toggle ? std::function<void(bool)>([on_toggle, index](bool now_collapsed)
+                                                                      { on_toggle(index, now_collapsed); })
+                                          : std::function<void(bool)>{}))
             result.listeners.push_back(std::move(listener));
 
-        const std::size_t index = i;
         if (Rml::Element* remove_button = card->QuerySelector(".row-card-remove"))
         {
             auto listener = std::make_unique<RmlClickListener>([on_remove, index] { on_remove(index); });

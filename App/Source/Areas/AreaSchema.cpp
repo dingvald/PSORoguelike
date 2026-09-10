@@ -25,6 +25,10 @@ AreaSchemaModel BuildAreaSchemaModel()
     model.fields.push_back(FieldSchema{"accent_texture_id", FieldKind::NameId});
     model.fields.push_back(FieldSchema{"unlock_predecessor_tag", FieldKind::String});
 
+    FieldSchema dungeon_id_strings{"dungeon_id_strings", FieldKind::Array};
+    dungeon_id_strings.children.push_back(FieldSchema{"", FieldKind::String});
+    model.fields.push_back(std::move(dungeon_id_strings));
+
     return model;
 }
 

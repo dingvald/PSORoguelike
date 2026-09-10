@@ -176,6 +176,42 @@ TEST_CASE("ExperienceSystem spawns exactly one LEVEL UP floating text across a m
     REQUIRE(floating_text.Active()[0].origin_tile == psr::Vec2{2, 3});
 }
 
+TEST_CASE("ExperienceSystem's total_xp accumulates across kills and survives a level-up", "[ExperienceSystem]")
+{
+    psr::Registry registry;
+    psr::MessageBus bus;
+    psr::MessageQueue hud_queue;
+    psr::FloatingTextSystem floating_text;
+
+    psr::GrowthCurveLevel level_2;
+    level_2.level = 2;
+    level_2.xp_to_next = 10;
+    psr::GrowthCurve growth_curve{{level_2}};
+
+    psr::StatsComponent stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
+    psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, stats);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    system.Subscribe(player);
+
+    psr::Entity first_kill = MakeExperienceTarget(registry, /*xp=*/6);
+    psr::AfterDamageEvent first_event{.target = first_kill, .amount = 6, .target_defeated = true};
+    player.Dispatch(first_event);
+
+    CHECK(player.Get<psr::LevelComponent>().level == 1);
+    CHECK(player.Get<psr::LevelComponent>().xp == 6);
+    CHECK(player.Get<psr::LevelComponent>().total_xp == 6);
+
+    // Second kill crosses xp_to_next (6 + 6 = 12 >= 10): xp resets to the
+    // 2-point remainder, but total_xp keeps the full 12 -- it's never consumed.
+    psr::Entity second_kill = MakeExperienceTarget(registry, /*xp=*/6);
+    psr::AfterDamageEvent second_event{.target = second_kill, .amount = 6, .target_defeated = true};
+    player.Dispatch(second_event);
+
+    CHECK(player.Get<psr::LevelComponent>().level == 2);
+    CHECK(player.Get<psr::LevelComponent>().xp == 2);
+    CHECK(player.Get<psr::LevelComponent>().total_xp == 12);
+}
+
 TEST_CASE("ExperienceSystem publishes no level-up line or floating text when no level is crossed", "[ExperienceSystem]")
 {
     psr::Registry registry;

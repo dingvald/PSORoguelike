@@ -116,7 +116,14 @@ namespace fieldwidgets {
     // this function) -- both are plain ASCII for the same reason the original
     // comment gave: the editor's pixel font isn't guaranteed to have Unicode
     // geometric-shape/triangle codepoints.
-    Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron = false);
+    //
+    // on_toggle, if set, is called with the new collapsed state right after
+    // the class/glyph flip -- lets a caller that rebuilds this same list from
+    // scratch (every rebuildable list in this codebase does) persist each
+    // item's collapse state across the rebuild instead of it silently
+    // resetting to whatever the freshly-generated markup hardcoded.
+    Listeners WireCollapseToggle(Rml::Element& item, bool use_chevron = false,
+                                 std::function<void(bool)> on_toggle = nullptr);
 
     // Wires native RmlUi drag-and-drop reordering across an already-built row
     // set: rows[i]/handles[i] must be parallel (same length, same order).
@@ -174,9 +181,14 @@ namespace fieldwidgets {
     // cards[i]->QuerySelector(".component-title") to update it live, same as
     // Dungeon's piece-ref/lock cards do for their id/type fields), and
     // bodies[i] is the collapsible body's inner markup (the caller's own
-    // field-row containers, wired exactly as BuildRowList's rows are). Cards
-    // start collapsed, using the ">"/"v" chevron glyph (WireCollapseToggle's
-    // use_chevron=true). Wires collapse, remove (on_remove(index)), and
+    // field-row containers, wired exactly as BuildRowList's rows are).
+    // collapsed[i] (parallel array, same length) is that card's initial
+    // collapse state -- pass a caller-owned std::vector<bool> that on_toggle
+    // (below) keeps in sync, so a rebuild (e.g. from adding a sibling entry)
+    // restores each card to how the user last left it instead of resetting
+    // to a hardcoded default. Cards use the ">"/"v" chevron glyph
+    // (WireCollapseToggle's use_chevron=true). Wires collapse (calling
+    // on_toggle(index, now_collapsed) if set), remove (on_remove(index)), and
     // drag-reorder (request_reorder, same deferred-only constraint as
     // WireDragReorder/BuildRowList).
     struct CardList
@@ -185,9 +197,10 @@ namespace fieldwidgets {
         std::vector<Rml::Element*> cards;
     };
     CardList BuildCardList(Rml::Element& container, const std::vector<std::string>& summaries,
-                           const std::vector<std::string>& bodies, const std::string& empty_message,
-                           std::function<void(std::size_t)> on_remove,
-                           std::function<void(std::size_t, std::size_t)> request_reorder);
+                           const std::vector<std::string>& bodies, const std::vector<bool>& collapsed,
+                           const std::string& empty_message, std::function<void(std::size_t)> on_remove,
+                           std::function<void(std::size_t, std::size_t)> request_reorder,
+                           std::function<void(std::size_t, bool)> on_toggle = nullptr);
 
     // Shared index math for every request_reorder callback (WireDragReorder/
     // BuildRowList's contract): moves the element at from_index to

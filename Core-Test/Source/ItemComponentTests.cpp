@@ -74,8 +74,10 @@ TEST_CASE("Armor/Item/Mod/Rarity components register as authorable with the expe
     const psr::ComponentSchema& item = model.components[1];
     CHECK(item.id == "item");
     CHECK(item.authorable);
-    CHECK(item.is_tag);
-    CHECK(item.fields.empty());
+    CHECK_FALSE(item.is_tag);
+    REQUIRE(item.fields.size() == 1);
+    CHECK(item.fields[0].name == "max_stack");
+    CHECK(item.fields[0].kind == psr::FieldKind::Integer);
 
     const psr::ComponentSchema& mod = model.components[2];
     CHECK(mod.id == "mod");

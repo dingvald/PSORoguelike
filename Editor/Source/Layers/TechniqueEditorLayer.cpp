@@ -1,10 +1,12 @@
 #include "Layers/TechniqueEditorLayer.h"
 
+#include "Combat/StatusEffectLibraryFile.h"
 #include "Combat/TechniqueLibraryFile.h"
-#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
+#include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Layers/EditorMenuLayer.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 
@@ -27,6 +29,13 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "technique_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
+
+    // Mirrors PrefabEditorLayer.cpp's own kEntitySchemaVersion -- this file
+    // only enumerates prefab ids (for the projectile/hit-effect prefab id
+    // pickers below), never parses an entity's full body, so it doesn't share
+    // PrefabEditorLayer's JsonEntityLoader/EntitySchemaModel machinery.
+    constexpr int kEntitySchemaVersion = 1;
 
     // Mirrors PieceEditorLayer.cpp/DungeonEditorLayer.cpp/AffixEditorLayer.cpp/
     // PhotonArtEditorLayer.cpp's own IdToPath.
@@ -78,14 +87,6 @@ namespace {
         return fallback;
     }
 
-    std::string LabelFor(std::uint32_t id)
-    {
-        if (id == 0)
-            return {};
-        if (std::optional<std::string> label = NameIdRegistry::Find(id))
-            return *label;
-        return {};
-    }
 } // namespace
 
 TechniqueEditorLayer::TechniqueEditorLayer() : Layer("TechniqueEditorLayer") {}
@@ -100,6 +101,27 @@ void TechniqueEditorLayer::OnAttach()
     if (!Rml::LoadFontFace(kFontPathBold.string().c_str()))
         SDL_Log("Warning: TechniqueEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
 
+    try
+    {
+        m_status_effects = LoadStatusEffectLibrary(EditorFilepaths::StatusEffectsPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_status_effects = StatusEffectLibrary{};
+        m_error = error.what();
+    }
+
+    m_prefab_ids.clear();
+    try
+    {
+        for (const JsonDirectoryEntry& entry : LoadJsonDirectory(EditorFilepaths::EntitiesPath, kEntitySchemaVersion))
+            m_prefab_ids.push_back(entry.id);
+    }
+    catch (const std::exception& error)
+    {
+        m_error = error.what();
+    }
+
     LoadDocuments();
     ReloadLibrary();
     RefreshList();
@@ -113,6 +135,12 @@ void TechniqueEditorLayer::OnDetach()
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -125,12 +153,15 @@ void TechniqueEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: TechniqueEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     WireButtonClick("new-technique", [this] { BeginNew(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
@@ -312,6 +343,14 @@ void TechniqueEditorLayer::RefreshDirtyDisplay()
             dirty->SetInnerRML(m_dirty ? "unsaved" : "");
 }
 
+std::vector<std::pair<std::uint32_t, std::string>> TechniqueEditorLayer::PrefabIdOptions() const
+{
+    std::vector<std::pair<std::uint32_t, std::string>> options = {{0, "-- Select Prefab --"}};
+    for (const std::string& id : m_prefab_ids)
+        options.emplace_back(entt::hashed_string::value(id.c_str()), id);
+    return options;
+}
+
 void TechniqueEditorLayer::RefreshEditForm()
 {
     if (!m_editor)
@@ -399,15 +438,18 @@ void TechniqueEditorLayer::RefreshEditForm()
                                           }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-status-effect"))
-        keep(fieldwidgets::BuildNameIdField(*row, "status_effect_id", m_draft.status_effect_id,
-                                            LabelFor(m_draft.status_effect_id),
-                                            [this](std::uint32_t id, std::string name)
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> status_effect_options = {{0, "-- Select Status Effect --"}};
+        for (const StatusEffect& status_effect : m_status_effects.All())
+            status_effect_options.emplace_back(status_effect.id, status_effect.name.empty() ? status_effect.id_string
+                                                                                            : status_effect.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "status_effect_id", status_effect_options, m_draft.status_effect_id,
+                                            [this](std::uint32_t id)
                                             {
                                                 m_draft.status_effect_id = id;
-                                                if (!name.empty())
-                                                    NameIdRegistry::Register(id, name);
                                                 MarkDirty();
                                             }));
+    }
 
     if (Rml::Element* row = m_editor->GetElementById("field-status-chance"))
         keep(fieldwidgets::BuildIntField(*row, "status_chance_percent", m_draft.status_chance_percent,
@@ -426,13 +468,11 @@ void TechniqueEditorLayer::RefreshEditForm()
                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-projectile-prefab"))
-        keep(fieldwidgets::BuildNameIdField(*row, "projectile_prefab_id", m_draft.projectile_prefab_id,
-                                            LabelFor(m_draft.projectile_prefab_id),
-                                            [this](std::uint32_t id, std::string name)
+        keep(fieldwidgets::BuildIdEnumField(*row, "projectile_prefab_id", PrefabIdOptions(),
+                                            m_draft.projectile_prefab_id,
+                                            [this](std::uint32_t id)
                                             {
                                                 m_draft.projectile_prefab_id = id;
-                                                if (!name.empty())
-                                                    NameIdRegistry::Register(id, name);
                                                 MarkDirty();
                                             }));
 
@@ -445,13 +485,11 @@ void TechniqueEditorLayer::RefreshEditForm()
                                           }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-hit-effect-prefab"))
-        keep(fieldwidgets::BuildNameIdField(*row, "hit_effect_prefab_id", m_draft.hit_effect_prefab_id,
-                                            LabelFor(m_draft.hit_effect_prefab_id),
-                                            [this](std::uint32_t id, std::string name)
+        keep(fieldwidgets::BuildIdEnumField(*row, "hit_effect_prefab_id", PrefabIdOptions(),
+                                            m_draft.hit_effect_prefab_id,
+                                            [this](std::uint32_t id)
                                             {
                                                 m_draft.hit_effect_prefab_id = id;
-                                                if (!name.empty())
-                                                    NameIdRegistry::Register(id, name);
                                                 MarkDirty();
                                             }));
 
@@ -564,6 +602,10 @@ void TechniqueEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Technique, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

@@ -2,6 +2,7 @@
 
 #include "Messages/CharacterScreenClosedMessage.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Messages/CharacterScreenStatPreviewMessage.h"
 #include "Messages/CombatLogEntryMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
@@ -12,6 +13,7 @@
 #include "Messages/HubInteractionPromptMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
+#include "Messages/InventoryItemHoverChangedMessage.h"
 #include "Messages/LootDropMessage.h"
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectClosedMessage.h"
@@ -28,6 +30,7 @@
 #include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenClosedMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
+#include "Messages/TeleporterPromptMessage.h"
 
 #include "ApplicationFilepaths.h"
 #include "Engine/Events/Event.h"
@@ -36,6 +39,7 @@
 #include "Items/Equip.h"
 #include "UI/LogMarkup.h"
 #include "UI/RmlClickListener.h"
+#include "UI/RmlHoverListener.h"
 #include "UI/RmlScrollListener.h"
 #include "UI/RmlText.h"
 
@@ -89,6 +93,13 @@ namespace {
         return std::nullopt;
     }
 
+    // display_name, plus " xN" when the item is a stack of more than one
+    // (see CharacterScreenMessage::ItemEntry::quantity).
+    std::string ItemRowLabel(const CharacterScreenMessage::ItemEntry& entry)
+    {
+        return entry.quantity > 1 ? entry.display_name + " x" + std::to_string(entry.quantity) : entry.display_name;
+    }
+
     std::string PercentWidth(int current, int max)
     {
         const int clamped_max = std::max(max, 1);
@@ -128,6 +139,21 @@ namespace {
         return "rgba(" + std::to_string(color.r) + "," + std::to_string(color.g) + "," + std::to_string(color.b) + "," +
                std::to_string(color.a) + ")";
     }
+
+    // "LABEL: 45" normally, or "LABEL: 45 <span class=...>-> 50</span>" while
+    // a stat preview is active and this stat actually moves -- delta == 0
+    // (preview active but this particular stat unaffected, e.g. a weapon's
+    // ATP-only bonus leaving DFP alone) renders the same as no preview.
+    std::string StatRow(const char* label, int value, int delta)
+    {
+        std::string row = std::string("<div class=\"stat-row\">") + label + ": " + std::to_string(value);
+        if (delta != 0)
+        {
+            const char* color_class = delta > 0 ? "stat-increase" : "stat-decrease";
+            row += std::string(" <span class=\"") + color_class + "\">-> " + std::to_string(value + delta) + "</span>";
+        }
+        return row + "</div>";
+    }
 } // namespace
 
 HudLayer::HudLayer() : Layer("HudLayer") {}
@@ -155,11 +181,13 @@ void HudLayer::OnAttach()
     Subscribe<LootDropMessage>(&HudLayer::OnLootDrop, this);
     Subscribe<CharacterScreenMessage>(&HudLayer::OnCharacterScreenState, this);
     Subscribe<CharacterScreenClosedMessage>(&HudLayer::OnCharacterScreenClosed, this);
+    Subscribe<CharacterScreenStatPreviewMessage>(&HudLayer::OnStatPreview, this);
     Subscribe<TechniquesScreenMessage>(&HudLayer::OnTechniquesScreenState, this);
     Subscribe<TechniquesScreenClosedMessage>(&HudLayer::OnTechniquesScreenClosed, this);
     Subscribe<FloatingTextStateMessage>(&HudLayer::OnFloatingTextState, this);
     Subscribe<TargetStateMessage>(&HudLayer::OnTargetState, this);
     Subscribe<HubInteractionPromptMessage>(&HudLayer::OnHubInteractionPrompt, this);
+    Subscribe<TeleporterPromptMessage>(&HudLayer::OnTeleporterPrompt, this);
     Subscribe<MissionCompletedMessage>(&HudLayer::OnMissionCompleted, this);
     Subscribe<MissionSelectMessage>(&HudLayer::OnMissionSelectState, this);
     Subscribe<MissionSelectClosedMessage>(&HudLayer::OnMissionSelectClosed, this);
@@ -178,6 +206,7 @@ void HudLayer::OnDetach()
 {
     m_hotbar_listeners.clear();
     m_character_screen_listeners.clear();
+    m_character_screen_hover_listeners.clear();
     m_techniques_screen_listeners.clear();
     m_mission_select_listeners.clear();
     m_shop_listeners.clear();
@@ -316,6 +345,35 @@ void HudLayer::OnHubInteractionPrompt(const HubInteractionPromptMessage& message
         break;
     case InteractionType::MissionSelect:
         text = "Press SPACE to select a mission";
+        break;
+    }
+    prompt->SetInnerRML(text);
+    prompt->SetProperty("display", "block");
+}
+
+void HudLayer::OnTeleporterPrompt(const TeleporterPromptMessage& message)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* prompt = m_document->GetElementById("hub-interaction-prompt");
+    if (!prompt)
+        return;
+
+    if (!message.destination)
+    {
+        prompt->SetProperty("display", "none");
+        return;
+    }
+
+    const char* text = "Press SPACE to interact";
+    switch (*message.destination)
+    {
+    case TeleporterDestination::ReturnToHub:
+        text = "Press SPACE to return to the Hub";
+        break;
+    case TeleporterDestination::AdvanceLevel:
+        text = "Press SPACE to proceed to the next level";
         break;
     }
     prompt->SetInnerRML(text);
@@ -499,8 +557,20 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         overlay->SetProperty("display", "flex");
 
     m_character_screen_listeners.clear();
+    m_character_screen_hover_listeners.clear();
+    // The DOM elements a mouse might currently be over are about to be torn
+    // down and rebuilt below -- RmlUi will refire "mouseover" on whatever new
+    // element ends up under the cursor on its next update, so there's nothing
+    // to preserve here. m_requested_preview_index/m_stat_preview are reset
+    // too so RenderFocusHighlights' end-of-function UpdateStatPreview call
+    // always re-requests fresh deltas rather than trusting a preview computed
+    // against pre-refresh stats (e.g. an equip that changed base stats but
+    // left the still-hovered/focused row's index unchanged).
+    m_hovered_inventory_index.reset();
+    m_requested_preview_index.reset();
+    m_stat_preview.reset();
 
-    RenderStatsPanel(message.stats);
+    RenderStatsPanel();
 
     static constexpr std::array<const char*, 5> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs"};
 
@@ -537,7 +607,11 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     {
         std::string markup;
         for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
-            markup += "<div class=\"inventory-row\">" + EscapeRml(entry.display_name) + "</div>";
+            markup += "<div class=\"inventory-row\">" + EscapeRml(ItemRowLabel(entry)) + "</div>";
+        // Pinned to the bottom, outside the .inventory-row rows above -- see
+        // CharacterScreenMessage::meseta's doc comment for why this doesn't
+        // consume a slot index or participate in row focus/selection.
+        markup += "<div class=\"meseta-row\">Meseta: " + std::to_string(message.meseta) + "</div>";
         inventory_list->SetInnerRML(markup);
 
         Rml::ElementList rows;
@@ -549,6 +623,23 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
                 [this, index]() { OpenContextMenu(CharacterScreenPanel::Inventory, index); });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
+
+            auto hover_listener = std::make_unique<RmlHoverListener>(
+                [this, index]()
+                {
+                    m_hovered_inventory_index = index;
+                    UpdateStatPreview();
+                },
+                [this, index]()
+                {
+                    if (m_hovered_inventory_index == index)
+                    {
+                        m_hovered_inventory_index.reset();
+                        UpdateStatPreview();
+                    }
+                });
+            hover_listener->Attach(*rows[i]);
+            m_character_screen_hover_listeners.push_back(std::move(hover_listener));
         }
     }
 
@@ -573,6 +664,10 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
         overlay->SetProperty("display", "none");
 
     m_character_screen_listeners.clear();
+    m_character_screen_hover_listeners.clear();
+    m_hovered_inventory_index.reset();
+    m_requested_preview_index.reset();
+    m_stat_preview.reset();
     CloseContextMenu();
     CancelAwaitingHotbarSlot();
     m_character_screen_cache.reset();
@@ -1076,7 +1171,7 @@ void HudLayer::OnStorageScreenState(const StorageMessage& message)
         else
         {
             for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
-                markup += "<div class=\"storage-inventory-row\">" + EscapeRml(entry.display_name) + "</div>";
+                markup += "<div class=\"storage-inventory-row\">" + EscapeRml(ItemRowLabel(entry)) + "</div>";
         }
         list->SetInnerRML(markup);
 
@@ -1107,7 +1202,7 @@ void HudLayer::OnStorageScreenState(const StorageMessage& message)
         else
         {
             for (const CharacterScreenMessage::ItemEntry& entry : message.storage)
-                markup += "<div class=\"storage-storage-row\">" + EscapeRml(entry.display_name) + "</div>";
+                markup += "<div class=\"storage-storage-row\">" + EscapeRml(ItemRowLabel(entry)) + "</div>";
         }
         list->SetInnerRML(markup);
 
@@ -1224,23 +1319,33 @@ void HudLayer::RenderStorageRowFocus(const char* container_id, const char* row_c
         rows[i]->SetClass("focused", panel == m_storage_focused_panel && static_cast<int>(i) == m_storage_focused_row);
 }
 
-void HudLayer::RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stats)
+void HudLayer::RenderStatsPanel()
 {
     Rml::Element* panel = m_document->GetElementById("character-screen-stats");
-    if (!panel)
+    if (!panel || !m_character_screen_cache)
         return;
 
+    const CharacterScreenMessage::StatsSummary& stats = m_character_screen_cache->stats;
+    const bool preview_active = m_stat_preview && m_stat_preview->active;
+
     std::string markup;
+    markup += "<div class=\"stat-row character-name\">Player</div>";
+    markup += "<div class=\"stat-row\">Lv: " + std::to_string(stats.level) + "</div>";
+    markup += stats.xp_to_next > 0 ? "<div class=\"stat-row\">XP to Next: " + std::to_string(stats.xp) + " / " +
+                                          std::to_string(stats.xp_to_next) + "</div>"
+                                    : std::string("<div class=\"stat-row\">XP to Next: MAX</div>");
+    markup += "<div class=\"stat-row\">Total EXP: " + std::to_string(stats.total_xp) + "</div>";
+    markup += "<div class=\"stats-separator\"></div>";
     markup +=
         "<div class=\"stat-row\">HP: " + std::to_string(stats.hp) + " / " + std::to_string(stats.max_hp) + "</div>";
     markup +=
         "<div class=\"stat-row\">TP: " + std::to_string(stats.tp) + " / " + std::to_string(stats.max_tp) + "</div>";
-    markup += "<div class=\"stat-row\">ATP: " + std::to_string(stats.atp) + "</div>";
-    markup += "<div class=\"stat-row\">ATA: " + std::to_string(stats.ata) + "</div>";
-    markup += "<div class=\"stat-row\">MST: " + std::to_string(stats.mst) + "</div>";
-    markup += "<div class=\"stat-row\">DFP: " + std::to_string(stats.dfp) + "</div>";
-    markup += "<div class=\"stat-row\">EVP: " + std::to_string(stats.evp) + "</div>";
-    markup += "<div class=\"stat-row\">LCK: " + std::to_string(stats.lck) + "</div>";
+    markup += StatRow("ATP", stats.atp, preview_active ? m_stat_preview->atp_delta : 0);
+    markup += StatRow("ATA", stats.ata, preview_active ? m_stat_preview->ata_delta : 0);
+    markup += StatRow("MST", stats.mst, preview_active ? m_stat_preview->mst_delta : 0);
+    markup += StatRow("DFP", stats.dfp, preview_active ? m_stat_preview->dfp_delta : 0);
+    markup += StatRow("EVP", stats.evp, preview_active ? m_stat_preview->evp_delta : 0);
+    markup += StatRow("LCK", stats.lck, preview_active ? m_stat_preview->lck_delta : 0);
     panel->SetInnerRML(markup);
 }
 
@@ -1454,6 +1559,43 @@ void HudLayer::JumpToMatchingInventoryItem(EquipmentSlot slot)
     RenderFocusHighlights();
 }
 
+void HudLayer::UpdateStatPreview()
+{
+    std::optional<int> target;
+    if (m_hovered_inventory_index)
+        target = m_hovered_inventory_index;
+    else if (m_focused_panel == CharacterScreenPanel::Inventory)
+        target = m_focused_row;
+
+    if (target && (!m_character_screen_cache || *target < 0 ||
+                   *target >= static_cast<int>(m_character_screen_cache->inventory.size()) ||
+                   !m_character_screen_cache->inventory[static_cast<std::size_t>(*target)].equip_slot.has_value()))
+        target.reset();
+
+    if (target == m_requested_preview_index)
+        return;
+    m_requested_preview_index = target;
+
+    if (target)
+    {
+        // Response arrives via OnStatPreview, once GameplayLayer's own
+        // message queue processes this request -- see
+        // InventoryItemHoverChangedMessage's doc comment.
+        Publish(InventoryItemHoverChangedMessage{*target});
+    }
+    else
+    {
+        m_stat_preview.reset();
+        RenderStatsPanel();
+    }
+}
+
+void HudLayer::OnStatPreview(const CharacterScreenStatPreviewMessage& message)
+{
+    m_stat_preview = message;
+    RenderStatsPanel();
+}
+
 std::vector<HudLayer::ContextMenuOption> HudLayer::BuildMenuOptions(CharacterScreenPanel panel, int index) const
 {
     std::vector<ContextMenuOption> options;
@@ -1564,6 +1706,8 @@ void HudLayer::RenderFocusHighlights()
 
     RenderRowFocus("character-screen-equipment", ".equip-row", CharacterScreenPanel::Equipment);
     RenderRowFocus("character-screen-inventory", ".inventory-row", CharacterScreenPanel::Inventory);
+
+    UpdateStatPreview();
 }
 
 void HudLayer::RenderRowFocus(const char* container_id, const char* row_class, CharacterScreenPanel panel)

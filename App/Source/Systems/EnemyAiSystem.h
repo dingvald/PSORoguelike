@@ -22,11 +22,12 @@ class TechniqueLibrary;
 // what a non-player actor with an AiComponent does this turn.
 //
 // - ChaseAndAttack: step toward the nearest PlayerControlledComponent entity
-//   within AiComponent::detection_range tiles (Manhattan distance), one
-//   cardinal step at a time, via MoveAction. No separate "am I in range,
-//   should I attack instead" check exists: MoveAction's own bump-into-hostile
-//   fallback already turns a step into an adjacent hostile's tile into an
-//   AttackAction, so chasing into range is attacking in range.
+//   within AiComponent::detection_range tiles (Manhattan distance), one step
+//   (diagonal included) at a time, via MoveAction -- see StepToward. No
+//   separate "am I in range, should I attack instead" check exists:
+//   MoveAction's own bump-into-hostile fallback already turns a step into an
+//   adjacent hostile's tile into an AttackAction, so chasing into range is
+//   attacking in range.
 // - FleeWhenHit: behaves exactly like ChaseAndAttack until this entity's own
 //   HealthComponent shows any damage taken (current_hp < max_hp), then steps
 //   directly away from the nearest hostile every turn instead -- a
@@ -84,10 +85,10 @@ private:
     IAction* DecideRangedTechAtDistance(Entity actor, const AiComponent& ai);
 
     // Shared by ChaseAndAttack/PackFollower/FleeWhenHit's approach phase and
-    // RangedTechAtDistance's close-the-distance fallback: one cardinal step
-    // from self_tile toward self_tile+delta, retrying the perpendicular axis
-    // if the primary one is blocked. Passing -delta instead steps away
-    // (FleeWhenHit's fleeing phase).
+    // RangedTechAtDistance's close-the-distance fallback: one step (diagonal
+    // included) from self_tile toward self_tile+delta, degrading to a single
+    // cardinal axis (dominant delta first) if the diagonal is blocked.
+    // Passing -delta instead steps away (FleeWhenHit's fleeing phase).
     IAction* StepToward(Entity actor, Vec2 self_tile, Vec2 delta);
 
     Grid* m_grid;

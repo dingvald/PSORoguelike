@@ -3,8 +3,11 @@
 #include "Components/CurrencyComponent.h"
 #include "Components/InventoryComponent.h"
 #include "Engine/ECS/ComponentMeta.h"
+#include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/IEntityLoader.h"
+#include "Engine/ECS/ItemComponent.h"
+#include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/ValueComponent.h"
 #include "Shop/ShopStock.h"
@@ -32,6 +35,7 @@ struct ItemMarker
 };
 
 const std::uint32_t kTestItemId = entt::hashed_string::value("test_item");
+const std::uint32_t kStackableTestItemId = entt::hashed_string::value("stackable_test_item");
 
 class TestEntityLoader : public IEntityLoader
 {
@@ -44,12 +48,22 @@ public:
         entt::entity item = prefab_registry.create();
         prefab_registry.emplace<ItemMarker>(item);
         out_prefab_ids.emplace(kTestItemId, item);
+
+        entt::entity stackable_item = prefab_registry.create();
+        prefab_registry.emplace<ItemComponent>(stackable_item, ItemComponent{/*max_stack=*/5, /*quantity=*/1});
+        out_prefab_ids.emplace(kStackableTestItemId, stackable_item);
     }
 };
 
+// Registers ItemMarker (a manual clone func, same as the existing precedent)
+// and ItemComponent (via the real ComponentSchemaRegistrar, since BuyItem's
+// stacking merge needs Registry::CreateEntity(prefab_id) to actually clone
+// the stackable prefab's ItemComponent value onto each purchased instance).
 void RegisterTestPrefabTypes(Registry& registry)
 {
     ItemMarker::Register(registry.GetMetaContext());
+    ComponentSchemaRegistrar reg{registry.GetMetaContext()};
+    ItemComponent::Register(reg);
 }
 
 } // namespace
@@ -138,6 +152,56 @@ TEST_CASE("BuyItem is a no-op for an unresolvable prefab id", "[Shop]")
     stock.entries.push_back(ShopStockEntry{"nonexistent", 10});
 
     REQUIRE_FALSE(BuyItem(actor, stock, 0));
+}
+
+TEST_CASE("BuyItem merges a stackable purchase into an existing matching slot instead of opening a new one",
+          "[Shop]")
+{
+    Registry registry;
+    RegisterTestPrefabTypes(registry);
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    entt::entity handle = registry.CreateEntity();
+    Entity actor(registry, handle);
+    actor.Emplace<CurrencyComponent>(CurrencyComponent{100});
+    actor.Emplace<InventoryComponent>();
+
+    ShopStock stock;
+    stock.entries.push_back(ShopStockEntry{"stackable_test_item", 10});
+
+    REQUIRE(BuyItem(actor, stock, 0));
+    REQUIRE(BuyItem(actor, stock, 0));
+    REQUIRE(BuyItem(actor, stock, 0));
+
+    REQUIRE(actor.Get<CurrencyComponent>().meseta == 70);
+    REQUIRE(actor.Get<InventoryComponent>().items.size() == 1);
+    const entt::entity item = actor.Get<InventoryComponent>().items[0];
+    CHECK(registry.GetComponent<ItemComponent>(item).quantity == 3);
+}
+
+TEST_CASE("BuyItem is a no-op once a stackable purchase's matching slot is already at max_stack", "[Shop]")
+{
+    Registry registry;
+    RegisterTestPrefabTypes(registry);
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    entt::entity handle = registry.CreateEntity();
+    Entity actor(registry, handle);
+    actor.Emplace<CurrencyComponent>(CurrencyComponent{100});
+
+    entt::entity held = registry.CreateEntity(kStackableTestItemId);
+    registry.GetComponent<ItemComponent>(held).quantity = 5; // already at max_stack
+    actor.Emplace<InventoryComponent>(InventoryComponent{{held}, 20});
+
+    ShopStock stock;
+    stock.entries.push_back(ShopStockEntry{"stackable_test_item", 10});
+
+    REQUIRE_FALSE(BuyItem(actor, stock, 0));
+    REQUIRE(actor.Get<CurrencyComponent>().meseta == 100);
+    REQUIRE(actor.Get<InventoryComponent>().items == std::vector<entt::entity>{held});
+    CHECK(registry.GetComponent<ItemComponent>(held).quantity == 5);
 }
 
 TEST_CASE("SellItem succeeds, credits Meseta by ValueComponent, and destroys the item", "[Shop]")

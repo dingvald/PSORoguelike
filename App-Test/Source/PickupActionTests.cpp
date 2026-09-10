@@ -34,6 +34,17 @@ entt::entity MakeGroundItem(psr::Registry& registry, psr::Grid& grid, psr::Vec2 
     return item;
 }
 
+entt::entity MakeStackableGroundItem(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile,
+                                     std::uint32_t prefab_id, int max_stack, int quantity = 1)
+{
+    entt::entity item = registry.CreateEntity();
+    registry.Emplace<psr::ItemComponent>(item, psr::ItemComponent{max_stack, quantity});
+    registry.Emplace<psr::Position>(item, psr::Position{tile});
+    registry.Emplace<psr::PrefabIdComponent>(item, psr::PrefabIdComponent{prefab_id});
+    grid.AddEntity(tile, item);
+    return item;
+}
+
 entt::entity MakeGroundCurrencyPickup(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, int amount)
 {
     entt::entity item = registry.CreateEntity();
@@ -217,4 +228,104 @@ TEST_CASE("PickupAction credits a Meseta pickup even when the actor's inventory 
     REQUIRE(result.cost == psr::PickupAction::kPickupCost);
     REQUIRE(actor.Get<psr::CurrencyComponent>().meseta == 5);
     REQUIRE(actor.Get<psr::InventoryComponent>().items.empty());
+}
+
+TEST_CASE("PickupAction merges a stackable item into an existing matching inventory stack", "[PickupAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::MessageBus bus;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    entt::entity existing_stack = registry.CreateEntity();
+    registry.Emplace<psr::ItemComponent>(existing_stack, psr::ItemComponent{/*max_stack=*/10, /*quantity=*/3});
+    registry.Emplace<psr::PrefabIdComponent>(existing_stack, psr::PrefabIdComponent{7});
+    actor.Emplace<psr::InventoryComponent>(psr::InventoryComponent{{existing_stack}, 20});
+
+    entt::entity picked_up = MakeStackableGroundItem(registry, grid, psr::Vec2{1, 1}, /*prefab_id=*/7,
+                                                     /*max_stack=*/10, /*quantity=*/1);
+
+    psr::PickupAction action(grid, bus);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::PickupAction::kPickupCost);
+    REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{existing_stack});
+    CHECK(registry.GetComponent<psr::ItemComponent>(existing_stack).quantity == 4);
+    CHECK_FALSE(registry.IsValid(picked_up));
+    REQUIRE(grid.GetEntities(psr::Vec2{1, 1}) == std::vector<entt::entity>{handle});
+}
+
+TEST_CASE("PickupAction leaves a stackable item on the ground once its matching inventory stack is at max_stack",
+          "[PickupAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::MessageBus bus;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    entt::entity existing_stack = registry.CreateEntity();
+    registry.Emplace<psr::ItemComponent>(existing_stack, psr::ItemComponent{/*max_stack=*/5, /*quantity=*/5});
+    registry.Emplace<psr::PrefabIdComponent>(existing_stack, psr::PrefabIdComponent{7});
+    // Free slot #2 exists, but a stackable item must never open a second slot
+    // for a type it already has a slot for.
+    actor.Emplace<psr::InventoryComponent>(psr::InventoryComponent{{existing_stack}, 20});
+
+    entt::entity picked_up = MakeStackableGroundItem(registry, grid, psr::Vec2{1, 1}, /*prefab_id=*/7,
+                                                     /*max_stack=*/5, /*quantity=*/1);
+
+    psr::PickupAction action(grid, bus);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{existing_stack});
+    CHECK(registry.GetComponent<psr::ItemComponent>(existing_stack).quantity == 5);
+    REQUIRE(registry.IsValid(picked_up));
+    REQUIRE(grid.GetEntities(psr::Vec2{1, 1}) == std::vector<entt::entity>{handle, picked_up});
+}
+
+TEST_CASE("PickupAction picks up the first instance of a stackable item as a normal new slot", "[PickupAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::MessageBus bus;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    entt::entity item = MakeStackableGroundItem(registry, grid, psr::Vec2{1, 1}, /*prefab_id=*/9, /*max_stack=*/10);
+
+    psr::PickupAction action(grid, bus);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::PickupAction::kPickupCost);
+    REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{item});
+    CHECK(registry.GetComponent<psr::ItemComponent>(item).quantity == 1);
+}
+
+TEST_CASE("PickupAction gives two non-stackable items sharing a prefab id their own separate slots",
+          "[PickupAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::MessageBus bus;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+
+    entt::entity item_a = MakeGroundItem(registry, grid, psr::Vec2{1, 1}, /*prefab_id=*/13);
+    entt::entity item_b = MakeGroundItem(registry, grid, psr::Vec2{1, 1}, /*prefab_id=*/13);
+
+    psr::PickupAction action(grid, bus);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::PickupAction::kPickupCost);
+    REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{item_a, item_b});
 }

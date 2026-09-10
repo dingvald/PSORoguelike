@@ -8,6 +8,7 @@
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/ECS/Registry.h"
@@ -157,6 +158,59 @@ TEST_CASE("UseItemAction restores TP clamped to max_tp and consumes the item", "
 
     REQUIRE(result.cost == psr::UseItemAction::kUseItemCost);
     CHECK(actor.Get<psr::TPComponent>().current_tp == 50); // clamped, not 110
+    CHECK(actor.Get<psr::InventoryComponent>().items.empty());
+    CHECK_FALSE(registry.IsValid(item));
+}
+
+TEST_CASE("UseItemAction decrements a stack's quantity instead of destroying it while quantity remains",
+          "[UseItemAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    actor.Emplace<psr::HealthComponent>(psr::HealthComponent{50, 100});
+
+    entt::entity item = MakeConsumable(registry, psr::ConsumableEffect::RestoreHp, /*amount=*/10, /*prefab_id=*/33);
+    registry.Emplace<psr::ItemComponent>(item, psr::ItemComponent{/*max_stack=*/5, /*quantity=*/3});
+    actor.Emplace<psr::InventoryComponent>(psr::InventoryComponent{{item}, 20});
+
+    psr::UseItemAction action(/*inventory_index=*/0);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::UseItemAction::kUseItemCost);
+    CHECK(actor.Get<psr::HealthComponent>().current_hp == 60);
+    CHECK(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{item});
+    REQUIRE(registry.IsValid(item));
+    CHECK(registry.GetComponent<psr::ItemComponent>(item).quantity == 2);
+}
+
+TEST_CASE("UseItemAction destroys the slot once a stack's last unit is used", "[UseItemAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    actor.Emplace<psr::HealthComponent>(psr::HealthComponent{50, 100});
+
+    entt::entity item = MakeConsumable(registry, psr::ConsumableEffect::RestoreHp, /*amount=*/10, /*prefab_id=*/33);
+    registry.Emplace<psr::ItemComponent>(item, psr::ItemComponent{/*max_stack=*/5, /*quantity=*/1});
+    actor.Emplace<psr::InventoryComponent>(psr::InventoryComponent{{item}, 20});
+
+    psr::UseItemAction action(/*inventory_index=*/0);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == psr::UseItemAction::kUseItemCost);
     CHECK(actor.Get<psr::InventoryComponent>().items.empty());
     CHECK_FALSE(registry.IsValid(item));
 }

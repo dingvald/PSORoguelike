@@ -10,6 +10,7 @@
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Layers/EditorMenuLayer.h"
 #include "Render/RegistryRenderableLookup.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 #include "UI/SpriteQuad.h"
@@ -35,6 +36,7 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "dungeon_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
     const std::filesystem::path kVertexShaderPath = "TileSprite.vert.spv";
     const std::filesystem::path kFragmentShaderPath = "TileSprite.frag.spv";
 
@@ -103,6 +105,12 @@ void DungeonEditorLayer::OnDetach()
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -149,12 +157,15 @@ void DungeonEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: DungeonEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     WireButtonClick("new-dungeon", [this] { BeginNewDungeon(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
@@ -230,10 +241,19 @@ void DungeonEditorLayer::WirePreviewInteraction()
     up->Attach(*target);
     m_preview_listeners.push_back(std::move(up));
 
-    auto scroll = std::make_unique<RmlEventListener>(
-        "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
-    scroll->Attach(*target);
-    m_preview_listeners.push_back(std::move(scroll));
+    // Scoped to #grid-panel itself, not the wider #edit-body: HandlePreviewMouseScroll
+    // unconditionally StopPropagation()s to consume the wheel event for
+    // pan/zoom, which would otherwise also swallow wheel scrolling over the
+    // side column's overflowing inspector cards (mirrors
+    // PieceEditorLayer::WireGridInteraction's own grid-panel-only scroll
+    // scoping).
+    if (Rml::Element* panel = m_editor->GetElementById("grid-panel"))
+    {
+        auto scroll = std::make_unique<RmlEventListener>(
+            "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
+        scroll->Attach(*panel);
+        m_preview_listeners.push_back(std::move(scroll));
+    }
 }
 
 void DungeonEditorLayer::HandlePreviewMouseDown(Rml::Event& event)
@@ -373,6 +393,8 @@ void DungeonEditorLayer::OpenForEdit(const std::string& id)
     if (!found)
         return;
     m_draft = *found;
+    m_piece_ref_collapsed.clear();
+    m_lock_collapsed.clear();
 
     m_draft_id = id;
     m_original_id = id;
@@ -392,6 +414,8 @@ void DungeonEditorLayer::OpenForEdit(const std::string& id)
 void DungeonEditorLayer::BeginNewDungeon()
 {
     m_draft = Dungeon{};
+    m_piece_ref_collapsed.clear();
+    m_lock_collapsed.clear();
 
     m_draft_id.clear();
     m_original_id.clear();
@@ -523,6 +547,8 @@ void DungeonEditorLayer::RefreshPieceRefRows()
         return "(no piece selected)";
     };
 
+    m_piece_ref_collapsed.resize(m_draft.pieces.size(), true);
+
     std::vector<std::string> summaries;
     std::vector<std::string> bodies;
     for (const DungeonPieceRef& ref : m_draft.pieces)
@@ -533,11 +559,13 @@ void DungeonEditorLayer::RefreshPieceRefRows()
     }
 
     fieldwidgets::CardList result = fieldwidgets::BuildCardList(
-        *list, summaries, bodies, "<div class=\"list-empty\">No pieces referenced yet.</div>",
+        *list, summaries, bodies, m_piece_ref_collapsed, "<div class=\"list-empty\">No pieces referenced yet.</div>",
         [this](std::size_t index)
         {
             if (index < m_draft.pieces.size())
                 m_draft.pieces.erase(m_draft.pieces.begin() + static_cast<std::ptrdiff_t>(index));
+            if (index < m_piece_ref_collapsed.size())
+                m_piece_ref_collapsed.erase(m_piece_ref_collapsed.begin() + static_cast<std::ptrdiff_t>(index));
             MarkDirty();
             RefreshPieceRefRows();
         },
@@ -546,9 +574,15 @@ void DungeonEditorLayer::RefreshPieceRefRows()
             m_pending_action = [this, from, to]
             {
                 fieldwidgets::MoveElement(m_draft.pieces, from, to);
+                fieldwidgets::MoveElement(m_piece_ref_collapsed, from, to);
                 MarkDirty();
                 RefreshPieceRefRows();
             };
+        },
+        [this](std::size_t index, bool collapsed)
+        {
+            if (index < m_piece_ref_collapsed.size())
+                m_piece_ref_collapsed[index] = collapsed;
         });
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
@@ -608,6 +642,8 @@ void DungeonEditorLayer::RefreshLockRows()
     const auto SummaryFor = [](const std::string& lock_type) -> std::string
     { return lock_type.empty() ? "(untyped lock)" : lock_type; };
 
+    m_lock_collapsed.resize(m_draft.locks.size(), true);
+
     std::vector<std::string> summaries;
     std::vector<std::string> bodies;
     for (const DungeonLockConfig& lock : m_draft.locks)
@@ -617,11 +653,13 @@ void DungeonEditorLayer::RefreshLockRows()
     }
 
     fieldwidgets::CardList result = fieldwidgets::BuildCardList(
-        *list, summaries, bodies, "<div class=\"list-empty\">No locks configured.</div>",
+        *list, summaries, bodies, m_lock_collapsed, "<div class=\"list-empty\">No locks configured.</div>",
         [this](std::size_t index)
         {
             if (index < m_draft.locks.size())
                 m_draft.locks.erase(m_draft.locks.begin() + static_cast<std::ptrdiff_t>(index));
+            if (index < m_lock_collapsed.size())
+                m_lock_collapsed.erase(m_lock_collapsed.begin() + static_cast<std::ptrdiff_t>(index));
             MarkDirty();
             RefreshLockRows();
         },
@@ -630,9 +668,15 @@ void DungeonEditorLayer::RefreshLockRows()
             m_pending_action = [this, from, to]
             {
                 fieldwidgets::MoveElement(m_draft.locks, from, to);
+                fieldwidgets::MoveElement(m_lock_collapsed, from, to);
                 MarkDirty();
                 RefreshLockRows();
             };
+        },
+        [this](std::size_t index, bool collapsed)
+        {
+            if (index < m_lock_collapsed.size())
+                m_lock_collapsed[index] = collapsed;
         });
 
     const auto keep = [this](fieldwidgets::Listeners listeners)
@@ -695,6 +739,10 @@ void DungeonEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Dungeon, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

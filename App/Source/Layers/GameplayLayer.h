@@ -5,8 +5,8 @@
 #include "Combat/PhotonArtLibrary.h"
 #include "Combat/StatusEffectLibrary.h"
 #include "Combat/TechniqueLibrary.h"
+#include "Components/TeleporterComponent.h"
 #include "Engine/Dungeon/DungeonLibrary.h"
-#include "Engine/Dungeon/DungeonPiece.h"
 #include "Engine/Dungeon/PieceLibrary.h"
 #include "Engine/Dungeon/RoomMap.h"
 #include "Engine/Dungeon/RoomVisibilityTracker.h"
@@ -64,6 +64,7 @@ struct HotbarSlotActivatedMessage;
 struct HudReadyMessage;
 struct RestartRequestedMessage;
 struct InventoryItemActivatedMessage;
+struct InventoryItemHoverChangedMessage;
 struct EquipmentSlotActivatedMessage;
 struct HotbarSlotAssignedMessage;
 struct TechniquesScreenSlotAssignedMessage;
@@ -100,9 +101,13 @@ struct StorageWithdrawRequestedMessage;
 // HotbarSlotActivatedMessage) -- see TryActivateSlot. Item activation skips
 // the target-select detour (self-only) and submits its UseItemAction via
 // TurnCoordinator::SetPendingAction directly. Standing on a hub entity
-// carrying InteractableComponent (shopkeeper/storage terminal/teleprompter)
-// and pressing Space opens the matching screen -- see
-// Hub/HubInteraction.h's FindInteractableAt and OnEvent's Space handling.
+// carrying InteractableComponent (shopkeeper/storage terminal/teleporter) and
+// pressing Space opens the matching screen -- see Hub/HubInteraction.h's
+// FindInteractableAt and OnEvent's Space handling. A dungeon's Entrance/Exit
+// pieces carry their own TeleporterComponent-stamped entities instead
+// (M4.6): standing on one and pressing Space calls OnTeleporterActivated
+// directly rather than opening a modal screen -- see
+// Missions/TeleporterInteraction.h's FindTeleporterAt.
 class GameplayLayer : public Layer
 {
 public:
@@ -200,13 +205,15 @@ private:
     // TransitionToWorld call, not just a death restart.
     void RepublishHudStateAfterTransition();
 
-    // Checked once per frame from OnUpdate while m_scene == Dungeon: if the
-    // player's current room (via m_room_map->GetRoom) is a PieceCategory::
-    // Exit piece, records the dungeon as completed in m_run_progress,
-    // publishes MissionCompletedMessage, and transitions back to the hub.
-    // Debounced by m_mission_exit_handled so a lingering player doesn't
-    // re-trigger every frame.
-    void OnMissionExitReached();
+    // Dispatched from OnEvent's dungeon-scene Space handling when
+    // FindTeleporterAt resolves a hit on the player's tile (see
+    // Missions/TeleporterInteraction.h) -- ReturnToHub bails out of the
+    // mission with no completion credit (same as the 'H' abandon key);
+    // AdvanceLevel records the current dungeon as completed in
+    // m_run_progress, publishes MissionCompletedMessage, and transitions to
+    // whatever Missions::NextDungeonInArea resolves (the next dungeon in this
+    // dungeon's Area sequence, or the hub if there isn't one).
+    void OnTeleporterActivated(TeleporterDestination destination);
 
     // Responds to RestartRequestedMessage (published by GameOverState on the
     // first key press while it's on top of the state stack) by transitioning
@@ -241,6 +248,13 @@ private:
     // republishes the screen's contents on success so the open list reflects
     // the change immediately.
     void OnInventoryItemActivated(const InventoryItemActivatedMessage& message);
+
+    // Published by HudLayer whenever the Character screen's hovered/focused
+    // inventory row changes -- see EquipPreview.h's ComputeEquipStatDelta and
+    // InventoryItemHoverChangedMessage's own doc comment. Read-only (never
+    // mutates player state), so unlike OnInventoryItemActivated this always
+    // responds, even for a non-equippable row (with active=false).
+    void OnInventoryItemHoverChanged(const InventoryItemHoverChangedMessage& message);
     void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
 
     // Handles HudLayer's "Assign to Hotbar" flow -- free/instant, same
@@ -292,6 +306,11 @@ private:
     // Called from OnUpdate, hub scene only.
     void PublishHubInteractionPrompt();
 
+    // Dungeon-scene sibling of PublishHubInteractionPrompt -- resolves
+    // FindTeleporterAt(m_registry, *m_grid, player_tile) into a
+    // TeleporterPromptMessage. Called from OnUpdate, dungeon scene only.
+    void PublishTeleporterPrompt();
+
     Registry m_registry;
     AreaLibrary m_areas;
     PieceLibrary m_pieces;
@@ -312,8 +331,6 @@ private:
 
     SceneKind m_scene = SceneKind::Hub;
     std::string m_current_dungeon_id; // only meaningful while m_scene == Dungeon
-    std::vector<PieceCategory> m_room_categories; // room index -> its piece's category, Dungeon scenes only
-    bool m_mission_exit_handled = false;
 
     std::optional<Grid> m_grid;
     entt::entity m_player = entt::null;
@@ -495,7 +512,7 @@ private:
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
-    CharacterScreenState m_character_screen_state{m_affixes};
+    CharacterScreenState m_character_screen_state{m_affixes, m_growth_curve};
     TechniquesScreenState m_techniques_screen_state{m_techniques, m_photon_arts};
     MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};

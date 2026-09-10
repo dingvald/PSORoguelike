@@ -135,11 +135,14 @@ persistence, to a future milestone; `rapidjson`/`cereal` were deliberately left 
 
 ## Area themes / mission structure
 
-A **mission** is one visit to one area (resolved: not a multi-floor descent, not a multi-area
-run — matches PSO's per-visit dungeon model directly). Areas unlock in a **fixed order**: Forest,
-then Caves, then Mines, then Ruins, matching PSO's own pacing and giving early missions a natural
-difficulty ramp. Each area theme drives tile palette, enemy population (its race), and hazard
-type, generated fresh every time it's entered — non-persistent, like PSO's dungeons.
+A **mission** is one visit to one area (resolved: not a multi-area run — matches PSO's per-visit
+dungeon model directly), which may itself span a numbered sequence of dungeon levels (Forest 1,
+Forest 2; Caves 1-3; and so on) linked by teleporters at each level's Entrance/Exit — reaching a
+level's Exit steps into the next level rather than closing the mission, and only the final level's
+Exit completes it. Areas unlock in a **fixed order**: Forest, then Caves, then Mines, then Ruins,
+matching PSO's own pacing and giving early missions a natural difficulty ramp. Each area theme
+drives tile palette, enemy population (its race), and hazard type, generated fresh every time it's
+entered — non-persistent, like PSO's dungeons.
 
 **Current implementation:** nothing yet.
 

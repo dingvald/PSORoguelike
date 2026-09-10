@@ -2,17 +2,21 @@
 
 #include "Combat/EffectiveStats.h"
 #include "Components/ConsumableComponent.h"
+#include "Components/CurrencyComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/LevelComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Items/Equip.h"
 #include "Items/ItemDisplayName.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Progression/GrowthCurve.h"
 
 #include <array>
 #include <cstddef>
@@ -28,6 +32,8 @@ namespace {
         entry.display_name = FormatItemDisplayName(registry, item, affixes);
         entry.equip_slot = ResolveEquipSlot(registry, item);
         entry.is_consumable = registry.HasComponent<ConsumableComponent>(item);
+        if (const ItemComponent* item_component = registry.TryGetComponent<ItemComponent>(item))
+            entry.quantity = item_component->quantity;
         if (const ArmorComponent* armor = registry.TryGetComponent<ArmorComponent>(item))
             entry.mod_slot_labels.assign(static_cast<std::size_t>(armor->mod_slot_count), "(empty)");
         return entry;
@@ -36,7 +42,7 @@ namespace {
 } // namespace
 
 CharacterScreenMessage BuildCharacterScreenMessage(Registry& registry, entt::entity player,
-                                                   const AffixLibrary& affixes)
+                                                   const AffixLibrary& affixes, const GrowthCurve& growth_curve)
 {
     CharacterScreenMessage message;
 
@@ -57,6 +63,18 @@ CharacterScreenMessage BuildCharacterScreenMessage(Registry& registry, entt::ent
                 message.equipment[i] = BuildItemEntry(registry, slots[i], affixes);
         }
     }
+
+    if (const LevelComponent* level = registry.TryGetComponent<LevelComponent>(player))
+    {
+        message.stats.level = level->level;
+        message.stats.xp = level->xp;
+        message.stats.total_xp = level->total_xp;
+        if (const GrowthCurveLevel* next = growth_curve.Find(level->level + 1))
+            message.stats.xp_to_next = next->xp_to_next;
+    }
+
+    if (const CurrencyComponent* currency = registry.TryGetComponent<CurrencyComponent>(player))
+        message.meseta = currency->meseta;
 
     if (const HealthComponent* health = registry.TryGetComponent<HealthComponent>(player))
     {

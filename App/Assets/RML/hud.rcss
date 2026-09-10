@@ -209,6 +209,28 @@ body {
     color: #ddd;
 }
 
+/* RmlUi never sizes its internal scrollbarvertical element unless the app
+   styles it -- left unstyled, it defaults to filling its scrollable
+   container's full width, and LayoutDetails::GetContainingBlock subtracts
+   that (now-huge) scrollbar width from every child's available width,
+   collapsing it to zero. #event-log needs this once enough lines accumulate
+   to scroll. */
+#event-log scrollbarvertical {
+    width: 10px;
+}
+
+#event-log scrollbarvertical slidertrack {
+    background-color: #1c1c22;
+}
+
+#event-log scrollbarvertical sliderbar {
+    background-color: #f6470a;
+}
+
+#event-log scrollbarvertical sliderbar:hover {
+    background-color: #ff6a30;
+}
+
 .log-line {
     display: block;
     margin-bottom: 0.2em;
@@ -312,6 +334,38 @@ body {
     padding: 0.3em 0.2em;
     font-size: 0.85em;
     color: #ddd;
+}
+
+.character-name {
+    font-weight: bold;
+    color: #f6470a;
+}
+
+.stat-increase {
+    font-weight: bold;
+    color: #f6470a;
+}
+
+.stat-decrease {
+    font-weight: bold;
+    color: #3aa0ff;
+}
+
+.stats-separator {
+    display: block;
+    height: 1px;
+    margin: 0.4em 0.2em;
+    background-color: #444;
+}
+
+.meseta-row {
+    display: block;
+    padding: 0.3em 0.2em;
+    margin-top: 0.4em;
+    border-top: 1px #444;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #d4c93f;
 }
 
 .equip-row:hover,

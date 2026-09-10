@@ -4,6 +4,7 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Items/AffixLibraryFile.h"
 #include "Layers/EditorMenuLayer.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 
@@ -26,6 +27,7 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "affix_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
 
     // Turns an entered id ("power") into its file path ("Affixes/power.json"),
     // mirroring LoadJsonDirectory's reverse rule, same as PieceEditorLayer.cpp/
@@ -106,6 +108,12 @@ void AffixEditorLayer::OnDetach()
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -118,12 +126,15 @@ void AffixEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: AffixEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     WireButtonClick("new-affix", [this] { BeginNewAffix(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
@@ -391,6 +402,10 @@ void AffixEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Affix, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

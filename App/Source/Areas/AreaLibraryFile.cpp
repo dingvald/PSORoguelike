@@ -70,6 +70,32 @@ namespace {
         return value;
     }
 
+    std::vector<std::string> ReadStringArray(const rapidjson::Value& object, const char* key)
+    {
+        std::vector<std::string> result;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd())
+            return result;
+        if (!it->value.IsArray())
+            throw AreaError(std::string("area file: '") + key + "' must be an array");
+        for (const auto& entry : it->value.GetArray())
+        {
+            if (!entry.IsString())
+                throw AreaError(std::string("area file: '") + key + "' entries must be strings");
+            result.emplace_back(entry.GetString());
+        }
+        return result;
+    }
+
+    rapidjson::Value WriteStringArray(const std::vector<std::string>& values,
+                                      rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value array(rapidjson::kArrayType);
+        for (const std::string& value : values)
+            array.PushBack(StringValue(value, allocator), allocator);
+        return array;
+    }
+
     rapidjson::Value NameIdValue(std::uint32_t id, rapidjson::Document::AllocatorType& allocator)
     {
         if (std::optional<std::string> label = NameIdRegistry::Find(id))
@@ -100,6 +126,7 @@ Area ReadAreaBody(const rapidjson::Value& area_def)
     area.wall_texture_id = ReadNameId(area_def, "wall_texture_id", area.wall_texture_id);
     area.accent_texture_id = ReadNameId(area_def, "accent_texture_id", area.accent_texture_id);
     area.unlock_predecessor_tag = ReadString(area_def, "unlock_predecessor_tag", area.unlock_predecessor_tag);
+    area.dungeon_id_strings = ReadStringArray(area_def, "dungeon_id_strings");
     return area;
 }
 
@@ -114,6 +141,7 @@ rapidjson::Value WriteAreaBody(const Area& area, rapidjson::Document::AllocatorT
     object.AddMember("wall_texture_id", NameIdValue(area.wall_texture_id, allocator), allocator);
     object.AddMember("accent_texture_id", NameIdValue(area.accent_texture_id, allocator), allocator);
     object.AddMember("unlock_predecessor_tag", StringValue(area.unlock_predecessor_tag, allocator), allocator);
+    object.AddMember("dungeon_id_strings", WriteStringArray(area.dungeon_id_strings, allocator), allocator);
     return object;
 }
 

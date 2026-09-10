@@ -2,8 +2,10 @@
 
 #include "Components/CurrencyComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/ECS/ValueComponent.h"
+#include "Items/Stacking.h"
 #include "Shop/ShopStock.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -28,11 +30,35 @@ bool BuyItem(Entity actor, const ShopStock& stock, int stock_index)
         return false;
 
     InventoryComponent& inventory = actor.GetOrEmplace<InventoryComponent>();
+
+    // Spin up the purchased instance first so a stackable item can be merged
+    // into an existing matching slot (same "exactly one slot per stackable
+    // type" rule PickupAction/WithdrawItem enforce) rather than always
+    // opening a new one; discard it again if the purchase can't go through.
+    const entt::entity item = registry.CreateEntity(prefab_id);
+
+    if (MergeIntoMatchingStacks(registry, item, inventory.items, /*stop_after_first_match=*/true))
+    {
+        const ItemComponent* item_component = registry.TryGetComponent<ItemComponent>(item);
+        if (!item_component || item_component->quantity > 0)
+        {
+            // Matching stack was already full -- nothing to buy into.
+            registry.DestroyEntity(item);
+            return false;
+        }
+        currency->meseta -= entry.buy_price;
+        registry.DestroyEntity(item);
+        return true;
+    }
+
     if (static_cast<int>(inventory.items.size()) >= inventory.capacity)
+    {
+        registry.DestroyEntity(item);
         return false;
+    }
 
     currency->meseta -= entry.buy_price;
-    inventory.items.push_back(registry.CreateEntity(prefab_id));
+    inventory.items.push_back(item);
     return true;
 }
 

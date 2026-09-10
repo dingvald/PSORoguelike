@@ -3,6 +3,7 @@
 #include "Components/HotbarComponent.h"
 #include "Engine/Layer.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Messages/CharacterScreenStatPreviewMessage.h"
 #include "Messages/MissionSelectMessage.h"
 #include "Messages/ShopMessage.h"
 #include "Messages/StorageMessage.h"
@@ -24,6 +25,7 @@ class ElementDocument;
 namespace psr {
 
 class RmlClickListener;
+class RmlHoverListener;
 class RmlScrollListener;
 struct PlayerStatusMessage;
 struct HotbarStateMessage;
@@ -37,6 +39,7 @@ struct TechniquesScreenClosedMessage;
 struct FloatingTextStateMessage;
 struct TargetStateMessage;
 struct HubInteractionPromptMessage;
+struct TeleporterPromptMessage;
 struct MissionCompletedMessage;
 struct MissionSelectClosedMessage;
 struct ShopClosedMessage;
@@ -171,6 +174,14 @@ private:
     void OnCharacterScreenState(const CharacterScreenMessage& message);
     void OnCharacterScreenClosed(const CharacterScreenClosedMessage& message);
 
+    // GameplayLayer's response to UpdateStatPreview's request -- see
+    // CharacterScreenStatPreviewMessage's own doc comment. Caches the deltas
+    // and re-renders the stats panel; a stale response that no longer matches
+    // the current hover/focus target is harmless (the next UpdateStatPreview
+    // call re-requests and overwrites it), so this doesn't bother correlating
+    // request/response by index.
+    void OnStatPreview(const CharacterScreenStatPreviewMessage& message);
+
     // Same shape as OnCharacterScreenState/OnCharacterScreenClosed, for the
     // Techniques/Photon Arts screen -- two panels, no Stats-equivalent, no
     // context menu (a row's only action is "assign to hotbar", so Space goes
@@ -219,6 +230,11 @@ private:
     // the current InteractionType, or hides it entirely on nullopt.
     void OnHubInteractionPrompt(const HubInteractionPromptMessage& message);
 
+    // Dungeon-scene sibling of OnHubInteractionPrompt -- shows/hides the same
+    // hint element keyed off TeleporterDestination instead (mutually
+    // exclusive scenes, so the two never fight over it).
+    void OnTeleporterPrompt(const TeleporterPromptMessage& message);
+
     // Rebuilds #floating-text-layer every call (published every frame by
     // GameplayLayer) -- one positioned, non-interactive span per active
     // FloatingTextSystem instance, left/top/color set inline since they're
@@ -242,7 +258,12 @@ private:
     // Character-screen navigation/context-menu helpers -- see OnEvent's doc
     // comment. Split out of OnEvent itself so both the keyboard path and the
     // RmlClickListener callbacks on rows/menu options can share them.
-    void RenderStatsPanel(const CharacterScreenMessage::StatsSummary& stats);
+    // Renders #character-screen-stats from m_character_screen_cache->stats,
+    // annotated with m_stat_preview's deltas (if active) -- "ATP: 45 -> 50" in
+    // the increase/decrease color, plain "ATP: 45" otherwise. Reads both
+    // members directly (no parameters) since every caller already has both in
+    // sync -- see UpdateStatPreview's doc comment for who calls this and when.
+    void RenderStatsPanel();
     int CharacterScreenRowCount(CharacterScreenPanel panel) const;
     void MovePanelFocus(int direction);
     void MoveRowFocus(int direction);
@@ -252,6 +273,17 @@ private:
     void MoveMenuHighlight(int direction);
     void ChooseHighlightedMenuOption();
     void JumpToMatchingInventoryItem(EquipmentSlot slot);
+
+    // Stat-change hover preview: recomputes which inventory row (if any) is
+    // the current "preview target" -- m_hovered_inventory_index if the mouse
+    // is over an equippable row, else the keyboard-focused Inventory row if
+    // that's equippable, else none -- and, only when that target actually
+    // changed since the last call, publishes InventoryItemHoverChangedMessage
+    // (GameplayLayer's OnStatPreview response updates m_stat_preview and
+    // re-renders). Called from every place m_hovered_inventory_index or
+    // keyboard focus can change: the hover listeners below, and
+    // RenderFocusHighlights/OnCharacterScreenState/OnCharacterScreenClosed.
+    void UpdateStatPreview();
 
     // Techniques-screen navigation helpers -- same split-out-of-OnEvent
     // reasoning as the Character-screen helpers above, just without a
@@ -287,6 +319,26 @@ private:
     // fixed 10 slots) -- the inventory's row count changes as items are
     // picked up/equipped/unequipped.
     std::vector<std::unique_ptr<RmlClickListener>> m_character_screen_listeners;
+
+    // One RmlHoverListener per .inventory-row, rebuilt alongside
+    // m_character_screen_listeners -- separate container/class since a row
+    // needs both a click listener (context menu) and a hover listener (stat
+    // preview) simultaneously.
+    std::vector<std::unique_ptr<RmlHoverListener>> m_character_screen_hover_listeners;
+
+    // Set by the hover listeners above; nullopt when the mouse isn't over any
+    // inventory row. See UpdateStatPreview's doc comment.
+    std::optional<int> m_hovered_inventory_index;
+
+    // The inventory_index last sent via InventoryItemHoverChangedMessage (or
+    // nullopt for "no preview"), so UpdateStatPreview only re-publishes when
+    // the target actually changes.
+    std::optional<int> m_requested_preview_index;
+
+    // Latest CharacterScreenStatPreviewMessage; nullopt (rendered as no
+    // preview) until the first response arrives after a preview target is
+    // requested. Cleared in OnCharacterScreenClosed.
+    std::optional<CharacterScreenStatPreviewMessage> m_stat_preview;
 
     // The latest CharacterScreenMessage, kept around so OnEvent's keyboard
     // handling knows row counts/item kinds without touching ECS (this layer

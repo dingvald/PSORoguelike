@@ -9,6 +9,7 @@
 namespace psr {
 
 class Registry;
+struct EquipmentComponent;
 
 // Which EquipmentComponent field an item occupies -- Weapon for a
 // WeaponComponent-tagged item, the other four mirroring ArmorComponent's
@@ -29,6 +30,11 @@ enum class EquipmentSlot
 // which needs the same routing to tag each inventory ItemEntry with whether/
 // where it's equippable without duplicating this switch.
 std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::entity item);
+
+// Which EquipmentComponent field `slot` occupies -- shared by EquipItem/
+// UnequipSlot's own swap logic and EquipPreview.h's hypothetical-equip swap,
+// so the EquipmentSlot <-> field mapping only exists in one place.
+entt::entity& SlotRef(EquipmentComponent& equipment, EquipmentSlot slot);
 
 // Moves inventory->items[inventory_index] into whichever EquipmentComponent
 // slot its own WeaponComponent/ArmorComponent implies, swapping whatever

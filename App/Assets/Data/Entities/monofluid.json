@@ -1,6 +1,9 @@
 {
     "schema_version": 1,
     "components": {
+        "value": {
+            "base_price": 8
+        },
         "consumable": {
             "effect": "restore_tp",
             "amount": 15,
@@ -22,9 +25,8 @@
             "frames": 1,
             "frame_time": 0.0
         },
-        "item": {},
-        "value": {
-            "base_price": 8
+        "item": {
+            "max_stack": 10
         }
     }
 }

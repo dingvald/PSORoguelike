@@ -29,9 +29,11 @@
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/StatsComponent.h"
 #include "Components/StorageComponent.h"
 #include "Components/TPComponent.h"
 #include "Components/TabTargetComponent.h"
+#include "Components/TeleporterComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
@@ -52,9 +54,10 @@
 #include "Hub/HubInteraction.h"
 #include "Items/CharacterScreenSnapshot.h"
 #include "Items/Equip.h"
+#include "Items/EquipPreview.h"
 #include "Items/Hotbar.h"
 #include "Items/Shop.h"
-#include "Items/ShopSnapshot.h"
+#include "Shop/ShopSnapshot.h"
 #include "Items/Storage.h"
 #include "Items/StorageSnapshot.h"
 #include "Layers/HudLayer.h"
@@ -67,7 +70,9 @@
 #include "Messages/HotbarStateMessage.h"
 #include "Messages/HubInteractionPromptMessage.h"
 #include "Messages/HudReadyMessage.h"
+#include "Messages/CharacterScreenStatPreviewMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
+#include "Messages/InventoryItemHoverChangedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectedMessage.h"
@@ -80,6 +85,9 @@
 #include "Messages/StorageWithdrawRequestedMessage.h"
 #include "Messages/TargetStateMessage.h"
 #include "Messages/TechniquesScreenSlotAssignedMessage.h"
+#include "Messages/TeleporterPromptMessage.h"
+#include "Missions/AreaProgression.h"
+#include "Missions/TeleporterInteraction.h"
 #include "Progression/GrowthCurveFile.h"
 #include "Shop/ShopStockFile.h"
 #include "States/GameState.h"
@@ -144,6 +152,7 @@ void GameplayLayer::OnAttach()
     Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
     Subscribe<RestartRequestedMessage>(&GameplayLayer::OnRestartRequested, this);
     Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
+    Subscribe<InventoryItemHoverChangedMessage>(&GameplayLayer::OnInventoryItemHoverChanged, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
     Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
     Subscribe<TechniquesScreenSlotAssignedMessage>(&GameplayLayer::OnTechniquesScreenSlotAssigned, this);
@@ -206,7 +215,11 @@ void GameplayLayer::SpawnNewCharacter()
     m_growth_curve = LoadGrowthCurve(ApplicationFilepaths::GrowthCurvePath);
 
     m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
-    m_registry.Emplace<PlayerControlledComponent>(m_player);
+    // Unlike piece/enemy entities, the player is never routed through
+    // DungeonInstantiator/SpawnWaveSystem's placement step (the only other
+    // code that emplaces Position), so TransitionToWorld's tile assignment
+    // below needs the component to already exist.
+    m_registry.Emplace<Position>(m_player);
     m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
     // Same "hardcoded until M10.3 character creation exists" deferral as
     // HealthComponent above -- growth_curve.json's level-2 max_tp (24) is the
@@ -272,6 +285,15 @@ void GameplayLayer::SpawnNewCharacter()
     hotbar.slots[9] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonofluidPrefabId)};
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
+    // Both emplaced only now, after TransitionToWorld has lazily constructed
+    // m_turn_coordinator above: TurnCoordinator's constructor is where it
+    // subscribes OnConstruct<PlayerControlledComponent>/OnConstruct<ActorComponent>
+    // to track m_live_player_count/TurnQueue membership, so emplacing either
+    // one before that construction would silently miss the signal -- leaving
+    // m_live_player_count stuck at 0 and Step() reporting PlayerDefeated
+    // immediately, forever (m_turn_coordinator is never rebuilt after this
+    // first call).
+    m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
 }
 
@@ -308,8 +330,6 @@ void GameplayLayer::DestroyWorldEntities()
 void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::string> dungeon_id_string)
 {
     DestroyWorldEntities();
-    m_mission_exit_handled = false;
-    m_room_categories.clear();
 
     DungeonLayout layout;
     Rect bounds;
@@ -333,13 +353,6 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         if (bounds.Empty())
             throw std::runtime_error("GameplayLayer: generated dungeon has no cells");
         m_current_dungeon_id = dungeon_id_string.value();
-
-        m_room_categories.reserve(layout.pieces.size());
-        for (const PlacedPiece& placed : layout.pieces)
-        {
-            const DungeonPiece* piece = m_pieces.Find(placed.piece_id);
-            m_room_categories.push_back(piece ? piece->category : PieceCategory::Room);
-        }
     }
 
     m_grid.emplace(bounds.size.x, bounds.size.y);
@@ -501,14 +514,36 @@ void GameplayLayer::RepublishHudStateAfterTransition()
             Publish(MesetaChangedMessage{currency->meseta, 0});
     }
     PublishTargetState();
+    if (m_scene == SceneKind::Hub)
+    {
+        PublishHubInteractionPrompt();
+        Publish(TeleporterPromptMessage{});
+    }
+    else
+    {
+        Publish(HubInteractionPromptMessage{});
+        PublishTeleporterPrompt();
+    }
 }
 
-void GameplayLayer::OnMissionExitReached()
+void GameplayLayer::OnTeleporterActivated(TeleporterDestination destination)
 {
-    m_mission_exit_handled = true;
-    m_run_progress.completed_dungeon_ids.insert(entt::hashed_string::value(m_current_dungeon_id.c_str()));
+    if (destination == TeleporterDestination::ReturnToHub)
+    {
+        TransitionToWorld(SceneKind::Hub, std::nullopt);
+        return;
+    }
+
+    const std::uint32_t current_hash = entt::hashed_string::value(m_current_dungeon_id.c_str());
+    m_run_progress.completed_dungeon_ids.insert(current_hash);
     Publish(MissionCompletedMessage{m_current_dungeon_id});
-    TransitionToWorld(SceneKind::Hub, std::nullopt);
+
+    const Dungeon* current = m_dungeons.Find(current_hash);
+    const Dungeon* next = current ? NextDungeonInArea(*current, m_areas, m_dungeons) : nullptr;
+    if (next)
+        TransitionToWorld(SceneKind::Dungeon, next->id_string);
+    else
+        TransitionToWorld(SceneKind::Hub, std::nullopt);
 }
 
 void GameplayLayer::OnRestartRequested(const RestartRequestedMessage& /*message*/)
@@ -543,13 +578,6 @@ void GameplayLayer::OnUpdate(float delta_time)
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         m_camera.SetTarget(player_tile);
         m_room_visibility->Update(m_room_map->GetRoom(player_tile));
-
-        if (m_scene == SceneKind::Dungeon && !m_mission_exit_handled)
-        {
-            const std::optional<std::uint32_t> room = m_room_map->GetRoom(player_tile);
-            if (room && *room < m_room_categories.size() && m_room_categories[*room] == PieceCategory::Exit)
-                OnMissionExitReached();
-        }
     }
     m_camera.Update(delta_time);
 
@@ -564,6 +592,8 @@ void GameplayLayer::OnUpdate(float delta_time)
         PublishTargetState();
         if (m_scene == SceneKind::Hub)
             PublishHubInteractionPrompt();
+        else
+            PublishTeleporterPrompt();
     }
 }
 
@@ -714,6 +744,33 @@ void GameplayLayer::OnInventoryItemActivated(const InventoryItemActivatedMessage
     m_character_screen_state.RequestClose();
 }
 
+void GameplayLayer::OnInventoryItemHoverChanged(const InventoryItemHoverChangedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    CharacterScreenStatPreviewMessage response;
+
+    const InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player);
+    if (inventory && message.inventory_index >= 0 &&
+        message.inventory_index < static_cast<int>(inventory->items.size()))
+    {
+        const entt::entity item = inventory->items[static_cast<std::size_t>(message.inventory_index)];
+        if (const std::optional<StatsComponent> delta = ComputeEquipStatDelta(m_registry, m_player, item, m_affixes))
+        {
+            response.active = true;
+            response.atp_delta = delta->atp;
+            response.ata_delta = delta->ata;
+            response.mst_delta = delta->mst;
+            response.dfp_delta = delta->dfp;
+            response.evp_delta = delta->evp;
+            response.lck_delta = delta->lck;
+        }
+    }
+
+    Publish(response);
+}
+
 void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message)
 {
     if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
@@ -804,7 +861,7 @@ void GameplayLayer::PublishCharacterScreenState()
     if (!m_registry.IsValid(m_player))
         return;
 
-    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes));
+    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes, m_growth_curve));
 }
 
 void GameplayLayer::PublishFloatingTextState()
@@ -860,6 +917,17 @@ void GameplayLayer::PublishHubInteractionPrompt()
     {
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         state.interaction_type = FindInteractableAt(m_registry, *m_grid, player_tile);
+    }
+    Publish(state);
+}
+
+void GameplayLayer::PublishTeleporterPrompt()
+{
+    TeleporterPromptMessage state;
+    if (m_registry.IsValid(m_player) && m_grid)
+    {
+        const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+        state.destination = FindTeleporterAt(m_registry, *m_grid, player_tile);
     }
     Publish(state);
 }
@@ -1034,6 +1102,22 @@ void GameplayLayer::OnEvent(Event& event)
                             m_state_machine.Push(m_mission_select_state, context);
                             return true;
                         }
+                    }
+                }
+
+                // Walking onto a dungeon's Entrance/Exit teleporter entity and
+                // pressing Space activates it directly (see
+                // OnTeleporterActivated) -- unlike the hub's InteractableComponent
+                // screens above, this never opens a modal GameState.
+                if (m_scene == SceneKind::Dungeon && key_event.GetKeyCode() == SDLK_SPACE &&
+                    m_registry.IsValid(m_player))
+                {
+                    const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+                    if (const std::optional<TeleporterDestination> destination =
+                            FindTeleporterAt(m_registry, *m_grid, player_tile))
+                    {
+                        OnTeleporterActivated(*destination);
+                        return true;
                     }
                 }
 

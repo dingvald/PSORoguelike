@@ -1,10 +1,11 @@
 #include "Layers/PhotonArtEditorLayer.h"
 
 #include "Combat/PhotonArtLibraryFile.h"
-#include "Engine/ECS/NameIdRegistry.h"
+#include "Combat/StatusEffectLibraryFile.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/EditorMenuLayer.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 
@@ -27,6 +28,7 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "photon_art_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
 
     // Mirrors PieceEditorLayer.cpp/DungeonEditorLayer.cpp/AffixEditorLayer.cpp's
     // own IdToPath.
@@ -78,14 +80,6 @@ namespace {
         return fallback;
     }
 
-    std::string LabelFor(std::uint32_t id)
-    {
-        if (id == 0)
-            return {};
-        if (std::optional<std::string> label = NameIdRegistry::Find(id))
-            return *label;
-        return {};
-    }
 } // namespace
 
 PhotonArtEditorLayer::PhotonArtEditorLayer() : Layer("PhotonArtEditorLayer") {}
@@ -100,6 +94,16 @@ void PhotonArtEditorLayer::OnAttach()
     if (!Rml::LoadFontFace(kFontPathBold.string().c_str()))
         SDL_Log("Warning: PhotonArtEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
 
+    try
+    {
+        m_status_effects = LoadStatusEffectLibrary(EditorFilepaths::StatusEffectsPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_status_effects = StatusEffectLibrary{};
+        m_error = error.what();
+    }
+
     LoadDocuments();
     ReloadLibrary();
     RefreshList();
@@ -113,6 +117,12 @@ void PhotonArtEditorLayer::OnDetach()
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -125,12 +135,15 @@ void PhotonArtEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: PhotonArtEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     WireButtonClick("new-photon-art", [this] { BeginNew(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
@@ -407,15 +420,18 @@ void PhotonArtEditorLayer::RefreshEditForm()
                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-status-effect"))
-        keep(fieldwidgets::BuildNameIdField(*row, "status_effect_id", m_draft.status_effect_id,
-                                            LabelFor(m_draft.status_effect_id),
-                                            [this](std::uint32_t id, std::string name)
+    {
+        std::vector<std::pair<std::uint32_t, std::string>> status_effect_options = {{0, "-- Select Status Effect --"}};
+        for (const StatusEffect& status_effect : m_status_effects.All())
+            status_effect_options.emplace_back(status_effect.id, status_effect.name.empty() ? status_effect.id_string
+                                                                                            : status_effect.name);
+        keep(fieldwidgets::BuildIdEnumField(*row, "status_effect_id", status_effect_options, m_draft.status_effect_id,
+                                            [this](std::uint32_t id)
                                             {
                                                 m_draft.status_effect_id = id;
-                                                if (!name.empty())
-                                                    NameIdRegistry::Register(id, name);
                                                 MarkDirty();
                                             }));
+    }
 
     if (Rml::Element* add_tier = m_editor->GetElementById("add-tier"))
     {
@@ -518,6 +534,10 @@ void PhotonArtEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::PhotonArt, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

@@ -2,8 +2,10 @@
 
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibrary.h"
+#include "Combat/StatusEffectLibrary.h"
 #include "Engine/Layer.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 
 #include <functional>
 #include <memory>
@@ -73,6 +75,8 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
+    InfoPopup m_info_popup;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable list rows
     fieldwidgets::Listeners m_form_listeners;
@@ -87,6 +91,11 @@ private:
     // -- List state --
     PhotonArtLibrary m_photon_arts;
     std::string m_pending_delete_id;
+
+    // Read-only, loaded once in OnAttach -- backs the status_effect_id
+    // picker's BuildIdEnumField (mirrors PrefabEditorLayer's own weapon-card
+    // status_effect_id treatment).
+    StatusEffectLibrary m_status_effects;
 
     // -- Edit state --
     PhotonArt m_draft;

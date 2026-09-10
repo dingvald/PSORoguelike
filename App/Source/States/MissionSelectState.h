@@ -9,7 +9,7 @@ class AreaLibrary;
 struct RunProgress;
 
 // Modal Mission Select screen, pushed by GameplayLayer's Space-key
-// interaction handling when the player is standing on the hub's teleprompter
+// interaction handling when the player is standing on the hub's teleporter
 // entity (see Hub/HubInteraction.h), popped by this state itself on
 // Space-with-nothing-focused-changing/Escape. Mirrors CharacterScreenState/
 // TechniquesScreenState's exact push/publish-on-enter/close-on-Escape shape

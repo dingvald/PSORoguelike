@@ -13,6 +13,7 @@
 #include "Engine/Items/ItemPickupEvent.h"
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/World/Grid.h"
+#include "Items/Stacking.h"
 #include "Messages/MesetaChangedMessage.h"
 
 #include <vector>
@@ -51,20 +52,45 @@ ActionResult PickupAction::Perform(Entity actor)
 
     for (entt::entity occupant : occupants)
     {
-        if (!registry.HasComponent<ItemComponent>(occupant))
+        ItemComponent* item = registry.TryGetComponent<ItemComponent>(occupant);
+        if (!item)
             continue;
 
         InventoryComponent& inventory = actor.GetOrEmplace<InventoryComponent>();
-        if (static_cast<int>(inventory.items.size()) >= inventory.capacity)
-            break;
-
-        m_grid->RemoveEntity(tile, occupant);
-        inventory.items.push_back(occupant);
-        picked_up_any = true;
 
         std::uint32_t item_prefab_id = 0;
         if (const PrefabIdComponent* prefab_id = registry.TryGetComponent<PrefabIdComponent>(occupant))
             item_prefab_id = prefab_id->value;
+
+        const int quantity_before = item->quantity;
+        if (MergeIntoMatchingStacks(registry, occupant, inventory.items, /*stop_after_first_match=*/true))
+        {
+            // A same-type slot already exists -- stacking items occupy exactly
+            // one inventory slot, so this occupant never opens a second one,
+            // regardless of how much (if any) of it fit.
+            if (item->quantity == 0)
+            {
+                m_grid->RemoveEntity(tile, occupant);
+                registry.DestroyEntity(occupant);
+                picked_up_any = true;
+                AfterItemPickupEvent event{item_prefab_id};
+                actor.Dispatch(event);
+            }
+            else if (item->quantity < quantity_before)
+            {
+                picked_up_any = true;
+                AfterItemPickupEvent event{item_prefab_id};
+                actor.Dispatch(event);
+            }
+            continue;
+        }
+
+        if (static_cast<int>(inventory.items.size()) >= inventory.capacity)
+            continue;
+
+        m_grid->RemoveEntity(tile, occupant);
+        inventory.items.push_back(occupant);
+        picked_up_any = true;
 
         AfterItemPickupEvent event{item_prefab_id};
         actor.Dispatch(event);

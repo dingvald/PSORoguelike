@@ -9,6 +9,7 @@
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Layers/EditorMenuLayer.h"
 #include "Render/RegistryRenderableLookup.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 #include "UI/SpriteQuad.h"
@@ -33,6 +34,7 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "piece_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
     const std::filesystem::path kVertexShaderPath = "TileSprite.vert.spv";
     const std::filesystem::path kFragmentShaderPath = "TileSprite.frag.spv";
 
@@ -202,6 +204,12 @@ void PieceEditorLayer::OnDetach()
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -251,12 +259,15 @@ void PieceEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: PieceEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
 
     WireButtonClick("new-piece", [this] { BeginNewPiece(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
@@ -1150,6 +1161,10 @@ void PieceEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Piece, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;

@@ -1,9 +1,13 @@
 {
     "schema_version": 1,
     "components": {
+        "value": {
+            "base_price": 6
+        },
         "consumable": {
             "effect": "restore_hp",
-            "amount": 75
+            "amount": 75,
+            "technique_id": 0
         },
         "renderable": {
             "texture_id": "item_pickup",
@@ -17,11 +21,12 @@
             },
             "color_1": "#000000ff",
             "color_2": "#076e00ff",
-            "render_layer": 0
+            "render_layer": 0,
+            "frames": 1,
+            "frame_time": 0.0
         },
-        "item": {},
-        "value": {
-            "base_price": 6
+        "item": {
+            "max_stack": 10
         }
     }
 }

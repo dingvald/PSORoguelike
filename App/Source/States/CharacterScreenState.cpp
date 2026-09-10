@@ -11,12 +11,16 @@
 
 namespace psr {
 
-CharacterScreenState::CharacterScreenState(const AffixLibrary& affixes) : m_affixes(&affixes) {}
+CharacterScreenState::CharacterScreenState(const AffixLibrary& affixes, const GrowthCurve& growth_curve)
+    : m_affixes(&affixes), m_growth_curve(&growth_curve)
+{
+}
 
 void CharacterScreenState::OnEnter(GameplayContext& context)
 {
     m_close_requested = false;
-    context.message_bus.Publish(BuildCharacterScreenMessage(context.registry, context.player, *m_affixes));
+    context.message_bus.Publish(
+        BuildCharacterScreenMessage(context.registry, context.player, *m_affixes, *m_growth_curve));
 }
 
 void CharacterScreenState::OnExit(GameplayContext& context)

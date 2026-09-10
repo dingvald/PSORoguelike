@@ -5,6 +5,7 @@
 namespace psr {
 
 class AffixLibrary;
+struct GrowthCurve;
 
 // Modal Character screen (Inventory + Equipment as simple lists), pushed by
 // GameplayLayer::OnEvent when 'C' is pressed while ExploringState is on top,
@@ -23,7 +24,7 @@ class AffixLibrary;
 class CharacterScreenState : public GameState
 {
 public:
-    explicit CharacterScreenState(const AffixLibrary& affixes);
+    CharacterScreenState(const AffixLibrary& affixes, const GrowthCurve& growth_curve);
 
     GameStateId GetId() const override { return GameStateId::CharacterScreen; }
 
@@ -42,6 +43,7 @@ public:
 
 private:
     const AffixLibrary* m_affixes;
+    const GrowthCurve* m_growth_curve;
     bool m_close_requested = false;
 };
 

@@ -8,6 +8,7 @@
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Engine/Render/AnimationClock.h"
 #include "UI/FieldWidgets.h"
+#include "UI/InfoPopup.h"
 #include "UI/PreviewCanvas.h"
 #include "UI/PreviewWindowChrome.h"
 
@@ -164,6 +165,8 @@ private:
     Mode m_mode = Mode::List;
 
     Rml::ElementDocument* m_editor = nullptr;
+    Rml::ElementDocument* m_info_popup_document = nullptr;
+    InfoPopup m_info_popup;
     std::vector<std::unique_ptr<RmlClickListener>> m_listeners;      // static toolbar buttons
     std::vector<std::unique_ptr<RmlClickListener>> m_list_listeners; // rebuildable piece-list rows
     std::vector<std::unique_ptr<RmlEventListener>> m_grid_listeners; // #edit-body mouse listeners

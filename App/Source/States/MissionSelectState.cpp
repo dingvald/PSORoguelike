@@ -37,7 +37,7 @@ bool MissionSelectState::HandleEvent(Event& event, GameplayContext& /*context*/)
 {
     // Unlike CharacterScreenState/TechniquesScreenState, there's no
     // dedicated toggle key for this screen (it's opened by walking onto the
-    // hub's teleprompter and pressing Space, not a letter key) -- only
+    // hub's teleporter and pressing Space, not a letter key) -- only
     // Escape closes it.
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<KeyPressedEvent>(

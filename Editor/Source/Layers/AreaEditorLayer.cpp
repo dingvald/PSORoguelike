@@ -1,10 +1,12 @@
 #include "Layers/AreaEditorLayer.h"
 
 #include "Areas/AreaLibraryFile.h"
+#include "Engine/Dungeon/DungeonLibraryFile.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/EditorMenuLayer.h"
+#include "UI/AssetRenameCascade.h"
 #include "UI/RmlClickListener.h"
 #include "UI/RmlText.h"
 
@@ -19,8 +21,11 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace psr {
 
@@ -28,6 +33,8 @@ namespace {
     const std::filesystem::path kFontPath = EditorFilepaths::FontsPath / "PixelCode-Regular.ttf";
     const std::filesystem::path kFontPathBold = EditorFilepaths::FontsPath / "PixelCode-Bold.ttf";
     const std::filesystem::path kEditorDocument = EditorFilepaths::RmlDocumentsPath / "area_editor.rml";
+    const std::filesystem::path kInfoPopupDocument = EditorFilepaths::RmlDocumentsPath / "info_popup.rml";
+    const std::filesystem::path kTexturePickerDocument = EditorFilepaths::RmlDocumentsPath / "texture_picker.rml";
 
     // Turns an entered id ("forest") into its file path ("Areas/forest.json"),
     // mirroring LoadJsonDirectory's reverse rule, same as
@@ -106,6 +113,16 @@ void AreaEditorLayer::OnAttach()
     if (!Rml::LoadFontFace(kFontPathBold.string().c_str()))
         SDL_Log("Warning: AreaEditorLayer failed to load font '%s'", kFontPathBold.string().c_str());
 
+    try
+    {
+        m_dungeons = LoadDungeonLibrary(EditorFilepaths::DungeonsPath);
+    }
+    catch (const std::exception& error)
+    {
+        m_dungeons = DungeonLibrary{};
+        m_error = error.what();
+    }
+
     LoadDocuments();
     ReloadAreaLibrary();
     RefreshAreaList();
@@ -114,10 +131,24 @@ void AreaEditorLayer::OnAttach()
 
 void AreaEditorLayer::OnDetach()
 {
+    m_dungeon_row_listeners.clear();
+    m_card_listeners.clear();
     m_form_listeners.clear();
     m_list_listeners.clear();
     m_listeners.clear();
 
+    m_info_popup.Unbind();
+    if (m_info_popup_document)
+    {
+        m_info_popup_document->Close();
+        m_info_popup_document = nullptr;
+    }
+    m_texture_picker.Unbind();
+    if (m_texture_picker_document)
+    {
+        m_texture_picker_document->Close();
+        m_texture_picker_document = nullptr;
+    }
     if (m_editor)
     {
         m_editor->Close();
@@ -130,16 +161,31 @@ void AreaEditorLayer::LoadDocuments()
     {
         GuiContext::LockedAccess gui_context = GetLockedGuiContext();
         m_editor = gui_context->LoadDocument(kEditorDocument.string().c_str());
+        m_info_popup_document = gui_context->LoadDocument(kInfoPopupDocument.string().c_str());
+        m_texture_picker_document = gui_context->LoadDocument(kTexturePickerDocument.string().c_str());
     }
     if (!m_editor)
     {
         SDL_Log("Warning: AreaEditorLayer has no editor document");
         return;
     }
+    if (m_info_popup_document)
+        m_info_popup.Bind(*m_info_popup_document);
+    if (m_texture_picker_document)
+        m_texture_picker.Bind(*m_texture_picker_document);
+    m_pickers.open_texture_picker = [this](std::uint32_t id, std::function<void(std::uint32_t, std::string)> on_pick)
+    { m_texture_picker.Open(EditorFilepaths::TexturesPath, id, std::move(on_pick)); };
 
     WireButtonClick("new-area", [this] { BeginNewArea(); });
     WireButtonClick("back-to-menu", [this] { TransitionTo<EditorMenuLayer>(); });
     WireButtonClick("save-area", [this] { SaveDraft(); });
+    WireButtonClick("add-dungeon-sequence-entry",
+                    [this]
+                    {
+                        m_draft.dungeon_id_strings.push_back({});
+                        MarkDirty();
+                        RefreshDungeonSequenceRows();
+                    });
     WireButtonClick("back-to-list",
                     [this]
                     {
@@ -147,6 +193,10 @@ void AreaEditorLayer::LoadDocuments()
                         ShowScreen(Mode::List);
                         RefreshAreaList();
                     });
+
+    if (Rml::Element* card = m_editor->GetElementById("dungeon-sequence-card"))
+        for (auto& listener : fieldwidgets::WireCollapseToggle(*card, /*use_chevron=*/true))
+            m_card_listeners.push_back(std::move(listener));
 
     m_editor->Show();
 }
@@ -379,7 +429,7 @@ void AreaEditorLayer::RefreshEditForm()
                                           }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-floor-texture-id"))
-        keep(fieldwidgets::BuildNameIdField(
+        keep(fieldwidgets::BuildTextureField(
             *row, "floor_texture_id", m_draft.floor_texture_id, LabelFor(m_draft.floor_texture_id),
             [this](std::uint32_t id, std::string name)
             {
@@ -387,10 +437,11 @@ void AreaEditorLayer::RefreshEditForm()
                 if (!name.empty())
                     NameIdRegistry::Register(id, name);
                 MarkDirty();
-            }));
+            },
+            m_pickers.open_texture_picker));
 
     if (Rml::Element* row = m_editor->GetElementById("field-wall-texture-id"))
-        keep(fieldwidgets::BuildNameIdField(
+        keep(fieldwidgets::BuildTextureField(
             *row, "wall_texture_id", m_draft.wall_texture_id, LabelFor(m_draft.wall_texture_id),
             [this](std::uint32_t id, std::string name)
             {
@@ -398,10 +449,11 @@ void AreaEditorLayer::RefreshEditForm()
                 if (!name.empty())
                     NameIdRegistry::Register(id, name);
                 MarkDirty();
-            }));
+            },
+            m_pickers.open_texture_picker));
 
     if (Rml::Element* row = m_editor->GetElementById("field-accent-texture-id"))
-        keep(fieldwidgets::BuildNameIdField(
+        keep(fieldwidgets::BuildTextureField(
             *row, "accent_texture_id", m_draft.accent_texture_id, LabelFor(m_draft.accent_texture_id),
             [this](std::uint32_t id, std::string name)
             {
@@ -409,7 +461,8 @@ void AreaEditorLayer::RefreshEditForm()
                 if (!name.empty())
                     NameIdRegistry::Register(id, name);
                 MarkDirty();
-            }));
+            },
+            m_pickers.open_texture_picker));
 
     if (Rml::Element* row = m_editor->GetElementById("field-unlock-predecessor-tag"))
         keep(fieldwidgets::BuildStringField(*row, "unlock_predecessor_tag", m_draft.unlock_predecessor_tag,
@@ -419,7 +472,92 @@ void AreaEditorLayer::RefreshEditForm()
                                                 MarkDirty();
                                             }));
 
+    RefreshDungeonSequenceRows();
     RefreshDirtyDisplay();
+}
+
+void AreaEditorLayer::RefreshDungeonSequenceRows()
+{
+    if (!m_editor)
+        return;
+    m_dungeon_row_listeners.clear();
+
+    Rml::Element* list = m_editor->GetElementById("dungeon-sequence-list");
+    if (!list)
+        return;
+
+    std::vector<std::pair<std::uint32_t, std::string>> dungeon_options = {{0, "-- Select Dungeon --"}};
+    for (const Dungeon& dungeon : m_dungeons.All())
+        dungeon_options.emplace_back(dungeon.id, dungeon.name.empty() ? dungeon.id_string : dungeon.name);
+
+    const auto ResolveDungeonIdString = [this](std::uint32_t dungeon_id) -> std::string
+    {
+        for (const Dungeon& dungeon : m_dungeons.All())
+            if (dungeon.id == dungeon_id)
+                return dungeon.id_string;
+        return {};
+    };
+
+    const auto CurrentIdFor = [this](const std::string& id_string) -> std::uint32_t
+    {
+        for (const Dungeon& dungeon : m_dungeons.All())
+            if (dungeon.id_string == id_string)
+                return dungeon.id;
+        return 0;
+    };
+
+    const std::vector<std::string> content(m_draft.dungeon_id_strings.size(),
+                                           "<div class=\"sequence-dungeon field-row\"></div>");
+
+    fieldwidgets::RowList result = fieldwidgets::BuildRowList(
+        *list, content, "<div class=\"list-empty\">No dungeons in this area's sequence yet.</div>",
+        [this](std::size_t index)
+        {
+            if (index < m_draft.dungeon_id_strings.size())
+                m_draft.dungeon_id_strings.erase(m_draft.dungeon_id_strings.begin() +
+                                                 static_cast<std::ptrdiff_t>(index));
+            MarkDirty();
+            RefreshDungeonSequenceRows();
+        },
+        [this](std::size_t from, std::size_t to)
+        {
+            m_pending_action = [this, from, to]
+            {
+                fieldwidgets::MoveElement(m_draft.dungeon_id_strings, from, to);
+                MarkDirty();
+                RefreshDungeonSequenceRows();
+            };
+        });
+
+    for (std::size_t i = 0; i < result.rows.size() && i < m_draft.dungeon_id_strings.size(); ++i)
+    {
+        const std::size_t index = i;
+        if (Rml::Element* row = result.rows[i]->QuerySelector(".sequence-dungeon"))
+            for (auto& listener : fieldwidgets::BuildIdEnumField(
+                     *row, "dungeon_id", dungeon_options, CurrentIdFor(m_draft.dungeon_id_strings[i]),
+                     [this, index, ResolveDungeonIdString](std::uint32_t id)
+                     {
+                         if (index < m_draft.dungeon_id_strings.size())
+                             m_draft.dungeon_id_strings[index] = ResolveDungeonIdString(id);
+                         MarkDirty();
+                     }))
+                m_dungeon_row_listeners.push_back(std::move(listener));
+    }
+
+    for (auto& listener : result.listeners)
+        m_dungeon_row_listeners.push_back(std::move(listener));
+}
+
+void AreaEditorLayer::OnRender(SDL_Renderer* renderer)
+{
+    (void)renderer;
+    // See fieldwidgets::WireDragReorder's doc comment -- deferred a frame
+    // past the drag gesture that requested it.
+    if (m_pending_action)
+    {
+        const std::function<void()> action = std::exchange(m_pending_action, nullptr);
+        action();
+    }
 }
 
 void AreaEditorLayer::SaveDraft()
@@ -446,6 +584,10 @@ void AreaEditorLayer::SaveDraft()
         {
             std::error_code error_code;
             std::filesystem::remove(IdToPath(m_original_id), error_code);
+
+            const int updated = UpdateReferencesOnRename(AssetKind::Area, m_original_id, m_draft_id);
+            if (updated > 0)
+                m_info_popup.Open("Updated " + std::to_string(updated) + " other asset(s) that referenced this asset.");
         }
         m_original_id = m_draft_id;
         m_is_new = false;
