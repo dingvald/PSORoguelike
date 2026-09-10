@@ -11,11 +11,12 @@
 
 namespace psr {
 
-// Gates enemy population past a piece's first authored spawn wave: the
-// lowest-numbered wave of a piece's PieceSpawn list stamps immediately (see
-// DungeonInstantiator), and every later wave is handed to this system as a
-// PendingSpawnWave. It spawns the next wave for a group (a piece placement)
-// once every entity tagged with that group's current wave has died.
+// Owns spawning every authored PieceSpawn wave for every group (a piece
+// placement): DungeonInstantiator hands every wave to this system as a
+// PendingSpawnWave, unspawned. A group's earliest wave spawns once the
+// player first enters that room (see TriggerRoomEntered, driven by
+// GameplayLayer's room-change detection); every later wave spawns once every
+// entity tagged with the group's current wave has died.
 //
 // Deliberately has no dependency on DeathEvent/HealthSystem/DeathSystem: it
 // reacts to SpawnWaveComponent being destroyed via entt's own on_destroy
@@ -26,13 +27,11 @@ class SpawnWaveSystem
 {
 public:
     // on_spawned, if set, is invoked once for each entity this system spawns
-    // for a later wave -- same contract as DungeonInstantiator's own
-    // on_spawned parameter (both should normally be given the same callback),
-    // since a later-wave spawn needs the identical App-level, per-creature
-    // setup (joining the turn queue, equipping an innate weapon) a first-wave
-    // spawn gets there.
-    SpawnWaveSystem(Registry& registry, Grid& grid, std::unordered_map<std::uint32_t, int> initial_wave_counts,
-                    std::vector<PendingSpawnWave> pending_waves, std::function<void(entt::entity)> on_spawned = {});
+    // (every wave, first and later alike) -- Core's only hook for App-level,
+    // per-creature setup (e.g. joining the turn queue) that Core itself
+    // can't perform.
+    SpawnWaveSystem(Registry& registry, Grid& grid, std::vector<PendingSpawnWave> pending_waves,
+                    std::function<void(entt::entity)> on_spawned = {});
     ~SpawnWaveSystem();
 
     // Bound on_destroy<SpawnWaveComponent> listener captures this instance's
@@ -41,6 +40,16 @@ public:
     SpawnWaveSystem& operator=(const SpawnWaveSystem&) = delete;
     SpawnWaveSystem(SpawnWaveSystem&&) = delete;
     SpawnWaveSystem& operator=(SpawnWaveSystem&&) = delete;
+
+    // Spawns group_id's earliest still-queued wave, unless one is already in
+    // flight for it (SpawnNextWave already handles an empty/absent queue
+    // gracefully, so this is a harmless no-op for a room with no spawns, or
+    // one already fully cleared). Called once per group the first time the
+    // player enters that room -- see GameplayLayer::EnterRoom. Safe to call
+    // again on re-entry: the guard below only lets a group's very next
+    // not-yet-spawned wave through, whether that's "never started" or
+    // "cleared, nothing left queued".
+    void TriggerRoomEntered(std::uint32_t group_id);
 
 private:
     void OnSpawnWaveComponentDestroyed(entt::registry& registry, entt::entity entity);

@@ -12,20 +12,17 @@ namespace psr {
 
 // Unlocks every RoomCleared-condition door gating a room once every entity ever spawned
 // into that room (across all of its waves, not just the current one) has died. Takes the
-// same (initial_wave_counts, pending_spawn_waves) DungeonInstantiator handed
-// SpawnWaveSystem, summed per group into a single total-remaining counter here -- unlike
-// SpawnWaveSystem, this system doesn't care about wave boundaries, only the room's
-// eventual total. Reacts to SpawnWaveComponent being destroyed via entt's own on_destroy
-// signal, coexisting independently alongside SpawnWaveSystem's own subscription to the
-// same signal (mirrors TurnCoordinator/SpawnWaveSystem's shared "react to
-// ActorComponent/SpawnWaveComponent destruction rather than a bespoke DeathEvent"
-// precedent).
+// same pending_spawn_waves DungeonInstantiator handed SpawnWaveSystem, summed per group
+// into a single total-remaining counter here -- unlike SpawnWaveSystem, this system
+// doesn't care about wave boundaries, only the room's eventual total. Reacts to
+// SpawnWaveComponent being destroyed via entt's own on_destroy signal, coexisting
+// independently alongside SpawnWaveSystem's own subscription to the same signal (mirrors
+// TurnCoordinator/SpawnWaveSystem's shared "react to ActorComponent/SpawnWaveComponent
+// destruction rather than a bespoke DeathEvent" precedent).
 class RoomClearDoorSystem
 {
 public:
-    RoomClearDoorSystem(Registry& registry, Grid& grid,
-                        const std::unordered_map<std::uint32_t, int>& initial_wave_counts,
-                        const std::vector<PendingSpawnWave>& pending_waves,
+    RoomClearDoorSystem(Registry& registry, Grid& grid, const std::vector<PendingSpawnWave>& pending_waves,
                         std::unordered_map<std::uint32_t, std::vector<entt::entity>> room_cleared_doors);
     ~RoomClearDoorSystem();
 

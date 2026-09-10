@@ -8,7 +8,6 @@
 namespace psr {
 
 RoomClearDoorSystem::RoomClearDoorSystem(Registry& registry, Grid& grid,
-                                         const std::unordered_map<std::uint32_t, int>& initial_wave_counts,
                                          const std::vector<PendingSpawnWave>& pending_waves,
                                          std::unordered_map<std::uint32_t, std::vector<entt::entity>> room_cleared_doors)
     : m_registry(&registry), m_grid(&grid), m_room_cleared_doors(std::move(room_cleared_doors))
@@ -16,8 +15,6 @@ RoomClearDoorSystem::RoomClearDoorSystem(Registry& registry, Grid& grid,
     for (const auto& [group_id, doors] : m_room_cleared_doors)
     {
         int total = 0;
-        if (auto it = initial_wave_counts.find(group_id); it != initial_wave_counts.end())
-            total += it->second;
         for (const PendingSpawnWave& wave : pending_waves)
             if (wave.group_id == group_id)
                 total += static_cast<int>(wave.entries.size());

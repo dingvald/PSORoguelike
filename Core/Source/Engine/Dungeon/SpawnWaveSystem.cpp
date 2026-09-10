@@ -7,12 +7,9 @@
 
 namespace psr {
 
-SpawnWaveSystem::SpawnWaveSystem(Registry& registry, Grid& grid,
-                                 std::unordered_map<std::uint32_t, int> initial_wave_counts,
-                                 std::vector<PendingSpawnWave> pending_waves,
+SpawnWaveSystem::SpawnWaveSystem(Registry& registry, Grid& grid, std::vector<PendingSpawnWave> pending_waves,
                                  std::function<void(entt::entity)> on_spawned)
-    : m_registry(&registry), m_grid(&grid), m_remaining_in_wave(std::move(initial_wave_counts)),
-      m_on_spawned(std::move(on_spawned))
+    : m_registry(&registry), m_grid(&grid), m_on_spawned(std::move(on_spawned))
 {
     for (PendingSpawnWave& wave : pending_waves)
         m_queued_by_group[wave.group_id].push_back(std::move(wave));
@@ -33,6 +30,13 @@ void SpawnWaveSystem::OnSpawnWaveComponentDestroyed(entt::registry& registry, en
         return;
 
     m_remaining_in_wave.erase(it);
+    SpawnNextWave(group_id);
+}
+
+void SpawnWaveSystem::TriggerRoomEntered(std::uint32_t group_id)
+{
+    if (m_remaining_in_wave.contains(group_id))
+        return;
     SpawnNextWave(group_id);
 }
 

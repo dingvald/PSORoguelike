@@ -10,7 +10,6 @@
 #include "Engine/World/Grid.h"
 
 #include <cstdint>
-#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -49,14 +48,11 @@ struct DungeonInstantiation
     // room to the rooms beyond its doorways.
     std::vector<std::vector<std::uint32_t>> room_adjacency;
 
-    // group_id (a placed piece's index into layout.pieces) -> how many
-    // entities were stamped for that group's first (lowest-numbered) wave,
-    // immediately during instantiation. Only present for groups that
-    // authored at least one PieceSpawn.
-    std::unordered_map<std::uint32_t, int> initial_wave_counts;
-
-    // Every wave after each group's first, in ascending (group, wave) order,
-    // not yet spawned -- SpawnWaveSystem consumes these as earlier waves die.
+    // Every authored wave for every group, in ascending (group, wave) order,
+    // not yet spawned -- nothing spawns automatically at instantiation time
+    // any more. SpawnWaveSystem spawns a group's earliest wave once the
+    // player first enters that room (see SpawnWaveSystem::TriggerRoomEntered),
+    // and every later wave once the current one's entities all die.
     std::vector<PendingSpawnWave> pending_spawn_waves;
 
     // group_id (same placed-piece index as above) -> every locked door entity
@@ -83,20 +79,12 @@ struct DungeonInstantiation
 // resolved from this same library, so this only matters if a stale/
 // mismatched library is passed).
 //
-// Each placed piece's own PieceSpawn list is grouped by wave number: the
-// lowest-numbered wave stamps immediately (tagged with SpawnWaveComponent so
-// SpawnWaveSystem can track it), and every later wave is returned via
-// DungeonInstantiation::pending_spawn_waves for SpawnWaveSystem to spawn once
-// the previous wave's entities all die.
-//
-// on_spawned, if set, is invoked once for each PieceSpawn-sourced entity
-// stamped here (first-wave only -- later waves go through SpawnWaveSystem's
-// own on_spawned instead), right after its SpawnWaveComponent is emplaced.
-// Not called for plain cell/dead-end-socket prefabs (static dungeon
-// furniture, not creatures). This is Core's only hook for App-level, per-
-// creature setup (e.g. joining the turn queue) that Core itself can't
-// perform, since the components involved (ActorComponent, EquipmentComponent)
-// are App-level -- see GameplayLayer::OnAttach.
+// Each placed piece's own PieceSpawn list is grouped by wave number: every
+// wave, including what would once have been the lowest-numbered one, is
+// returned via DungeonInstantiation::pending_spawn_waves -- this function no
+// longer creates any spawn entities itself; SpawnWaveSystem owns spawning a
+// group's earliest wave (once the player enters that room) and every later
+// wave (once the previous one's entities all die).
 //
 // layout.locks is walked next: each LockAnnotation stamps
 // layout.locked_door_prefab_id at its edge's world cell (tagged with a
@@ -108,7 +96,6 @@ struct DungeonInstantiation
 // component of its own. A corridor-to-corridor connection stamps nothing, same
 // as before this feature existed.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
-                                        Registry& registry, Grid& grid,
-                                        std::function<void(entt::entity)> on_spawned = {});
+                                        Registry& registry, Grid& grid);
 
 } // namespace psr
