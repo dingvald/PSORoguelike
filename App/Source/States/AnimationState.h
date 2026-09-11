@@ -12,7 +12,7 @@ namespace psr {
 // comment for why UpdateTweens no longer runs from there). Pops back to
 // ExploringState the instant the registry is tween-free again -- by
 // construction that only happens once every queued Tween's on_completion
-// (e.g. AttackAction's deferred damage application) has already fired, so no
+// (e.g. WeaponAttackAction's deferred damage application) has already fired, so no
 // other actor can act mid-animation and a target can't flee or die from
 // something else mid-swing. No OnEnter/OnExit/HandleEvent override needed:
 // GameState's defaults are already what's wanted here (no per-frame publish,

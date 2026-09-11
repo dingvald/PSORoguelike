@@ -39,8 +39,8 @@ public:
 
 // An NPC action that kills target outright via the same
 // IncomingDamageEvent -> HealthSystem -> DeathEvent -> DeathSystem path a
-// real AttackAction uses, without needing a weapon/AffixLibrary/Grid to
-// build one -- just enough to drive TurnCoordinator's PlayerDefeated path
+// real WeaponAttackAction uses, without needing a weapon/AffixLibrary/Grid
+// to build one -- just enough to drive TurnCoordinator's PlayerDefeated path
 // from a non-player actor's turn.
 class LethalAction : public psr::IAction
 {
@@ -419,4 +419,74 @@ TEST_CASE("TurnCoordinator returns PlayerDefeated instead of hanging when an NPC
 
     REQUIRE(step == psr::TurnStep::PlayerDefeated);
     REQUIRE_FALSE(registry.IsValid(player));
+}
+
+TEST_CASE("TurnCoordinator's Subscribe reacts to a dispatched AfterDamageEvent by debiting the target's TurnQueue "
+          "energy by hit_stun_energy",
+          "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    // AfterDamageEvent is dispatched at the *attacker*, not the target (see
+    // DamageEvent.h) -- Subscribe must be called on whoever lands the hit,
+    // exactly like CombatLogBridge/DamageTextSystem/OnHitEffectSystem.
+    entt::entity attacker = registry.CreateEntity();
+    registry.Emplace<psr::ActorComponent>(attacker);
+    coordinator.Subscribe(psr::Entity(registry, attacker));
+
+    entt::entity target = registry.CreateEntity();
+    registry.Emplace<psr::ActorComponent>(target);
+    const int energy_before = registry.GetComponent<psr::ActorComponent>(target).ap;
+
+    // A sub-100 amount (not a whole action threshold) -- proves this is a
+    // raw energy debit, not a whole-turn "ticks" count.
+    psr::AfterDamageEvent event{
+        psr::Entity(registry, target), /*amount=*/5, false, false, 0, 0.3f, /*hit_stun_energy=*/30};
+    psr::Entity(registry, attacker).Dispatch(event);
+
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(target).ap == energy_before - 30);
+}
+
+TEST_CASE("TurnCoordinator's OnDamage is a no-op when hit_stun_energy is 0", "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity attacker = registry.CreateEntity();
+    registry.Emplace<psr::ActorComponent>(attacker);
+    coordinator.Subscribe(psr::Entity(registry, attacker));
+
+    entt::entity target = registry.CreateEntity();
+    registry.Emplace<psr::ActorComponent>(target);
+    const int energy_before = registry.GetComponent<psr::ActorComponent>(target).ap;
+
+    psr::AfterDamageEvent event{psr::Entity(registry, target), 5, false, false, 0, 0.3f, /*hit_stun_energy=*/0};
+    psr::Entity(registry, attacker).Dispatch(event);
+
+    REQUIRE(registry.GetComponent<psr::ActorComponent>(target).ap == energy_before);
+}
+
+TEST_CASE("TurnCoordinator's OnDamage safely ignores a target with no ActorComponent", "[TurnCoordinator]")
+{
+    psr::Registry registry;
+    psr::StatusEffectLibrary status_effects;
+    registry.SetStatusEffectLibrary(status_effects);
+    registry.BindComponentEvents<psr::StatusEffectComponent>();
+    psr::TurnCoordinator coordinator(registry);
+
+    entt::entity attacker = registry.CreateEntity();
+    registry.Emplace<psr::ActorComponent>(attacker);
+    coordinator.Subscribe(psr::Entity(registry, attacker));
+
+    entt::entity target = registry.CreateEntity(); // never queued -- no ActorComponent
+
+    psr::AfterDamageEvent event{psr::Entity(registry, target), 5, false, false, 0, 0.3f, /*hit_stun_energy=*/30};
+    REQUIRE_NOTHROW(psr::Entity(registry, attacker).Dispatch(event));
 }

@@ -22,7 +22,7 @@ struct EquipmentComponent
 
     // Contributes this entity's equipped-weapon data and effective stats to
     // BeforeAttackEvent/BeforeTechniqueCastEvent/BeforePhotonArtCastEvent,
-    // dispatched to this same entity by AttackAction/TechniqueAction/
+    // dispatched to this same entity by WeaponAttackAction/TechniqueAction/
     // PhotonArtAction -- see EquipmentComponent.cpp. Wired via
     // Registry::BindComponentEvents<EquipmentComponent>() in
     // RegisterComponents.cpp, so every entity gets this the moment it gains

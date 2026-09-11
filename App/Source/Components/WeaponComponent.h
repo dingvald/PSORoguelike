@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Combat/Element.h"
+#include "Engine/Combat/TargetingMode.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/TypeReflection.h"
 
@@ -81,7 +82,7 @@ struct WeaponComponent
     std::vector<std::uint32_t> photon_art_ids;
 
     // The weapon's own elemental flavor (e.g. a "Fire Saber"): inherited by
-    // both its plain attacks (AttackAction, via BeforeAttackEvent) and its
+    // both its plain attacks (WeaponAttackAction, via BeforeAttackEvent) and its
     // granted Photon Arts (PhotonArtAction, via BeforePhotonArtCastEvent) --
     // a Photon Art is "channeled through" its granting weapon, per
     // Technique.h's own doc comment on how Photon Arts/Techniques are
@@ -93,6 +94,28 @@ struct WeaponComponent
     Element element = Element::None;
     std::uint32_t status_effect_id = 0;
     int status_chance_percent = 0;
+
+    // How this weapon's own attack is targeted when fired explicitly (the
+    // hotbar's Normal Attack slot -- see WeaponAttackAction), mirroring
+    // Technique/PhotonArt's own per-content targeting_mode field. Unused for
+    // a bump-triggered attack, which always swings in the move's direction.
+    TargetingMode targeting_mode = TargetingMode::Directional;
+
+    // true = a ranged weapon (e.g. a Handgun): its attack spawns a real
+    // travelling ProjectileComponent instead of resolving instantly, and
+    // bumping into a hostile with it equipped is a free no-op -- it must be
+    // fired explicitly via the hotbar's tile-select targeting instead. False
+    // (melee) weapons ignore projectile_pierces/projectile_speed entirely.
+    bool fires_projectile = false;
+    bool projectile_pierces = false;
+    int projectile_speed = 5; // hops per full turn-cycle, same meaning as Technique::projectile_speed
+    std::uint32_t projectile_prefab_id = 0; // NameId of the travelling visual entity, ignored unless fires_projectile
+
+    // Extra energy debited from a landed hit's target, on the same 0-100
+    // scale TurnQueue::kDefaultActionThreshold schedules actions with --
+    // deliberately not a whole-turn "ticks" count, so a weapon can author a
+    // sub-turn stun (e.g. 25 = a quarter-action delay). 0 = no stun.
+    int hit_stun_energy = 0;
 
     static void Register(ComponentSchemaRegistrar& reg)
     {
@@ -107,7 +130,13 @@ struct WeaponComponent
             .Data<&WeaponComponent::photon_art_ids>("photon_art_ids")
             .Data<&WeaponComponent::element>("element")
             .Data<&WeaponComponent::status_effect_id>("status_effect_id")
-            .Data<&WeaponComponent::status_chance_percent>("status_chance_percent");
+            .Data<&WeaponComponent::status_chance_percent>("status_chance_percent")
+            .Data<&WeaponComponent::targeting_mode>("targeting_mode")
+            .Data<&WeaponComponent::fires_projectile>("fires_projectile")
+            .Data<&WeaponComponent::projectile_pierces>("projectile_pierces")
+            .Data<&WeaponComponent::projectile_speed>("projectile_speed")
+            .Data<&WeaponComponent::projectile_prefab_id>("projectile_prefab_id")
+            .Data<&WeaponComponent::hit_stun_energy>("hit_stun_energy");
     }
 };
 

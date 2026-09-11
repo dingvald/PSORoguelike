@@ -35,7 +35,7 @@ StateTransition MissionSelectState::Update(GameplayContext& /*context*/, float /
 
 bool MissionSelectState::HandleEvent(Event& event, GameplayContext& /*context*/)
 {
-    // Unlike CharacterScreenState/TechniquesScreenState, there's no
+    // Unlike CharacterScreenState/ActionPaletteState, there's no
     // dedicated toggle key for this screen (it's opened by walking onto the
     // hub's teleporter and pressing Space, not a letter key) -- only
     // Escape closes it.

@@ -15,6 +15,8 @@
 
 namespace psr {
 
+struct AfterDamageEvent;
+
 enum class TurnStep
 {
     AwaitingInput,      // nothing to resolve this call -- no actor is ready, or the player has no pending input
@@ -96,6 +98,16 @@ public:
     // valid until Step() next runs.
     void SetPendingAction(IAction* action) { m_pending_action = action; }
 
+    // Wires one entity's EventHandlerComponent to this coordinator's own
+    // AfterDamageEvent handler -- call once per actor as it's created, same
+    // call sites/rationale as CombatLogBridge::Subscribe (AfterDamageEvent is
+    // dispatched at the *attacker*, not the target, so reacting to a hit an
+    // enemy lands on the player needs a subscription on the enemy, not the
+    // player -- see DamageEvent.h). This is how a weapon's hit_stun_energy
+    // reaches TurnQueue without every hit-landing action needing a
+    // TurnCoordinator& dependency of its own.
+    void Subscribe(Entity actor);
+
     // Advances the turn loop by delta_time: ticks the input buffer, then lets
     // every non-player actor act before yielding once the player has acted
     // (or the player has no pending input). Does NOT tick in-flight tweens
@@ -136,6 +148,8 @@ private:
     void OnActorDestroyed(entt::registry& registry, entt::entity entity);
     void OnPlayerControlledConstructed(entt::registry& registry, entt::entity entity);
     void OnPlayerControlledDestroyed(entt::registry& registry, entt::entity entity);
+    void OnDamage(Entity actor, AfterDamageEvent& event);
+    void ApplyHitStun(entt::entity target, int extra_energy);
 
     Registry* m_registry;
     TurnQueue m_turn_queue;

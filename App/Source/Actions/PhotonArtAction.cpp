@@ -120,7 +120,7 @@ ActionResult PhotonArtAction::Perform(Entity actor)
     for (Vec2 tile : target_tiles)
     {
         // Snapshot before hitting anything -- a lethal hit mutates the
-        // Grid's own occupant vector via RemoveEntity (see AttackAction's
+        // Grid's own occupant vector via RemoveEntity (see WeaponAttackAction's
         // identical precaution).
         const std::vector<entt::entity> occupants = m_grid->GetEntities(tile);
         for (entt::entity occupant : occupants)

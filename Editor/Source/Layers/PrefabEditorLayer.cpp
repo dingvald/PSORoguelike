@@ -205,6 +205,14 @@ namespace {
         return it->value.GetFloat();
     }
 
+    bool ReadBool(const rapidjson::Value& object, const char* key, bool fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsBool())
+            return fallback;
+        return it->value.GetBool();
+    }
+
     RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
     {
         RenderableComponent renderable;
@@ -504,6 +512,12 @@ namespace {
         weapon.element = ReadEnum<Element>(body, "element", weapon.element);
         weapon.status_effect_id = ReadNameId(body, "status_effect_id", 0);
         weapon.status_chance_percent = ReadInt(body, "status_chance_percent", weapon.status_chance_percent);
+        weapon.targeting_mode = ReadEnum<TargetingMode>(body, "targeting_mode", weapon.targeting_mode);
+        weapon.fires_projectile = ReadBool(body, "fires_projectile", weapon.fires_projectile);
+        weapon.projectile_pierces = ReadBool(body, "projectile_pierces", weapon.projectile_pierces);
+        weapon.projectile_speed = ReadInt(body, "projectile_speed", weapon.projectile_speed);
+        weapon.projectile_prefab_id = ReadNameId(body, "projectile_prefab_id", 0);
+        weapon.hit_stun_energy = ReadInt(body, "hit_stun_energy", weapon.hit_stun_energy);
         return weapon;
     }
 
@@ -521,6 +535,13 @@ namespace {
         object.AddMember("element", StringValue(std::string{EnumName(weapon.element)}, allocator), allocator);
         object.AddMember("status_effect_id", WriteNameId(weapon.status_effect_id, allocator), allocator);
         object.AddMember("status_chance_percent", weapon.status_chance_percent, allocator);
+        object.AddMember("targeting_mode", StringValue(std::string{EnumName(weapon.targeting_mode)}, allocator),
+                         allocator);
+        object.AddMember("fires_projectile", weapon.fires_projectile, allocator);
+        object.AddMember("projectile_pierces", weapon.projectile_pierces, allocator);
+        object.AddMember("projectile_speed", weapon.projectile_speed, allocator);
+        object.AddMember("projectile_prefab_id", WriteNameId(weapon.projectile_prefab_id, allocator), allocator);
+        object.AddMember("hit_stun_energy", weapon.hit_stun_energy, allocator);
         return object;
     }
 
@@ -724,6 +745,12 @@ namespace {
           "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-status-effect\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-status-chance\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-targeting-mode\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-fires-projectile\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-projectile-pierces\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-projectile-speed\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-projectile-prefab\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-hit-stun-energy\" class=\"field-row\"></div>"
           "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
           "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
           "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
@@ -1190,6 +1217,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_health = components.HasMember("health") ? ReadHealthBody(components["health"]) : HealthComponent{};
 
     m_weapon = components.HasMember("weapon") ? ReadWeaponBody(components["weapon"]) : WeaponComponent{};
+    m_weapon_projectile_prefab_name = LabelFor(m_weapon.projectile_prefab_id);
     m_armor = components.HasMember("armor") ? ReadArmorBody(components["armor"]) : ArmorComponent{};
     m_item = components.HasMember("item") ? ReadItemBody(components["item"]) : ItemComponent{};
     m_rarity = components.HasMember("rarity") ? ReadRarityBody(components["rarity"]) : RarityComponent{};
@@ -1613,6 +1641,55 @@ void PrefabEditorLayer::RefreshEditForm()
                                          [this](int v)
                                          {
                                              m_weapon.status_chance_percent = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-targeting-mode"))
+        keep(fieldwidgets::BuildEnumField(*row, "targeting_mode", EnumOptions<TargetingMode>(),
+                                          std::string{EnumName(m_weapon.targeting_mode)},
+                                          [this](std::string v)
+                                          {
+                                              m_weapon.targeting_mode = EnumFromString(v, TargetingMode::Directional);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-fires-projectile"))
+        keep(fieldwidgets::BuildBoolField(*row, "fires_projectile", m_weapon.fires_projectile,
+                                          [this](bool v)
+                                          {
+                                              m_weapon.fires_projectile = v;
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-projectile-pierces"))
+        keep(fieldwidgets::BuildBoolField(*row, "projectile_pierces", m_weapon.projectile_pierces,
+                                          [this](bool v)
+                                          {
+                                              m_weapon.projectile_pierces = v;
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-projectile-speed"))
+        keep(fieldwidgets::BuildIntField(*row, "projectile_speed", m_weapon.projectile_speed,
+                                         [this](int v)
+                                         {
+                                             m_weapon.projectile_speed = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-projectile-prefab"))
+        keep(fieldwidgets::BuildNameIdField(
+            *row, "projectile_prefab_id", m_weapon.projectile_prefab_id, m_weapon_projectile_prefab_name,
+            [this](std::uint32_t id, std::string name)
+            {
+                m_weapon.projectile_prefab_id = id;
+                if (!name.empty())
+                {
+                    NameIdRegistry::Register(id, name);
+                    m_weapon_projectile_prefab_name = std::move(name);
+                }
+                MarkDirty();
+            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-hit-stun-energy"))
+        keep(fieldwidgets::BuildIntField(*row, "hit_stun_energy", m_weapon.hit_stun_energy,
+                                         [this](int v)
+                                         {
+                                             m_weapon.hit_stun_energy = v;
                                              MarkDirty();
                                          }));
     if (Rml::Element* row = m_editor->GetElementById("field-armor-slot"))

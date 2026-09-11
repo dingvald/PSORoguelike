@@ -7,7 +7,7 @@
 #include "Messages/MissionSelectMessage.h"
 #include "Messages/ShopMessage.h"
 #include "Messages/StorageMessage.h"
-#include "Messages/TechniquesScreenMessage.h"
+#include "Messages/ActionPaletteMessage.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -35,7 +35,7 @@ struct PlayerDefeatedMessage;
 struct GameRestartedMessage;
 struct LootDropMessage;
 struct CharacterScreenClosedMessage;
-struct TechniquesScreenClosedMessage;
+struct ActionPaletteClosedMessage;
 struct FloatingTextStateMessage;
 struct TargetStateMessage;
 struct HubInteractionPromptMessage;
@@ -83,7 +83,7 @@ public:
     // choice actually mutates game state (Equip/Use/Drop/Remove/
     // AssignToHotbar). Does nothing while both screens are closed, or Escape
     // is pressed with no menu open and no slot pick awaited, so
-    // CharacterScreenState/TechniquesScreenState's own HandleEvent still
+    // CharacterScreenState/ActionPaletteState's own HandleEvent still
     // closes the screen in that case.
     void OnEvent(Event& event) override;
 
@@ -98,12 +98,13 @@ private:
         Inventory
     };
 
-    // Which of the Techniques/Photon Arts screen's two panels currently has
+    // Which of the Action Palette screen's three panels currently has
     // keyboard focus.
-    enum class TechniquesScreenPanel
+    enum class ActionPalettePanel
     {
         Techniques,
-        PhotonArts
+        PhotonArts,
+        NormalAttack
     };
 
     // Which of the Shop screen's two panels currently has keyboard focus.
@@ -129,7 +130,7 @@ private:
     {
         None,
         CharacterScreenItem,
-        TechniquesScreenAbility
+        ActionPaletteAbility
     };
 
     // One row of the open context menu -- action is what ChooseHighlightedMenuOption
@@ -186,10 +187,10 @@ private:
     // Techniques/Photon Arts screen -- two panels, no Stats-equivalent, no
     // context menu (a row's only action is "assign to hotbar", so Space goes
     // straight into the awaiting-slot sub-state via ActivateFocusedTechRow).
-    void OnTechniquesScreenState(const TechniquesScreenMessage& message);
-    void OnTechniquesScreenClosed(const TechniquesScreenClosedMessage& message);
+    void OnActionPaletteState(const ActionPaletteMessage& message);
+    void OnActionPaletteClosed(const ActionPaletteClosedMessage& message);
 
-    // Single-panel variant of OnCharacterScreenState/OnTechniquesScreenState
+    // Single-panel variant of OnCharacterScreenState/OnActionPaletteState
     // for Mission Select -- a flat row list (no panel split), a locked row
     // renders dimmed and can't be focused/selected. Space on a focused
     // unlocked row publishes MissionSelectedMessage directly (no context
@@ -201,7 +202,7 @@ private:
     void ActivateFocusedMissionSelectRow();
     void RenderMissionSelectFocusHighlight();
 
-    // Same two-panel, no-context-menu shape as OnTechniquesScreenState, for
+    // Same two-panel, no-context-menu shape as OnActionPaletteState, for
     // the Shop screen (Stock / Your Items). Space on a focused Stock row
     // publishes ShopBuyRequestedMessage; on a focused Sellable row,
     // ShopSellRequestedMessage.
@@ -289,12 +290,12 @@ private:
     // Techniques-screen navigation helpers -- same split-out-of-OnEvent
     // reasoning as the Character-screen helpers above, just without a
     // context-menu layer (a row has exactly one action).
-    int TechniquesScreenRowCount(TechniquesScreenPanel panel) const;
+    int ActionPaletteRowCount(ActionPalettePanel panel) const;
     void MoveTechPanelFocus(int direction);
     void MoveTechRowFocus(int direction);
     void ActivateFocusedTechRow();
     void RenderTechniquesFocusHighlights();
-    void RenderTechRowFocus(const char* container_id, const char* row_class, TechniquesScreenPanel panel);
+    void RenderTechRowFocus(const char* container_id, const char* row_class, ActionPalettePanel panel);
 
     // "Assign to Hotbar" sub-state: menu closes, hint text changes, and
     // OnEvent waits for a 0-9 keypress (or Escape to cancel) instead of the
@@ -305,7 +306,7 @@ private:
     void BeginAwaitingAbilityHotbarSlot(HotbarSlotType type, std::uint32_t id);
     void CancelAwaitingHotbarSlot();
     void SetCharacterScreenHint(const char* text, bool awaiting);
-    void SetTechniquesScreenHint(const char* text, bool awaiting);
+    void SetActionPaletteHint(const char* text, bool awaiting);
     std::vector<ContextMenuOption> BuildMenuOptions(CharacterScreenPanel panel, int index) const;
     void RenderContextMenu();
     void UpdateMenuHighlightClasses();
@@ -359,16 +360,16 @@ private:
     std::vector<ContextMenuOption> m_menu_options;
     std::vector<std::unique_ptr<RmlClickListener>> m_context_menu_listeners;
 
-    // Rebuilt on every OnTechniquesScreenState call -- same reasoning as
+    // Rebuilt on every OnActionPaletteState call -- same reasoning as
     // m_character_screen_listeners (row count isn't fixed).
-    std::vector<std::unique_ptr<RmlClickListener>> m_techniques_screen_listeners;
+    std::vector<std::unique_ptr<RmlClickListener>> m_action_palette_listeners;
 
     // Same "cache drives OnEvent interception, empty means closed" contract
-    // as m_character_screen_cache. Set in OnTechniquesScreenState, cleared in
-    // OnTechniquesScreenClosed.
-    std::optional<TechniquesScreenMessage> m_techniques_screen_cache;
+    // as m_character_screen_cache. Set in OnActionPaletteState, cleared in
+    // OnActionPaletteClosed.
+    std::optional<ActionPaletteMessage> m_action_palette_cache;
 
-    TechniquesScreenPanel m_tech_focused_panel = TechniquesScreenPanel::Techniques;
+    ActionPalettePanel m_tech_focused_panel = ActionPalettePanel::Techniques;
     int m_tech_focused_row = 0;
 
     // Rebuilt on every OnMissionSelectState call -- same reasoning as
@@ -398,8 +399,8 @@ private:
     // depends on the source.
     HotbarAssignSource m_awaiting_hotbar_assign_source = HotbarAssignSource::None;
     int m_awaiting_hotbar_inventory_index = -1;                            // CharacterScreenItem
-    HotbarSlotType m_awaiting_hotbar_ability_type = HotbarSlotType::Empty; // TechniquesScreenAbility
-    std::uint32_t m_awaiting_hotbar_ability_id = 0;                        // TechniquesScreenAbility
+    HotbarSlotType m_awaiting_hotbar_ability_type = HotbarSlotType::Empty; // ActionPaletteAbility
+    std::uint32_t m_awaiting_hotbar_ability_id = 0;                        // ActionPaletteAbility
 
     static constexpr std::size_t kMaxLogLines = 50;
     std::deque<std::string> m_log_lines; // markup text (see LogMarkup.h) from CombatLogEntryMessage/LootDropMessage

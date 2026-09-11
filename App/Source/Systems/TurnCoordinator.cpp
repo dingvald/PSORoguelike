@@ -6,6 +6,8 @@
 #include "Components/TweenComponent.h"
 #include "Engine/Actions/ActionExecutor.h"
 #include "Engine/Actions/TurnEvent.h"
+#include "Engine/Combat/DamageEvent.h"
+#include "Engine/ECS/EventHandlerComponent.h"
 
 namespace psr {
 
@@ -55,6 +57,33 @@ void TurnCoordinator::OnPlayerControlledDestroyed(entt::registry& /*registry*/, 
 void TurnCoordinator::PressKey(int key_code) { m_input_buffer.Press(key_code); }
 
 void TurnCoordinator::ReleaseKey(int key_code) { m_input_buffer.Release(key_code); }
+
+void TurnCoordinator::Subscribe(Entity actor)
+{
+    EventHandlerComponent& events = actor.GetOrEmplace<EventHandlerComponent>();
+    events.Subscribe<AfterDamageEvent, TurnCoordinator>([this](Entity attacker, AfterDamageEvent& event)
+                                                        { OnDamage(attacker, event); });
+}
+
+void TurnCoordinator::OnDamage(Entity /*actor*/, AfterDamageEvent& event)
+{
+    if (event.hit_stun_energy <= 0)
+        return;
+    ApplyHitStun(event.target.Handle(), event.hit_stun_energy);
+}
+
+void TurnCoordinator::ApplyHitStun(entt::entity target, int extra_energy)
+{
+    if (!m_turn_queue.Contains(target))
+        return;
+    ActorComponent* actor_component = m_registry->TryGetComponent<ActorComponent>(target);
+    if (!actor_component)
+        return;
+
+    const int energy = m_turn_queue.GetEnergy(target) - extra_energy;
+    m_turn_queue.Requeue(target, energy);
+    actor_component->ap = energy;
+}
 
 TurnStep TurnCoordinator::Step(float delta_time)
 {

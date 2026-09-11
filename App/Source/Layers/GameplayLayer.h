@@ -40,7 +40,7 @@
 #include "States/ShopState.h"
 #include "States/StorageState.h"
 #include "States/TargetSelectionState.h"
-#include "States/TechniquesScreenState.h"
+#include "States/ActionPaletteState.h"
 #include "Systems/CombatLogBridge.h"
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
@@ -72,7 +72,7 @@ struct InventoryItemActivatedMessage;
 struct InventoryItemHoverChangedMessage;
 struct EquipmentSlotActivatedMessage;
 struct HotbarSlotAssignedMessage;
-struct TechniquesScreenSlotAssignedMessage;
+struct ActionPaletteSlotAssignedMessage;
 struct MissionSelectedMessage;
 struct ShopBuyRequestedMessage;
 struct ShopSellRequestedMessage;
@@ -282,9 +282,9 @@ private:
 
     // Same "Assign to Hotbar" flow as OnHotbarSlotAssigned, but for the
     // Techniques/Photon Arts screen's rows (see AssignAbilityToHotbarSlot) --
-    // gated on m_techniques_screen_state being on top instead of
+    // gated on m_action_palette_state being on top instead of
     // m_character_screen_state.
-    void OnTechniquesScreenSlotAssigned(const TechniquesScreenSlotAssignedMessage& message);
+    void OnActionPaletteSlotAssigned(const ActionPaletteSlotAssignedMessage& message);
 
     // Published by HudLayer when the player picks an unlocked Mission Select
     // row; re-validates IsDungeonUnlocked (defense in depth -- HudLayer
@@ -553,7 +553,7 @@ private:
     // matters: m_target_selection_state/m_game_over_state/m_animation_state
     // must outlive m_exploring_state (which holds references to all three)
     // and all states must outlive m_state_machine's use of any of them.
-    // m_character_screen_state/m_techniques_screen_state/
+    // m_character_screen_state/m_action_palette_state/
     // m_mission_select_state/m_shop_state/m_storage_state aren't referenced
     // by ExploringState's constructor (unlike the other three) -- each is
     // pushed directly from GameplayLayer::OnEvent's own key/interaction
@@ -565,7 +565,7 @@ private:
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
     CharacterScreenState m_character_screen_state{m_affixes, m_growth_curve};
-    TechniquesScreenState m_techniques_screen_state{m_techniques, m_photon_arts};
+    ActionPaletteState m_action_palette_state{m_techniques, m_photon_arts};
     MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};
     StorageState m_storage_state{m_affixes};

@@ -1,6 +1,6 @@
 #include "Systems/MissFlashEffectSystem.h"
 
-#include "Actions/AttackAction.h"
+#include "Actions/WeaponAttackAction.h"
 #include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -183,7 +183,7 @@ TEST_CASE("MissFlashEffectSystem still spawns after the attacking enemy dies mid
           "[MissFlashEffectSystem][stress]")
 {
     // End-to-end version of the Registry-level regression test above, through
-    // the real AttackAction/EventHandlerComponent::Dispatch/HealthSystem/
+    // the real WeaponAttackAction/EventHandlerComponent::Dispatch/HealthSystem/
     // DeathSystem/MissFlashEffectSystem pipeline: a nested DeathEvent
     // dispatch on the killed entity (see HealthSystem::ApplyIncomingDamage)
     // triggers the same destroy()-mid-iteration corruption, and the
@@ -246,7 +246,7 @@ TEST_CASE("MissFlashEffectSystem still spawns after the attacking enemy dies mid
     miss_flash.Subscribe(enemy);
 
     std::mt19937 rng{1};
-    psr::AttackAction player_attack(grid, affixes, psr::Vec2{1, 0}, rng);
+    psr::WeaponAttackAction player_attack(grid, affixes, rng, psr::Vec2{1, 0});
     for (int attempt = 0; attempt < 50 && registry.IsValid(enemy_handle); ++attempt)
     {
         player_attack.Perform(player);

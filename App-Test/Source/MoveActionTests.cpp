@@ -1,4 +1,4 @@
-#include "Actions/AttackAction.h"
+#include "Actions/WeaponAttackAction.h"
 #include "Actions/MoveAction.h"
 
 #include "Combat/StatusEffectApplication.h"
@@ -148,7 +148,7 @@ TEST_CASE("MoveAction onto a tile occupied by a non-blocking entity still succee
     REQUIRE(grid.GetEntities(psr::Vec2{2, 1}) == std::vector<entt::entity>{item, handle});
 }
 
-TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to an AttackAction", "[MoveAction]")
+TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a WeaponAttackAction", "[MoveAction]")
 {
     psr::Registry registry;
     psr::Grid grid{3, 3};
@@ -159,8 +159,8 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
     grid.AddEntity(psr::Vec2{1, 1}, handle);
     actor.Emplace<psr::PlayerControlledComponent>();
 
-    // Bump-to-attack needs a weapon equipped (AttackAction is a free no-op
-    // otherwise), consistent with attacking via any other route.
+    // Bump-to-attack needs a weapon equipped (WeaponAttackAction is a free
+    // no-op otherwise), consistent with attacking via any other route.
     entt::entity weapon = registry.CreateEntity();
     registry.Emplace<psr::WeaponComponent>(weapon);
     registry.Emplace<psr::StatsComponent>(weapon);
@@ -180,16 +180,64 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
 
     std::mt19937 rng{1};
     psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
-    psr::ActionResult result = psr::ResolveAction(action, actor); // runs the AttackAction fallback in the same turn
+    psr::ActionResult result =
+        psr::ResolveAction(action, actor); // runs the WeaponAttackAction fallback in the same turn
 
-    // The bump itself is free (cost 0); only the resolved AttackAction's own
-    // cost is ever applied -- actor never actually steps onto the enemy's
-    // tile. The fallback AttackAction found a target, so it queues its own
-    // lunge-and-return Tween pair on the actor -- MoveAction itself never
-    // emplaces one in this branch (see MoveAction.h's own doc comment).
-    REQUIRE(result.cost == psr::AttackAction::kAttackCost);
+    // The bump itself is free (cost 0); only the resolved WeaponAttackAction's
+    // own cost is ever applied -- actor never actually steps onto the
+    // enemy's tile. The fallback WeaponAttackAction found a target, so it
+    // queues its own lunge-and-return Tween pair on the actor -- MoveAction
+    // itself never emplaces one in this branch (see MoveAction.h's own doc
+    // comment).
+    REQUIRE(result.cost == psr::WeaponAttackAction::kWeaponAttackCost);
     REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 1});
     REQUIRE(actor.Get<psr::TweenComponent>().queue.size() == 2);
+}
+
+TEST_CASE("MoveAction bumping into a hostile with a fires_projectile weapon equipped is a true no-op",
+          "[MoveAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{3, 3};
+    psr::SetUpCombatRegistry(registry, grid, g_no_affixes, g_no_status_effects);
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+    actor.Emplace<psr::Position>(psr::Vec2{1, 1});
+    grid.AddEntity(psr::Vec2{1, 1}, handle);
+    actor.Emplace<psr::PlayerControlledComponent>();
+
+    entt::entity weapon = registry.CreateEntity();
+    psr::WeaponComponent weapon_component;
+    weapon_component.range_shape = psr::WeaponRangeShape::Line;
+    weapon_component.range = 5;
+    weapon_component.fires_projectile = true;
+    registry.Emplace<psr::WeaponComponent>(weapon, weapon_component);
+    registry.Emplace<psr::StatsComponent>(weapon);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::StatsComponent& actor_stats = actor.GetOrEmplace<psr::StatsComponent>();
+    actor_stats.atp = 80;
+    actor_stats.ata = 200;
+
+    entt::entity enemy_handle = registry.CreateEntity();
+    psr::Entity enemy(registry, enemy_handle);
+    registry.Emplace<psr::BlocksMovementComponent>(enemy_handle);
+    psr::HealthComponent enemy_health;
+    enemy_health.current_hp = 10;
+    enemy_health.max_hp = 10;
+    enemy.Emplace<psr::HealthComponent>(enemy_health);
+    grid.AddEntity(psr::Vec2{2, 1}, enemy_handle);
+
+    std::mt19937 rng{1};
+    psr::MoveAction action(grid, g_no_affixes, psr::Vec2{1, 0}, rng);
+    psr::ActionResult result = psr::ResolveAction(action, actor);
+
+    // A ranged weapon's attack must be fired explicitly through the hotbar's
+    // tile-select targeting -- bumping into a hostile with one equipped
+    // never attacks and never moves.
+    REQUIRE(result.cost == 0);
+    REQUIRE(actor.Get<psr::Position>().tile == psr::Vec2{1, 1});
+    REQUIRE_FALSE(actor.Has<psr::TweenComponent>());
+    REQUIRE(enemy.Get<psr::HealthComponent>().current_hp == 10);
 }
 
 TEST_CASE("MoveAction is a free no-op when a BeforeMoveEvent handler cancels it", "[MoveAction]")

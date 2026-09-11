@@ -10,7 +10,7 @@ namespace psr {
 // One in-flight render-offset interpolation: eases from start_offset to
 // end_offset over duration, in tile-fraction units (see
 // RegistryRenderableLookup::GetRenderOffset). on_completion, if set, fires
-// exactly once when this Tween finishes -- e.g. AttackAction uses it to defer
+// exactly once when this Tween finishes -- e.g. WeaponAttackAction uses it to defer
 // damage application until a lunge-toward-the-target Tween completes.
 struct Tween
 {

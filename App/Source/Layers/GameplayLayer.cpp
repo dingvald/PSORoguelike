@@ -4,6 +4,7 @@
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Actions/UseItemAction.h"
+#include "Actions/WeaponAttackAction.h"
 #include "ApplicationFilepaths.h"
 #include "Areas/AreaLibraryFile.h"
 #include "Combat/DisplayName.h"
@@ -85,7 +86,7 @@
 #include "Messages/StorageMessage.h"
 #include "Messages/StorageWithdrawRequestedMessage.h"
 #include "Messages/TargetStateMessage.h"
-#include "Messages/TechniquesScreenSlotAssignedMessage.h"
+#include "Messages/ActionPaletteSlotAssignedMessage.h"
 #include "Messages/TeleporterPromptMessage.h"
 #include "Missions/AreaProgression.h"
 #include "Missions/TeleporterInteraction.h"
@@ -164,7 +165,7 @@ void GameplayLayer::OnAttach()
     Subscribe<InventoryItemHoverChangedMessage>(&GameplayLayer::OnInventoryItemHoverChanged, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
     Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
-    Subscribe<TechniquesScreenSlotAssignedMessage>(&GameplayLayer::OnTechniquesScreenSlotAssigned, this);
+    Subscribe<ActionPaletteSlotAssignedMessage>(&GameplayLayer::OnActionPaletteSlotAssigned, this);
     Subscribe<MissionSelectedMessage>(&GameplayLayer::OnMissionSelected, this);
     Subscribe<ShopBuyRequestedMessage>(&GameplayLayer::OnShopBuyRequested, this);
     Subscribe<ShopSellRequestedMessage>(&GameplayLayer::OnShopSellRequested, this);
@@ -276,6 +277,7 @@ void GameplayLayer::SpawnNewCharacter()
     }
 
     HotbarComponent hotbar;
+    hotbar.slots[0] = HotbarSlot{HotbarSlotType::NormalAttack, 0};
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
         equipment && equipment->weapon != entt::null)
     {
@@ -434,6 +436,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
         m_damage_text_system.Subscribe(Entity(m_registry, m_player));
         m_heal_text_system.Subscribe(Entity(m_registry, m_player));
+        m_turn_coordinator->Subscribe(Entity(m_registry, m_player));
     }
     if (!m_loot_drop_system)
     {
@@ -489,6 +492,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
         m_on_hit_effect_system->Subscribe(Entity(m_registry, entity));
         m_heal_effect_system->Subscribe(Entity(m_registry, entity));
+        m_turn_coordinator->Subscribe(Entity(m_registry, entity));
 
         if (const Position* position = m_registry.TryGetComponent<Position>(entity))
         {
@@ -758,6 +762,23 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
         m_turn_coordinator->SetPendingAction(m_pending_slot_action.get());
         return true;
     }
+    case HotbarSlotType::NormalAttack:
+    {
+        const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
+        if (!equipment || equipment->weapon == entt::null)
+            return false;
+        const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon);
+        if (!weapon)
+            return false;
+
+        m_pending_slot_action = std::make_unique<WeaponAttackAction>(*m_grid, m_affixes, m_rng);
+        TargetRequest request{m_pending_slot_action.get(), weapon->targeting_mode, weapon->range_shape,
+                              weapon->range};
+        request.is_projectile = weapon->fires_projectile;
+        request.projectile_pierces = weapon->projectile_pierces;
+        m_turn_coordinator->RequestTargeting(request);
+        return true;
+    }
     case HotbarSlotType::Empty:
     default:
         return false;
@@ -841,9 +862,9 @@ void GameplayLayer::OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& messag
         PublishHotbarState();
 }
 
-void GameplayLayer::OnTechniquesScreenSlotAssigned(const TechniquesScreenSlotAssignedMessage& message)
+void GameplayLayer::OnActionPaletteSlotAssigned(const ActionPaletteSlotAssignedMessage& message)
 {
-    if (m_state_machine.Top() != &m_techniques_screen_state || !m_registry.IsValid(m_player))
+    if (m_state_machine.Top() != &m_action_palette_state || !m_registry.IsValid(m_player))
         return;
 
     if (AssignAbilityToHotbarSlot(Entity(m_registry, m_player), message.type, message.id, message.hotbar_slot))
@@ -1108,10 +1129,10 @@ void GameplayLayer::OnEvent(Event& event)
                     return true;
                 }
 
-                if (key_event.GetKeyCode() == SDLK_T)
+                if (key_event.GetKeyCode() == SDLK_P)
                 {
                     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
-                    m_state_machine.Push(m_techniques_screen_state, context);
+                    m_state_machine.Push(m_action_palette_state, context);
                     return true;
                 }
 

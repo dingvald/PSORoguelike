@@ -13,8 +13,9 @@ namespace psr {
 // free no-op (cost 0, no turn consumed). A target tile occupied by a
 // BlocksMovementComponent entity is either: a free no-op, if nothing
 // attackable/hostile is there (a wall/obstacle); or a bump-to-attack --
-// returned as an AttackAction fallback (see ActionResult::fallback,
-// ResolveAction) rather than performed here, if the occupant has a
+// returned as a WeaponAttackAction fallback with the move's own offset as a
+// fixed direction (see ActionResult::fallback, ResolveAction) rather than
+// performed here, if the occupant has a
 // HealthComponent and is hostile (see Hostility.h). On success, Position
 // snaps to the target tile immediately and a Tween easing the render offset
 // in from the old tile is queued onto TweenComponent -- unlike this class's

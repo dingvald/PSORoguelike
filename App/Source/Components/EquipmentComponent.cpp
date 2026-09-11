@@ -52,6 +52,11 @@ namespace {
         event.element = weapon->element;
         event.status_effect_id = weapon->status_effect_id;
         event.status_chance_percent = weapon->status_chance_percent;
+        event.fires_projectile = weapon->fires_projectile;
+        event.projectile_pierces = weapon->projectile_pierces;
+        event.projectile_speed = weapon->projectile_speed;
+        event.projectile_prefab_id = weapon->projectile_prefab_id;
+        event.hit_stun_energy = weapon->hit_stun_energy;
 
         if (const OnHitEffectComponent* hit_effect = FindEquippedWeaponHitEffect(actor))
         {

@@ -1,6 +1,6 @@
 #include "Actions/MoveAction.h"
 
-#include "Actions/AttackAction.h"
+#include "Actions/WeaponAttackAction.h"
 #include "Combat/ActionCost.h"
 #include "Combat/Hostility.h"
 #include "Combat/ProjectileImpact.h"
@@ -56,7 +56,7 @@ ActionResult MoveAction::Perform(Entity actor)
         if (!IsHostile(actor, Entity(registry, occupant)))
             continue;
 
-        return ActionResult(0, std::make_unique<AttackAction>(*m_grid, *m_affixes, offset, *m_rng));
+        return ActionResult(0, std::make_unique<WeaponAttackAction>(*m_grid, *m_affixes, *m_rng, offset));
     }
     if (blocked)
         return ActionResult(0);

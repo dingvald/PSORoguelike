@@ -63,6 +63,15 @@ bool AssignAbilityToHotbarSlot(Entity actor, HotbarSlotType type, std::uint32_t 
         if (!is_granted)
             return false;
     }
+    else if (type == HotbarSlotType::NormalAttack)
+    {
+        // "Normal Attack" always means "whatever is currently equipped," not
+        // a fixed id -- valid whenever the actor has a live equipped weapon.
+        const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
+        if (!equipment || equipment->weapon == entt::null)
+            return false;
+        id = 0;
+    }
     else
     {
         return false;

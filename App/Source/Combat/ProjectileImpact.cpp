@@ -8,6 +8,7 @@
 #include "Combat/StatusEffectHooks.h"
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/ProjectileComponent.h"
+#include "Components/RaceComponent.h"
 #include "Components/StatsComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/HealthComponent.h"
@@ -55,18 +56,41 @@ bool ResolveProjectileImpact(Registry& registry, const Grid& grid, const AffixLi
             continue;
         }
 
-        const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
-        const int resistance_percent =
-            defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
-        int damage = static_cast<int>(std::lround(
-            ComputeTechniqueDamage(projectile.attacker_stats.mst, resistance_percent) * projectile.power_multiplier));
+        int damage;
+        bool is_critical = false;
+        if (projectile.physical_damage)
+        {
+            // Physical (ATP-vs-DFP, race-bonus, crit) formula -- same as
+            // WeaponAttackAction's melee branch, unlike the MST-based magic
+            // formula below every Technique projectile still uses. No
+            // ElementalResistanceComponent mitigation here, matching every
+            // other physical attack's convention (resistance only reduces
+            // magic damage; a physical weapon's element only feeds
+            // MaybeApplyElementalStatus below).
+            const RaceComponent* defender_race = target.TryGet<RaceComponent>();
+            const std::uint32_t defender_race_id = defender_race ? defender_race->race_id : 0;
+            const int boosted_atp =
+                ApplyRaceBonus(projectile.attacker_stats.atp, projectile.race_bonuses, defender_race_id);
+            std::uniform_real_distribution<float> variance_roll(0.9f, 1.1f);
+            damage = ComputeDamage(boosted_atp, defender_stats.dfp, variance_roll(rng));
+            is_critical = unit_roll(rng) < ComputeCritChance(projectile.attacker_stats.lck);
+            damage = ApplyCritical(damage, is_critical);
+        }
+        else
+        {
+            const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+            const int resistance_percent =
+                defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
+            damage = static_cast<int>(std::lround(
+                ComputeTechniqueDamage(projectile.attacker_stats.mst, resistance_percent) * projectile.power_multiplier));
+        }
 
         BeforeDamageEvent before{target, damage};
         source.Dispatch(before);
         damage = before.incoming_damage;
 
-        IncomingDamageEvent incoming{source, damage, false, projectile.hit_effect_prefab_id,
-                                     projectile.hit_effect_duration};
+        IncomingDamageEvent incoming{source,      damage, is_critical, projectile.hit_effect_prefab_id,
+                                     projectile.hit_effect_duration, projectile.hit_stun_energy};
         target.Dispatch(incoming);
 
         if (!target.IsValid())

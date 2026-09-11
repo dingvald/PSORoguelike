@@ -13,7 +13,7 @@ namespace psr {
 // GameplayLayer subscribes and routes to AssignAbilityToHotbarSlot
 // (Items/Hotbar.h) -- free/instant, same reasoning as the Character screen's
 // own hotbar-assign path.
-struct TechniquesScreenSlotAssignedMessage
+struct ActionPaletteSlotAssignedMessage
 {
     HotbarSlotType type = HotbarSlotType::Empty; // Technique or PhotonArt
     std::uint32_t id = 0;

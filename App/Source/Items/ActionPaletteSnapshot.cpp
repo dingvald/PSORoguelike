@@ -1,4 +1,4 @@
-#include "Items/TechniquesScreenSnapshot.h"
+#include "Items/ActionPaletteSnapshot.h"
 
 #include "ApplicationFilepaths.h"
 #include "Combat/PhotonArtLibrary.h"
@@ -8,7 +8,7 @@
 #include "Components/KnownTechniquesComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/Registry.h"
-#include "Messages/TechniquesScreenMessage.h"
+#include "Messages/ActionPaletteMessage.h"
 
 #include <filesystem>
 
@@ -18,7 +18,7 @@ namespace {
 
     // Absolute path if a "<id_string>.png" icon exists under
     // ApplicationFilepaths::TexturesPath/"Techniques", empty string
-    // otherwise -- see TechniquesScreenSnapshot.h's own doc comment for why
+    // otherwise -- see ActionPaletteSnapshot.h's own doc comment for why
     // this must be absolute (RmlUi's <img src> resolves relative to process
     // CWD, not the .rml's own folder).
     std::string ResolveIconPath(const std::string& id_string)
@@ -32,18 +32,17 @@ namespace {
 
 } // namespace
 
-TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::entity player,
-                                                      const TechniqueLibrary& techniques,
-                                                      const PhotonArtLibrary& photon_arts)
+ActionPaletteMessage BuildActionPaletteMessage(Registry& registry, entt::entity player,
+                                               const TechniqueLibrary& techniques, const PhotonArtLibrary& photon_arts)
 {
-    TechniquesScreenMessage message;
+    ActionPaletteMessage message;
 
     if (const KnownTechniquesComponent* known = registry.TryGetComponent<KnownTechniquesComponent>(player))
     {
         message.techniques.reserve(known->known.size());
         for (const KnownTechniqueEntry& entry : known->known)
         {
-            TechniquesScreenMessage::TechniqueEntry technique_entry;
+            ActionPaletteMessage::TechniqueEntry technique_entry;
             technique_entry.technique_id = entry.technique_id;
             technique_entry.tier = entry.tier;
             if (const Technique* technique = techniques.Find(entry.technique_id))
@@ -64,7 +63,7 @@ TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::e
             message.photon_arts.reserve(weapon->photon_art_ids.size());
             for (std::uint32_t photon_art_id : weapon->photon_art_ids)
             {
-                TechniquesScreenMessage::PhotonArtEntry entry;
+                ActionPaletteMessage::PhotonArtEntry entry;
                 entry.photon_art_id = photon_art_id;
                 if (const PhotonArt* photon_art = photon_arts.Find(photon_art_id))
                 {
@@ -73,6 +72,13 @@ TechniquesScreenMessage BuildTechniquesScreenMessage(Registry& registry, entt::e
                 }
                 message.photon_arts.push_back(std::move(entry));
             }
+
+            // A plain "Normal Attack" label rather than the equipped
+            // weapon's own decorated name (FormatItemDisplayName) -- this
+            // row names the action (WeaponAttackAction), consistently
+            // regardless of which weapon happens to be equipped, the same
+            // way a Technique/PhotonArt row names the spell/art, not "cast".
+            message.normal_attack = ActionPaletteMessage::NormalAttackEntry{"Normal Attack"};
         }
     }
 

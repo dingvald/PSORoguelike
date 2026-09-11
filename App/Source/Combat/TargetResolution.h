@@ -14,9 +14,9 @@ namespace psr {
 // stopping at grid edge or a wall (a BlocksMovementComponent occupant with no
 // HealthComponent); Cone3 is the forward tile plus its two perpendicular
 // neighbours; Surrounding is all four cardinal-adjacent tiles, ignoring
-// direction. Shared by AttackAction (WeaponComponent's own range_shape/range)
+// direction. Shared by WeaponAttackAction (WeaponComponent's own range_shape/range)
 // and PhotonArtAction/TechniqueAction (PhotonArt/Technique's own fields of the
-// same name) -- originally AttackAction's file-local helper, lifted out once a
+// same name) -- originally WeaponAttackAction's file-local helper, lifted out once a
 // second and third call site needed the identical geometry against a
 // different owning struct each time.
 std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction,

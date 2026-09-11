@@ -220,6 +220,7 @@ private:
     std::string m_race_name;
     HealthComponent m_health;
     WeaponComponent m_weapon;
+    std::string m_weapon_projectile_prefab_name;
     ArmorComponent m_armor;
     ItemComponent m_item;
     RarityComponent m_rarity;
