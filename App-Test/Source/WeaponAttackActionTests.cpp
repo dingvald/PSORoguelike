@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/KnockbackMultiplierComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
@@ -473,6 +474,30 @@ TEST_CASE("WeaponAttackAction does not knock a target into a blocked destination
     REQUIRE(enemy.Get<psr::Position>().tile == psr::Vec2{2, 1}); // knockback silently skipped
 }
 
+TEST_CASE("WeaponAttackAction does not knock back a target with a zero KnockbackMultiplierComponent",
+          "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10000, /*player=*/false);
+    enemy.Emplace<psr::KnockbackMultiplierComponent>(psr::KnockbackMultiplierComponent{0.0f});
+
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0});
+    action.Perform(actor);
+    DrainAttackTween(registry);
+
+    REQUIRE(enemy.Get<psr::Position>().tile == psr::Vec2{2, 1}); // knockback suppressed
+}
+
 TEST_CASE("WeaponAttackAction is a free no-op when a fixed-direction (bump) call targets a fires_projectile weapon",
           "[WeaponAttackAction]")
 {
@@ -519,6 +544,41 @@ TEST_CASE("WeaponAttackAction with no fixed direction resolves via SelectedTarge
     // No fixed direction -- this is how GameplayLayer::TryActivateSlot's
     // hotbar Normal Attack slot invokes it, after TargetSelectionState has
     // already written SelectedTargetComponent.
+    psr::WeaponAttackAction action(grid, affixes, rng);
+
+    bool destroyed = false;
+    for (int attempt = 0; attempt < 50 && !destroyed; ++attempt)
+    {
+        action.Perform(actor);
+        DrainAttackTween(registry);
+        if (!registry.IsValid(enemy_handle))
+            destroyed = true;
+    }
+
+    REQUIRE(destroyed);
+}
+
+TEST_CASE("WeaponAttackAction resolves a diagonally-selected target instead of snapping it to a cardinal tile",
+          "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/80, /*ata=*/200, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    // Diagonal offset {1,1} -- a cardinal-only snap would flatten this to
+    // {1,0} (tile {2,1}), missing the defender placed at the true diagonal
+    // neighbour {2,2}.
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{2, 2}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {2, 2}, /*dfp=*/0, /*evp=*/0, /*hp=*/10, /*player=*/false);
+    const entt::entity enemy_handle = enemy.Handle();
+
     psr::WeaponAttackAction action(grid, affixes, rng);
 
     bool destroyed = false;

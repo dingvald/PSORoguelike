@@ -35,16 +35,18 @@ struct SocketConnection
 
 // One lock gate: edge is a bridge connection on the entrance-to-exit path
 // (see DungeonStitcher.cpp's Phase 4) gating entry into inside_room_index --
-// always a Room/Vault/BossArena piece, since only those get a physical door
-// -- unlocked per that piece's own DungeonPiece::preferred_unlock_condition.
-// When unlock_condition is Switch, switch_room_index/switch_cell are a
-// generator-picked room and world cell -- guaranteed reachable from the
-// entrance without crossing `edge` or any earlier-processed lock -- where
-// DungeonInstantiator stamps a single switch entity; that room can be, and
-// often is, a different room than the one the door itself sits in (the whole
-// point of a switch puzzle). Unused for RoomCleared, which instead unlocks
-// once every entity spawned into inside_room_index has died (see
-// RoomClearDoorSystem).
+// always a Room/Vault/BossArena piece whose own DungeonPiece::
+// preferred_unlock_condition is Switch, since a RoomCleared-preferring piece
+// is never chosen here any more (pre-locking its door at generation time,
+// before the player could ever enter to start the kill count that would
+// unlock it, made it an unenterable dead end -- see DungeonInstantiator::
+// room_entry_doors / RoomClearDoorSystem::LockRoomOnEntry for how RoomCleared
+// gating actually works instead, automatically, for any non-Corridor piece
+// with spawns). switch_room_index/switch_cell are a generator-picked room and
+// world cell -- guaranteed reachable from the entrance without crossing
+// `edge` or any earlier-processed lock -- where DungeonInstantiator stamps a
+// single switch entity; that room can be, and often is, a different room
+// than the one the door itself sits in (the whole point of a switch puzzle).
 struct LockAnnotation
 {
     SocketConnection edge;
@@ -96,9 +98,11 @@ struct DungeonLayout
 // straight to fallback-stamped dead ends rather than fed back into Phase
 // 2/3 -- adds loopback connections for multiple paths (Phase 2), resolves
 // remaining unused sockets as dead ends (Phase 3), and places dungeon.lock_count
-// locks gating Room/Vault/BossArena entrances on bridge connections of the
-// entrance-to-exit path, each unlocked per its gated piece's own
-// preferred_unlock_condition (Phase 4). Sockets are read directly off each piece's own
+// Switch locks gating Room/Vault/BossArena entrances on bridge connections of
+// the entrance-to-exit path, restricted to pieces whose own
+// preferred_unlock_condition is Switch (Phase 4) -- a RoomCleared-preferring
+// piece is never picked here; see LockAnnotation's own doc comment for why.
+// Sockets are read directly off each piece's own
 // DungeonPiece::sockets -- no ECS/Registry lookup involved, since a socket
 // is piece-authored data, not a stamped entity. Throws DungeonError if no
 // Entrance/Exit piece is available in dungeon.pieces (filtered against

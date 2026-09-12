@@ -60,6 +60,18 @@ struct DungeonInstantiation
     // any group without one. RoomClearDoorSystem consumes this to know which
     // doors to unlock once a room's spawned enemies are all dead.
     std::unordered_map<std::uint32_t, std::vector<entt::entity>> room_cleared_doors;
+
+    // group_id -> every plain (currently-unlocked, no DoorComponent) door
+    // entity auto-stamped at a connected socket bordering that room -- empty
+    // for any group with no such door (e.g. a Corridor, or a room with none
+    // of its sockets left unclaimed by a Switch lock). RoomClearDoorSystem::
+    // LockRoomOnEntry consumes this the first time the player steps into that
+    // room: if it still has spawns pending or alive, every door here is
+    // converted to a locked one and moved into room_cleared_doors' own
+    // bookkeeping so the same on-clear unlock path covers it. A room with no
+    // authored spawns, or an Entrance/Exit, simply never has this list acted
+    // on -- its doors stay open forever.
+    std::unordered_map<std::uint32_t, std::vector<entt::entity>> room_entry_doors;
 };
 
 // Stamps every placed piece's cells into grid as live entities: each cell's
@@ -90,11 +102,12 @@ struct DungeonInstantiation
 // layout.locked_door_prefab_id at its edge's world cell (tagged with a
 // DoorComponent), and -- for a Switch-condition lock -- layout.switch_prefab_id
 // at its switch_cell (tagged with a SwitchComponent wired to the door). Every
-// remaining connected socket (layout.connections) bordering a Room/Vault/
-// BossArena piece on either side, not already claimed by a lock, stamps
+// remaining connected socket (layout.connections) bordering any non-Corridor
+// piece on either side, not already claimed by a lock, stamps
 // layout.unlocked_door_prefab_id instead -- a plain always-open door with no
-// component of its own. A corridor-to-corridor connection stamps nothing, same
-// as before this feature existed.
+// component of its own, recorded into the result's room_entry_doors for
+// whichever non-Corridor side(s) border it. A corridor-to-corridor connection
+// stamps nothing, same as before this feature existed.
 DungeonInstantiation InstantiateDungeon(const DungeonLayout& layout, const PieceLibrary& library, Vec2 offset,
                                         Registry& registry, Grid& grid);
 

@@ -13,6 +13,7 @@
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InteractableComponent.h"
+#include "Components/KnockbackMultiplierComponent.h"
 #include "Components/OnHitEffectComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -59,6 +60,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     InnateWeaponComponent::Register(reg);
     InteractableComponent::Register(reg);
     ItemComponent::Register(reg);
+    KnockbackMultiplierComponent::Register(reg);
     ModComponent::Register(reg);
     OnHitEffectComponent::Register(reg);
     PackFollowerComponent::Register(reg);

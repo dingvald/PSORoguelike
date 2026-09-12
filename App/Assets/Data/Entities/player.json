@@ -5,6 +5,9 @@
       "weapon_prefab_id": "weapons.saber"
     },
     "blocks_movement": {},
+    "knockback_multiplier": {
+      "multiplier": 0.0
+    },
     "renderable": {
       "texture_id": "human_male",
       "texture_size": {

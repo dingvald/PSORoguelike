@@ -212,15 +212,20 @@ private:
     // TransitionToWorld call, not just a death restart.
     void RepublishHudStateAfterTransition();
 
-    // Called with the placed-piece index the player's tile currently
+    // Called with the player's current tile and the placed-piece index it
     // resolves to (via m_room_map->GetRoom), both once right after a
     // TransitionToWorld and every OnUpdate tick thereafter. Triggers
     // m_spawn_wave_system's room-entry-gated first wave exactly on a real
     // room change (never on every frame the player stays put, and safely
     // idempotent on re-entry -- see SpawnWaveSystem::TriggerRoomEntered's
     // own doc comment), then forwards to m_room_visibility->Update for fog
-    // of war, same as before this existed.
-    void EnterRoom(std::optional<std::uint32_t> room);
+    // of war, same as before this existed. Holds off on all of that --
+    // including the visibility update -- while player_tile is still one of
+    // the new room's own entry doors (see
+    // RoomClearDoorSystem::IsEntryThresholdTile), so the door doesn't seal
+    // shut under the player's feet; the neighboring room is still rendered
+    // Visible via room_adjacency in the meantime, so nothing looks hidden.
+    void EnterRoom(Vec2 player_tile, std::optional<std::uint32_t> room);
 
     // Dispatched from OnEvent's dungeon-scene Space handling when
     // FindTeleporterAt resolves a hit on the player's tile (see

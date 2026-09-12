@@ -37,13 +37,15 @@ template <> struct EnumNames<AiBehavior>
 // EnemyAiSystem::Decide should run for it -- entities without this component
 // keep TurnCoordinator's own default (Wait every turn). ChaseAndAttack always
 // steps toward the nearest PlayerControlledComponent entity within
-// detection_range tiles (Manhattan distance); MoveAction's own bump-into-
-// hostile fallback is what turns an adjacent step into an attack, so no
-// separate attack-range field is needed here.
+// detection_range tiles (Manhattan distance) that it also has an unobstructed
+// line of sight to (see TargetResolution.h's HasLineOfSight -- walls block
+// detection regardless of distance); MoveAction's own bump-into-hostile
+// fallback is what turns an adjacent step into an attack, so no separate
+// attack-range field is needed here.
 struct AiComponent
 {
     AiBehavior behavior = AiBehavior::ChaseAndAttack;
-    int detection_range = 8;
+    int detection_range = 20;
 
     static void Register(ComponentSchemaRegistrar& reg)
     {

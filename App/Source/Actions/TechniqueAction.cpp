@@ -165,7 +165,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
     if (technique->effect_family == EffectFamily::Heal)
         return ActionResult(EffectiveActCost(actor, kTechniqueCost));
 
-    const Vec2 direction = SnapToCardinalDirection(offset);
+    const Vec2 direction = SnapToDirection(offset);
 
     // projectile_speed > 0 (foie/barta): spawn a real travelling entity
     // instead of resolving damage inline -- see ProjectileComponent.h/

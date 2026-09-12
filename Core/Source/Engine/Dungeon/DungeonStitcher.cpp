@@ -489,6 +489,14 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
                                      candidate_piece->category != PieceCategory::Vault &&
                                      candidate_piece->category != PieceCategory::BossArena))
                 continue;
+            // RoomCleared is no longer a curated lock outcome -- pre-locking a door at
+            // generation time, before the player can ever enter to start the kill count
+            // that would unlock it, is an unenterable dead end. It's now the automatic
+            // (default) state for any non-Corridor piece with spawns instead (see
+            // DungeonInstantiator::room_entry_doors / RoomClearDoorSystem::LockRoomOnEntry).
+            // Only a piece that explicitly opts into Switch is still eligible here.
+            if (candidate_piece->preferred_unlock_condition != DoorUnlockCondition::Switch)
+                continue;
 
             chosen_edge = edge_index;
             inside_index = candidate_inside;

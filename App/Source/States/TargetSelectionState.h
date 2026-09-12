@@ -25,8 +25,9 @@ namespace psr {
 // A single mechanism serves all three TargetingMode values by varying only
 // what counts as "reachable" and how arrow keys move the cursor:
 //   - SelfTarget: reachable = {origin} only; cursor fixed there.
-//   - Directional: reachable = the 4 cardinal-adjacent tiles; an arrow key
-//     press jumps the cursor straight to that neighbour.
+//   - Directional: reachable = the 8 adjacent tiles (cardinal + diagonal); an
+//     arrow key (cardinal only) or numpad key (all 8) press jumps the cursor
+//     straight to that neighbour.
 //   - TargetSquare: reachable = every tile within Chebyshev range of origin
 //     (grid-clamped); arrow keys move the cursor incrementally by one tile.
 // Confirm (Space) is a no-op off the reachable set; Escape cancels without

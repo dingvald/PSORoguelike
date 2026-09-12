@@ -7,7 +7,7 @@
         "blocks_movement": {},
         "ai": {
             "behavior": "pack_follower",
-            "detection_range": 8
+            "detection_range": 20
         },
         "pack_follower": {
             "pack_leader_race_id": "a_beast_wolf_pack_leader"

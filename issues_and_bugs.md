@@ -21,4 +21,15 @@
   fallback queues 4 tweens instead of the expected lunge-and-return pair of 2), and
   `CombatLogBridgeTests.cpp:106` (a lethal `AfterDamageEvent` only publishes 1 combat-log line
   instead of the expected hit+defeat pair of 2). Fail in isolation, not order-dependent.
+- [] Four more pre-existing App-Test failures found on `master` (`2bee7e5`), not previously logged
+  here — schema/enum drift where a component or enum gained fields/values and its test wasn't
+  updated in the same commit, not caused by any in-progress work: `WeaponComponentTests.cpp:63`
+  (expects 11 fields, `WeaponComponent` now reflects 17 — drifted since `d23e7fa` "Add Sword and
+  Handgun weapon types..."), `ConsumableComponentTests.cpp:60` (expects 2 fields, now 3),
+  `PhotonArtSchemaTests.cpp:77` and `TechniqueSchemaTests.cpp:83` (both expect `EffectFamily`'s
+  `enum_values` as `{damage, drain, status}`, missing the `heal` value `EffectFamily.h` has carried
+  since `bffd39c` "Techniques"), and `TechniqueActionTests.cpp:278` (`boosted_damage > base_damage`
+  fails, `16 == 16` — a tier power multiplier not taking effect). Each is a test needing an update
+  to match current behavior, not necessarily a code defect — `TechniqueActionTests.cpp:278` is the
+  one worth checking as a possible real regression rather than stale expectations.
 

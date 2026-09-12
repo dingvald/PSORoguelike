@@ -52,7 +52,7 @@
         },
         "ai": {
             "behavior": "pack_follower",
-            "detection_range": 8
+            "detection_range": 20
         }
     }
 }

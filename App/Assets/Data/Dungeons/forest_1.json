@@ -1,0 +1,70 @@
+{
+    "schema_version": 1,
+    "name": "Forest 1",
+    "area_tag": "forest",
+    "room_count_min": 16,
+    "room_count_max": 22,
+    "loopback_count_min": 4,
+    "loopback_count_max": 8,
+    "pieces": [
+        {
+            "piece_id": "forest_square_room",
+            "weight": 1.0,
+            "max_occurrences": 20
+        },
+        {
+            "piece_id": "forest_entrance",
+            "weight": 1.0,
+            "max_occurrences": 1
+        },
+        {
+            "piece_id": "forest_exit",
+            "weight": 1.0,
+            "max_occurrences": 1
+        },
+        {
+            "piece_id": "forest_hall_straight_3",
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": "forest_hall_straight_5",
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": "forest_hall_straight_7",
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": "forest_hall_L_shape",
+            "weight": 1.0,
+            "max_occurrences": 0
+        },
+        {
+            "piece_id": "forest_long_room",
+            "weight": 1.0,
+            "max_occurrences": 3
+        },
+        {
+            "piece_id": "forest_split_room",
+            "weight": 1.0,
+            "max_occurrences": 2
+        },
+        {
+            "piece_id": "forest_box_room",
+            "weight": 1.0,
+            "max_occurrences": 1
+        },
+        {
+            "piece_id": "forest_large_square_room",
+            "weight": 1.0,
+            "max_occurrences": 1
+        }
+    ],
+    "lock_count": 1,
+    "unlocked_door_prefab_id": "dungeon.unlocked_door",
+    "locked_door_prefab_id": "dungeon.locked_door",
+    "switch_prefab_id": "dungeon.switch_lever"
+}

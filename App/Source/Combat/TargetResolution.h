@@ -23,13 +23,16 @@ std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 
                                      WeaponRangeShape shape, int range);
 
 // Snaps an arbitrary tile offset (e.g. a TargetSquare-picked tile minus the
-// caster's own tile) to the nearest cardinal unit direction, so
-// PhotonArtAction/TechniqueAction can feed a freely-picked target through the
-// same direction-based ResolveTargetTiles every other shape already uses.
-// {0,0} in, {0,0} out (the SelfTarget case -- callers check for this
-// separately to skip tile resolution entirely). Ties between axes favour the
-// horizontal axis.
-Vec2 SnapToCardinalDirection(Vec2 offset);
+// caster's own tile) to the nearest of the 8 surrounding unit directions
+// (4 cardinal + 4 diagonal), so PhotonArtAction/TechniqueAction/
+// WeaponAttackAction can feed a freely-picked target through the same
+// direction-based ResolveTargetTiles every other shape already uses --
+// WeaponRangeShape::Cone3 in particular expects a diagonal direction to flank
+// correctly (see ResolveTargetTiles's own comment). {0,0} in, {0,0} out (the
+// SelfTarget case -- callers check for this separately to skip tile
+// resolution entirely). An offset within 22.5 degrees of an axis snaps
+// cardinal; otherwise it snaps to the nearest diagonal.
+Vec2 SnapToDirection(Vec2 offset);
 
 // The tile sequence a Line/SingleTarget-shaped projectile travels from origin
 // (exclusive) toward direction, one tile per turn -- see ProjectileComponent.h/
@@ -45,5 +48,13 @@ Vec2 SnapToCardinalDirection(Vec2 offset);
 // immediately.
 std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction, int range,
                                       bool pierces);
+
+// Bresenham tile-line test: true if no wall tile (a BlocksMovementComponent
+// occupant with no HealthComponent, same definition ResolveTargetTiles/
+// BuildProjectilePath use) lies strictly between from and to. Endpoints
+// themselves are never tested, so standing next to or on a wall's tile
+// doesn't block sight to/from that tile. Used by EnemyAiSystem's detection
+// gate so a larger detection_range doesn't see through walls.
+bool HasLineOfSight(const Grid& grid, Registry& registry, Vec2 from, Vec2 to);
 
 } // namespace psr

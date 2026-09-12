@@ -514,9 +514,10 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
 
     m_spawn_wave_system.emplace(m_registry, *m_grid, instantiation.pending_spawn_waves, on_enemy_spawned);
     m_room_clear_door_system.emplace(m_registry, *m_grid, instantiation.pending_spawn_waves,
-                                     instantiation.room_cleared_doors);
+                                     instantiation.room_cleared_doors, instantiation.room_entry_doors,
+                                     layout.locked_door_prefab_id, layout.unlocked_door_prefab_id);
 
-    EnterRoom(m_room_map->GetRoom(instantiation.entrance_tile));
+    EnterRoom(instantiation.entrance_tile, m_room_map->GetRoom(instantiation.entrance_tile));
 
     m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
@@ -549,10 +550,15 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
     RepublishHudStateAfterTransition();
 }
 
-void GameplayLayer::EnterRoom(std::optional<std::uint32_t> room)
+void GameplayLayer::EnterRoom(Vec2 player_tile, std::optional<std::uint32_t> room)
 {
     if (room && room != m_room_visibility->CurrentRoom())
+    {
+        if (m_room_clear_door_system->IsEntryThresholdTile(*room, player_tile))
+            return;
         m_spawn_wave_system->TriggerRoomEntered(*room);
+        m_room_clear_door_system->LockRoomOnEntry(*room);
+    }
     m_room_visibility->Update(room);
 }
 
@@ -633,7 +639,7 @@ void GameplayLayer::OnUpdate(float delta_time)
     {
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         m_camera.SetTarget(player_tile);
-        EnterRoom(m_room_map->GetRoom(player_tile));
+        EnterRoom(player_tile, m_room_map->GetRoom(player_tile));
     }
     m_camera.Update(delta_time);
 

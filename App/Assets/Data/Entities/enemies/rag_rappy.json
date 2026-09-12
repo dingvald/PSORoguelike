@@ -7,7 +7,7 @@
         "blocks_movement": {},
         "ai": {
             "behavior": "flee_when_hit",
-            "detection_range": 8
+            "detection_range": 20
         },
         "health": {
             "current_hp": 20,

@@ -1,4 +1,4 @@
-#include "Engine/Dungeon/DungeonInstantiator.h"
+﻿#include "Engine/Dungeon/DungeonInstantiator.h"
 
 #include "Engine/Actions/MoveEvent.h"
 #include "Engine/Dungeon/DoorComponent.h"
@@ -569,11 +569,14 @@ TEST_CASE("InstantiateDungeon stamps a locked door for a RoomCleared lock, unloc
     Grid grid(3, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    // The lock's own edge cell_a (1,0) stamps the locked door, not the
-    // generic unlocked-door pass (it's claimed by the lock already).
-    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2); // floor + locked door
-    const entt::entity door = FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0});
-    REQUIRE(door != entt::null);
+    // The lock's own edge cell on the gated (inside_room_index) side, (2,0),
+    // stamps the locked door, not the generic unlocked-door pass (it's
+    // claimed by the lock already) and not the outside piece's cell_a (1,0)
+    // -- a door belongs on the room it gates, not whichever side of the
+    // connection happened to be placed first.
+    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
+    const entt::entity door = FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0});
+    REQUIRE((door != entt::null));
     REQUIRE(registry.HasComponent<DoorComponent>(door));
     CHECK(registry.GetComponent<DoorComponent>(door).condition == DoorUnlockCondition::RoomCleared);
     CHECK(registry.GetComponent<DoorComponent>(door).room_index == 1);
@@ -581,21 +584,28 @@ TEST_CASE("InstantiateDungeon stamps a locked door for a RoomCleared lock, unloc
     REQUIRE(result.room_cleared_doors.count(1) == 1);
     CHECK(result.room_cleared_doors.at(1) == std::vector<entt::entity>{door});
 
-    RoomClearDoorSystem door_system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors);
+    RoomClearDoorSystem door_system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors,
+                                    result.room_entry_doors, layout.locked_door_prefab_id,
+                                    layout.unlocked_door_prefab_id);
     SpawnWaveSystem spawn_system(registry, grid, result.pending_spawn_waves);
     spawn_system.TriggerRoomEntered(1); // simulates the player entering the gated room
 
     // The gated room's one enemy is still alive -- door stays locked.
-    CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == door);
+    CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0}) == door);
 
     const entt::entity enemy = FindWith<EnemyMarker>(registry, grid, Vec2{2, 0});
-    REQUIRE(enemy != entt::null);
+    REQUIRE((enemy != entt::null));
     registry.DestroyEntity(enemy);
 
-    // Killing the room's last enemy unlocks the door in place.
-    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
-    CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null);
-    CHECK(FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null);
+    // Killing the room's last enemy unlocks the door in place. 3, not 2: the
+    // destroyed enemy is still listed on this tile since the test calls
+    // DestroyEntity directly rather than through the grid.RemoveEntity +
+    // DestroyEntity pair DeathSystem uses in real gameplay -- the door swap
+    // itself, and FindWith below (which checks components, not liveness),
+    // are unaffected.
+    REQUIRE(grid.GetEntities(Vec2{2, 0}).size() == 3);
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0}) == entt::null));
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{2, 0}) != entt::null));
 }
 
 TEST_CASE("RoomClearDoorSystem unlocks a RoomCleared door immediately when its room has no spawns",
@@ -621,11 +631,15 @@ TEST_CASE("RoomClearDoorSystem unlocks a RoomCleared door immediately when its r
     Grid grid(3, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    RoomClearDoorSystem system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors);
+    RoomClearDoorSystem system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors,
+                               result.room_entry_doors, layout.locked_door_prefab_id, layout.unlocked_door_prefab_id);
 
+    // The door lives on the gated room's own cell (2,0), inside_room_index's
+    // side of the edge, not the outside piece's cell_a (1,0).
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
-    CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null);
-    CHECK(FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null);
+    REQUIRE(grid.GetEntities(Vec2{2, 0}).size() == 2);
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0}) == entt::null));
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{2, 0}) != entt::null));
 }
 
 TEST_CASE("SwitchTriggerSystem unlocks a Switch lock's door when its switch -- in a different room -- is triggered",
@@ -658,9 +672,11 @@ TEST_CASE("SwitchTriggerSystem unlocks a Switch lock's door when its switch -- i
     Grid grid(6, 1);
     const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
+    // The door lives on the gated room's own cell (2,0), inside_room_index's
+    // side of the edge, not the outside piece's cell_a (1,0).
     REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
-    const entt::entity door = FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0});
-    REQUIRE(door != entt::null);
+    const entt::entity door = FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0});
+    REQUIRE((door != entt::null));
     REQUIRE(registry.HasComponent<DoorComponent>(door));
     CHECK(registry.GetComponent<DoorComponent>(door).remaining_switches == 1);
 
@@ -677,12 +693,12 @@ TEST_CASE("SwitchTriggerSystem unlocks a Switch lock's door when its switch -- i
     Entity(registry, actor).Dispatch(move);
 
     CHECK(registry.GetComponent<SwitchComponent>(switch_entity).activated);
-    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
-    CHECK(FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null);
-    CHECK(FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null);
+    REQUIRE(grid.GetEntities(Vec2{2, 0}).size() == 2);
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{2, 0}) == entt::null));
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{2, 0}) != entt::null));
 }
 
-TEST_CASE("InstantiateDungeon stamps an unlocked door only where a connection borders a Room/Vault/BossArena piece",
+TEST_CASE("InstantiateDungeon stamps an unlocked door everywhere except a Corridor-to-Corridor connection",
           "[DungeonInstantiator]")
 {
     Registry registry;
@@ -692,24 +708,142 @@ TEST_CASE("InstantiateDungeon stamps an unlocked door only where a connection bo
     registry.RegisterPrefabs(loader);
 
     PieceLibrary library{{MakeSimplePiece(30, PieceCategory::Room), MakeSimplePiece(31, PieceCategory::Room),
-                          MakeSimplePiece(32, PieceCategory::Corridor), MakeSimplePiece(33, PieceCategory::Corridor)}};
+                          MakeSimplePiece(32, PieceCategory::Corridor), MakeSimplePiece(33, PieceCategory::Corridor),
+                          MakeSimplePiece(34, PieceCategory::Entrance), MakeSimplePiece(35, PieceCategory::Corridor)}};
     DungeonLayout layout;
     layout.pieces.push_back(PlacedPiece{30, Vec2{0, 0}}); // piece_index 0
     layout.pieces.push_back(PlacedPiece{31, Vec2{1, 0}}); // piece_index 1
     layout.pieces.push_back(PlacedPiece{32, Vec2{0, 1}}); // piece_index 2
     layout.pieces.push_back(PlacedPiece{33, Vec2{1, 1}}); // piece_index 3
+    layout.pieces.push_back(PlacedPiece{34, Vec2{0, 2}}); // piece_index 4
+    layout.pieces.push_back(PlacedPiece{35, Vec2{1, 2}}); // piece_index 5
     layout.connections.push_back(SocketConnection{0, 1, Vec2{0, 0}, Vec2{1, 0}});
     layout.connections.push_back(SocketConnection{2, 3, Vec2{0, 1}, Vec2{1, 1}});
+    layout.connections.push_back(SocketConnection{4, 5, Vec2{0, 2}, Vec2{1, 2}});
     layout.unlocked_door_prefab_id = kUnlockedDoorPrefab;
 
-    Grid grid(2, 2);
-    InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+    Grid grid(2, 3);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
 
-    // Room-to-Room connection: floor + unlocked door.
+    // Room-to-Room connection: floor + unlocked door, tracked as an entry
+    // door for both rooms (either side could be "entered" from the other).
     REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 2);
-    CHECK(FindWith<UnlockedDoorMarker>(registry, grid, Vec2{0, 0}) != entt::null);
+    const entt::entity room_door = FindWith<UnlockedDoorMarker>(registry, grid, Vec2{0, 0});
+    REQUIRE((room_door != entt::null));
+    REQUIRE(result.room_entry_doors.count(0) == 1);
+    CHECK(result.room_entry_doors.at(0) == std::vector<entt::entity>{room_door});
+    REQUIRE(result.room_entry_doors.count(1) == 1);
+    CHECK(result.room_entry_doors.at(1) == std::vector<entt::entity>{room_door});
 
-    // Corridor-to-Corridor connection: floor only, no door.
+    // Corridor-to-Corridor connection: floor only, no door, no entry-door entry.
     REQUIRE(grid.GetEntities(Vec2{0, 1}).size() == 1);
     CHECK(registry.HasComponent<FloorMarker>(grid.GetEntities(Vec2{0, 1})[0]));
+    CHECK(result.room_entry_doors.count(2) == 0);
+    CHECK(result.room_entry_doors.count(3) == 0);
+
+    // Entrance-to-Corridor connection: also gets a door now, tracked only
+    // under the Entrance side (Corridor itself never bears a door).
+    REQUIRE(grid.GetEntities(Vec2{0, 2}).size() == 2);
+    const entt::entity entrance_door = FindWith<UnlockedDoorMarker>(registry, grid, Vec2{0, 2});
+    REQUIRE((entrance_door != entt::null));
+    REQUIRE(result.room_entry_doors.count(4) == 1);
+    CHECK(result.room_entry_doors.at(4) == std::vector<entt::entity>{entrance_door});
+    CHECK(result.room_entry_doors.count(5) == 0);
+}
+
+TEST_CASE("RoomClearDoorSystem::LockRoomOnEntry locks a room's entry doors while it still has spawns",
+          "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    EnemyMarker::Register(registry.GetMetaContext());
+    LockedDoorMarker::Register(registry.GetMetaContext());
+    UnlockedDoorMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceSpawn spawn;
+    spawn.cell_offset = Vec2{0, 0};
+    spawn.prefab_id = kEnemyPrefab;
+    spawn.wave = 0;
+
+    PieceLibrary library{{MakeSimplePiece(30, PieceCategory::Corridor), MakePieceWithSpawns(20, {spawn})}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{30, Vec2{0, 0}}); // piece_index 0: corridor
+    layout.pieces.push_back(PlacedPiece{20, Vec2{1, 0}}); // piece_index 1: room with a spawn
+    layout.connections.push_back(SocketConnection{0, 1, Vec2{0, 0}, Vec2{1, 0}});
+    layout.locked_door_prefab_id = kLockedDoorPrefab;
+    layout.unlocked_door_prefab_id = kUnlockedDoorPrefab;
+
+    Grid grid(2, 1);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    // The door lives on the room's own cell (1,0) -- the door-bearing side
+    // of the connection -- not the Corridor's cell_a (0,0). It starts open
+    // -- no DoorComponent, no lock, until the player actually steps into
+    // the room.
+    REQUIRE(grid.GetEntities(Vec2{0, 0}).size() == 1);
+    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null));
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null));
+
+    RoomClearDoorSystem door_system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors,
+                                    result.room_entry_doors, layout.locked_door_prefab_id,
+                                    layout.unlocked_door_prefab_id);
+    SpawnWaveSystem spawn_system(registry, grid, result.pending_spawn_waves);
+    spawn_system.TriggerRoomEntered(1);
+    door_system.LockRoomOnEntry(1);
+
+    // The room still has a live enemy -- its entry door is now locked.
+    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 3);
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null));
+    const entt::entity locked_door = FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0});
+    REQUIRE((locked_door != entt::null));
+    REQUIRE(registry.HasComponent<DoorComponent>(locked_door));
+    CHECK(registry.GetComponent<DoorComponent>(locked_door).condition == DoorUnlockCondition::RoomCleared);
+
+    // Killing the room's last enemy unlocks the door in place again.
+    const entt::entity enemy = FindWith<EnemyMarker>(registry, grid, Vec2{1, 0});
+    REQUIRE((enemy != entt::null));
+    registry.DestroyEntity(enemy);
+
+    // 3, not 2: the destroyed enemy is still listed on this tile since the
+    // test calls DestroyEntity directly rather than through the
+    // grid.RemoveEntity + DestroyEntity pair DeathSystem uses in real
+    // gameplay -- the door swap itself, and FindWith below (which checks
+    // components, not liveness), are unaffected.
+    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 3);
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null));
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null));
+}
+
+TEST_CASE("RoomClearDoorSystem::LockRoomOnEntry leaves a spawn-less room's doors open", "[DungeonInstantiator]")
+{
+    Registry registry;
+    FloorMarker::Register(registry.GetMetaContext());
+    LockedDoorMarker::Register(registry.GetMetaContext());
+    UnlockedDoorMarker::Register(registry.GetMetaContext());
+    TestEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    PieceLibrary library{{MakeSimplePiece(30, PieceCategory::Corridor), MakeSimplePiece(20, PieceCategory::Room)}};
+    DungeonLayout layout;
+    layout.pieces.push_back(PlacedPiece{30, Vec2{0, 0}});
+    layout.pieces.push_back(PlacedPiece{20, Vec2{1, 0}}); // no spawns
+    layout.connections.push_back(SocketConnection{0, 1, Vec2{0, 0}, Vec2{1, 0}});
+    layout.locked_door_prefab_id = kLockedDoorPrefab;
+    layout.unlocked_door_prefab_id = kUnlockedDoorPrefab;
+
+    Grid grid(2, 1);
+    const DungeonInstantiation result = InstantiateDungeon(layout, library, Vec2{0, 0}, registry, grid);
+
+    RoomClearDoorSystem door_system(registry, grid, result.pending_spawn_waves, result.room_cleared_doors,
+                                    result.room_entry_doors, layout.locked_door_prefab_id,
+                                    layout.unlocked_door_prefab_id);
+    door_system.LockRoomOnEntry(1);
+
+    // The door lives on the room's own cell (1,0), not the Corridor's cell_a (0,0).
+    REQUIRE(grid.GetEntities(Vec2{1, 0}).size() == 2);
+    CHECK((FindWith<LockedDoorMarker>(registry, grid, Vec2{1, 0}) == entt::null));
+    CHECK((FindWith<UnlockedDoorMarker>(registry, grid, Vec2{1, 0}) != entt::null));
 }

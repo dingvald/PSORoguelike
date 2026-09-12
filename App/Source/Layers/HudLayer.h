@@ -102,9 +102,9 @@ private:
     // keyboard focus.
     enum class ActionPalettePanel
     {
+        NormalAttack,
         Techniques,
-        PhotonArts,
-        NormalAttack
+        PhotonArts
     };
 
     // Which of the Shop screen's two panels currently has keyboard focus.

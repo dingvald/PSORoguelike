@@ -25,22 +25,36 @@ namespace {
     constexpr const char* kTravelPreviewPrefabId = "ui.target_travel_preview";
     constexpr const char* kAreaPreviewPrefabId = "ui.target_area_preview";
 
-    // Mirrors KeyBindings.cpp's arrow-key-to-offset mapping -- kept local
-    // rather than shared, since MoveAction's own bindings are constructed
-    // once as fixed Vec2 offsets baked into each ActionMap entry, not
-    // resolved from a raw key code at call time the way this cursor needs.
+    // Mirrors KeyBindings.cpp's arrow-key/numpad-to-offset mapping -- kept
+    // local rather than shared, since MoveAction's own bindings are
+    // constructed once as fixed Vec2 offsets baked into each ActionMap
+    // entry, not resolved from a raw key code at call time the way this
+    // cursor needs. Arrow keys only cover the 4 cardinal directions (no
+    // diagonal arrow-key equivalent); numpad covers all 8.
     std::optional<Vec2> ResolveDirectionKey(int key_code)
     {
         switch (key_code)
         {
         case SDLK_UP:
+        case SDLK_KP_8:
             return Vec2{0, -1};
-        case SDLK_DOWN:
-            return Vec2{0, 1};
-        case SDLK_LEFT:
-            return Vec2{-1, 0};
+        case SDLK_KP_9:
+            return Vec2{1, -1};
         case SDLK_RIGHT:
+        case SDLK_KP_6:
             return Vec2{1, 0};
+        case SDLK_KP_3:
+            return Vec2{1, 1};
+        case SDLK_DOWN:
+        case SDLK_KP_2:
+            return Vec2{0, 1};
+        case SDLK_KP_1:
+            return Vec2{-1, 1};
+        case SDLK_LEFT:
+        case SDLK_KP_4:
+            return Vec2{-1, 0};
+        case SDLK_KP_7:
+            return Vec2{-1, -1};
         default:
             return std::nullopt;
         }
@@ -89,7 +103,7 @@ void TargetSelectionState::OnEnter(GameplayContext& context)
         break;
     case TargetingMode::Directional:
     {
-        const Vec2 snapped = target_position ? SnapToCardinalDirection(target_position->tile - m_origin) : Vec2{0, 0};
+        const Vec2 snapped = target_position ? SnapToDirection(target_position->tile - m_origin) : Vec2{0, 0};
         m_cursor = snapped == Vec2{0, 0} ? m_origin + Vec2{0, -1} : m_origin + snapped; // default facing: up
         break;
     }
@@ -167,7 +181,7 @@ bool TargetSelectionState::IsReachable(Vec2 tile) const
     case TargetingMode::SelfTarget:
         return tile == m_origin;
     case TargetingMode::Directional:
-        return true; // whichever cardinal neighbour is currently selected is always a valid pick
+        return true; // whichever of the 8 adjacent neighbours is currently selected is always a valid pick
     case TargetingMode::TargetSquare:
     {
         const Vec2 delta = tile - m_origin;
@@ -217,7 +231,7 @@ void TargetSelectionState::UpdatePreview(GameplayContext& context)
     if (offset == Vec2{0, 0})
         return;
 
-    const Vec2 direction = SnapToCardinalDirection(offset);
+    const Vec2 direction = SnapToDirection(offset);
     const std::vector<Vec2> path = BuildProjectilePath(context.grid, context.registry, m_origin, direction,
                                                        m_request.range, m_request.projectile_pierces);
     if (path.empty())

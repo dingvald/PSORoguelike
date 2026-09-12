@@ -1,0 +1,6 @@
+{
+    "schema_version": 1,
+    "name": "Forest",
+    "unlock_predecessor_tag": "",
+    "dungeon_id_strings": ["forest_1", "forest_2"]
+}

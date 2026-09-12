@@ -164,6 +164,52 @@ TEST_CASE("TargetSelectionState Directional jumps the cursor straight to the pre
     state.OnExit(context);
 }
 
+TEST_CASE("TargetSelectionState Directional accepts numpad cardinal keys same as arrow keys",
+          "[TargetSelectionState]")
+{
+    Fixture fixture;
+    psr::TargetSelectionState state;
+    psr::TargetRequest request;
+    request.action = &fixture.dummy_action;
+    request.mode = psr::TargetingMode::Directional;
+    state.Begin(request, fixture.actor);
+
+    psr::GameplayContext context = fixture.Context();
+    state.OnEnter(context); // default facing: up, i.e. cursor at {3,2}
+
+    fixture.Send(state, context, SDLK_KP_6); // numpad-right, same offset as SDLK_RIGHT
+    fixture.Send(state, context, SDLK_SPACE);
+
+    psr::StateTransition transition = state.Update(context, 0.016f);
+    REQUIRE(transition.kind == psr::StateTransitionKind::Pop);
+    CHECK(fixture.registry.GetComponent<psr::SelectedTargetComponent>(fixture.actor).tile == psr::Vec2{4, 3});
+
+    state.OnExit(context);
+}
+
+TEST_CASE("TargetSelectionState Directional jumps the cursor to a diagonal neighbour via numpad",
+          "[TargetSelectionState]")
+{
+    Fixture fixture;
+    psr::TargetSelectionState state;
+    psr::TargetRequest request;
+    request.action = &fixture.dummy_action;
+    request.mode = psr::TargetingMode::Directional;
+    state.Begin(request, fixture.actor);
+
+    psr::GameplayContext context = fixture.Context();
+    state.OnEnter(context); // origin {3,3}
+
+    fixture.Send(state, context, SDLK_KP_9); // numpad-9: up-right diagonal -> {4,2}
+    fixture.Send(state, context, SDLK_SPACE);
+
+    psr::StateTransition transition = state.Update(context, 0.016f);
+    REQUIRE(transition.kind == psr::StateTransitionKind::Pop);
+    CHECK(fixture.registry.GetComponent<psr::SelectedTargetComponent>(fixture.actor).tile == psr::Vec2{4, 2});
+
+    state.OnExit(context);
+}
+
 TEST_CASE("TargetSelectionState TargetSquare only confirms within Chebyshev range", "[TargetSelectionState]")
 {
     Fixture fixture;

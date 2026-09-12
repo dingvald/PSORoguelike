@@ -114,13 +114,59 @@ std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2
     return path;
 }
 
-Vec2 SnapToCardinalDirection(Vec2 offset)
+bool HasLineOfSight(const Grid& grid, Registry& registry, Vec2 from, Vec2 to)
+{
+    int x0 = from.x;
+    int y0 = from.y;
+    const int x1 = to.x;
+    const int y1 = to.y;
+    const int dx = std::abs(x1 - x0);
+    const int dy = -std::abs(y1 - y0);
+    const int sx = x0 < x1 ? 1 : -1;
+    const int sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+
+    while (x0 != x1 || y0 != y1)
+    {
+        const int e2 = 2 * err;
+        if (e2 >= dy)
+        {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx)
+        {
+            err += dx;
+            y0 += sy;
+        }
+
+        if ((x0 != x1 || y0 != y1) && IsWallTile(registry, grid, Vec2{x0, y0}))
+            return false;
+    }
+    return true;
+}
+
+Vec2 SnapToDirection(Vec2 offset)
 {
     if (offset == Vec2{0, 0})
         return offset;
-    if (std::abs(offset.x) >= std::abs(offset.y))
-        return Vec2{offset.x > 0 ? 1 : -1, 0};
-    return Vec2{0, offset.y > 0 ? 1 : -1};
+    const int sx = (offset.x > 0) - (offset.x < 0);
+    const int sy = (offset.y > 0) - (offset.y < 0);
+    if (offset.x == 0)
+        return Vec2{0, sy};
+    if (offset.y == 0)
+        return Vec2{sx, 0};
+
+    // tan(22.5 deg): the boundary between "mostly axis-aligned" (snaps to a
+    // cardinal direction) and "roughly diagonal" (snaps to sx,sy).
+    constexpr float kHalfOctaveTan = 0.41421356f;
+    const float ax = static_cast<float>(std::abs(offset.x));
+    const float ay = static_cast<float>(std::abs(offset.y));
+    if (ay < ax * kHalfOctaveTan)
+        return Vec2{sx, 0};
+    if (ax < ay * kHalfOctaveTan)
+        return Vec2{0, sy};
+    return Vec2{sx, sy};
 }
 
 } // namespace psr

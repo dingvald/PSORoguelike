@@ -309,20 +309,20 @@ TEST_CASE("GenerateDungeon places a solvable Switch lock: its switch is reachabl
     REQUIRE(without_lock[lock.switch_room_index]);
 }
 
-TEST_CASE("GenerateDungeon places a RoomCleared lock gating the actually-unreachable side", "[DungeonStitcher]")
+TEST_CASE("GenerateDungeon never curates a lock gating a RoomCleared-preferring piece", "[DungeonStitcher]")
 {
+    // RoomCleared is no longer a curated Phase-4 outcome (it would pre-lock the
+    // door at generation time, before the player could ever enter to start
+    // the kill count that would unlock it -- see LockAnnotation's own doc
+    // comment). With every fillable-chain piece preferring RoomCleared and no
+    // Switch-preferring alternative in the pool, Phase 4 should place no
+    // locks at all despite lock_count == 1.
     PieceLibrary library = MakeLockableTestLibrary(DoorUnlockCondition::RoomCleared);
     Dungeon dungeon = MakeLockableTestDungeon();
 
     DungeonLayout layout = GenerateDungeon(dungeon, library, 2024);
 
-    REQUIRE(layout.locks.size() == 1);
-    const LockAnnotation& lock = layout.locks.front();
-    REQUIRE(lock.unlock_condition == DoorUnlockCondition::RoomCleared);
-
-    std::vector<bool> without_lock = ReachableExcludingEdge(layout, lock.edge.piece_a, lock.edge.piece_b);
-    REQUIRE_FALSE(without_lock[lock.inside_room_index]);
-    REQUIRE(layout.pieces[lock.inside_room_index].piece_id == 400);
+    REQUIRE(layout.locks.empty());
 }
 
 TEST_CASE("GenerateDungeon caps a dead-end Corridor socket with a Room from the pool", "[DungeonStitcher]")

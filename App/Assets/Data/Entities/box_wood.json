@@ -6,6 +6,9 @@
             "current_hp": 15,
             "max_hp": 15
         },
+        "knockback_multiplier": {
+            "multiplier": 0.0
+        },
         "renderable": {
             "texture_id": "box",
             "texture_size": {

@@ -7,7 +7,7 @@
         "blocks_movement": {},
         "ai": {
             "behavior": "chase_and_attack",
-            "detection_range": 8
+            "detection_range": 20
         },
         "health": {
             "current_hp": 60,
@@ -35,7 +35,7 @@
                 "y": 0
             },
             "color_1": "#b2ada9ff",
-            "color_2": "#c9a86aff",
+            "color_2": "#634d22ff",
             "render_layer": 1,
             "frames": 1,
             "frame_time": 0.0

@@ -1,0 +1,209 @@
+{
+    "schema_version": 1,
+    "name": "forest_hall_straight_5",
+    "area_tag": "forest",
+    "category": "corridor",
+    "can_rotate": true,
+    "can_mirror": false,
+    "tags": [],
+    "cells": [
+        {
+            "offset": {
+                "x": 9,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "floor"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "floor"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "floor"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 12,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "floor"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 12
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "floor"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 9,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 12,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 11
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 13,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 12,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 11,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 10,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        },
+        {
+            "offset": {
+                "x": 9,
+                "y": 13
+            },
+            "prefabs": [
+                {
+                    "prefab_id": "wall"
+                }
+            ]
+        }
+    ],
+    "sockets": [
+        {
+            "cell_offset": {
+                "x": 9,
+                "y": 12
+            },
+            "edge": "west",
+            "tags": [
+                "hallway"
+            ],
+            "connects_to_tags": [
+                "hallway",
+                "door"
+            ],
+            "fallback_prefab_id": "wall"
+        },
+        {
+            "cell_offset": {
+                "x": 13,
+                "y": 12
+            },
+            "edge": "east",
+            "tags": [
+                "hallway"
+            ],
+            "connects_to_tags": [
+                "hallway",
+                "door"
+            ],
+            "fallback_prefab_id": "wall"
+        }
+    ],
+    "spawns": []
+}

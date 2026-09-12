@@ -77,7 +77,7 @@ namespace {
     // Must match #action-palette-hint's initial text in hud.rml -- same
     // "must match markup" reasoning as kDefaultCharacterScreenHint.
     constexpr const char* kDefaultActionPaletteHint =
-        "Numpad to navigate, Space to assign to hotbar, T / Esc to close";
+        "Numpad to navigate, Space to assign to hotbar, P / Esc to close";
 
     // Number-row key to hotbar slot index: 1-9 -> 0-8, 0 -> 9. Mirrors
     // GameplayLayer.cpp's own KeyCodeToHotbarSlot -- duplicated rather than

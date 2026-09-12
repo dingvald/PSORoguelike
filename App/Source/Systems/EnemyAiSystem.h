@@ -22,9 +22,12 @@ class TechniqueLibrary;
 // what a non-player actor with an AiComponent does this turn.
 //
 // - ChaseAndAttack: step toward the nearest PlayerControlledComponent entity
-//   within AiComponent::detection_range tiles (Manhattan distance), one step
-//   (diagonal included) at a time, via MoveAction -- see StepToward. No
-//   separate "am I in range, should I attack instead" check exists:
+//   within AiComponent::detection_range tiles (Manhattan distance) that it
+//   also has an unobstructed line of sight to (see TargetResolution.h's
+//   HasLineOfSight -- a wall blocks detection no matter how close the target
+//   is), one step (diagonal included) at a time, via MoveAction -- see
+//   StepToward. No separate "am I in range, should I attack instead" check
+//   exists:
 //   MoveAction's own bump-into-hostile fallback already turns a step into an
 //   adjacent hostile's tile into a WeaponAttackAction, so chasing into range is
 //   attacking in range.

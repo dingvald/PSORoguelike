@@ -3,6 +3,7 @@
 #include "Actions/MoveAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Combat/Hostility.h"
+#include "Combat/TargetResolution.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
@@ -24,11 +25,14 @@ namespace psr {
 
 namespace {
 
-    // Nearest PlayerControlledComponent entity's tile within detection_range,
-    // by Manhattan distance -- mirrors Hostility.h's own player-vs-everyone-
-    // else placeholder rather than a general hostile-faction query, since
-    // that's the only opposing faction that exists today.
-    std::optional<Vec2> FindNearestHostileTile(Registry& registry, Entity actor, Vec2 self_tile, int detection_range)
+    // Nearest PlayerControlledComponent entity's tile within detection_range
+    // (Manhattan distance) AND with an unobstructed line of sight (see
+    // TargetResolution.h's HasLineOfSight) -- mirrors Hostility.h's own
+    // player-vs-everyone-else placeholder rather than a general
+    // hostile-faction query, since that's the only opposing faction that
+    // exists today.
+    std::optional<Vec2> FindNearestHostileTile(Grid& grid, Registry& registry, Entity actor, Vec2 self_tile,
+                                                int detection_range)
     {
         std::optional<Vec2> best_tile;
         int best_distance = detection_range + 1;
@@ -45,7 +49,8 @@ namespace {
                     return;
 
                 const int distance = ManhattanDistance(self_tile, position->tile);
-                if (distance <= detection_range && distance < best_distance)
+                if (distance <= detection_range && distance < best_distance &&
+                    HasLineOfSight(grid, registry, self_tile, position->tile))
                 {
                     best_distance = distance;
                     best_tile = position->tile;
@@ -157,7 +162,7 @@ IAction* EnemyAiSystem::DecideChaseAndAttack(Entity actor, const AiComponent& ai
         return nullptr;
 
     const std::optional<Vec2> target_tile =
-        FindNearestHostileTile(*m_registry, actor, self_position->tile, ai.detection_range);
+        FindNearestHostileTile(*m_grid, *m_registry, actor, self_position->tile, ai.detection_range);
     if (!target_tile)
         return nullptr;
 
@@ -171,7 +176,7 @@ IAction* EnemyAiSystem::DecideFleeWhenHit(Entity actor, const AiComponent& ai)
         return nullptr;
 
     const std::optional<Vec2> target_tile =
-        FindNearestHostileTile(*m_registry, actor, self_position->tile, ai.detection_range);
+        FindNearestHostileTile(*m_grid, *m_registry, actor, self_position->tile, ai.detection_range);
     if (!target_tile)
         return nullptr;
 
@@ -282,7 +287,7 @@ IAction* EnemyAiSystem::DecideRangedTechAtDistance(Entity actor, const AiCompone
         return nullptr;
 
     const std::optional<Vec2> target_tile =
-        FindNearestHostileTile(*m_registry, actor, self_position->tile, ai.detection_range);
+        FindNearestHostileTile(*m_grid, *m_registry, actor, self_position->tile, ai.detection_range);
     if (!target_tile)
         return nullptr;
 

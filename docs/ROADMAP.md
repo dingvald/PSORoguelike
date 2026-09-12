@@ -635,13 +635,18 @@ verification** (same caveat as M3.2 above -- landed in the same unverified pass)
   generic. UI: a "Press SPACE to return to the Hub"/"...proceed to the next level" HUD prompt
   (`TeleporterPromptMessage`, dungeon-scene sibling of `HubInteractionPromptMessage`) — the
   "Forest 1/2" level-indicator/transition-card UI from the original note is still open, deferred
-  to M13.4/whichever milestone lands a HUD area-progress readout. **Known gap:** Mission Select
-  (`MissionSelectSnapshot`/`IsDungeonUnlocked`) still gates and lists every `Dungeon` individually,
-  not one row per `Area` — once an author gives an `Area` more than one `dungeon_id_strings`
-  entry, every level in the sequence stays directly selectable from Mission Select rather than
-  only the first. Reworking Mission Select to show one row per `Area` (selecting its first level)
-  and gating later levels on sequence position instead of `unlock_predecessor_tag` is follow-up
-  work, not yet scheduled to a milestone.
+  to M13.4/whichever milestone lands a HUD area-progress readout. **Known gap — resolved:**
+  `BuildMissionSelectMessage` (`App/Source/Missions/MissionSelectSnapshot.cpp`) now emits one row
+  per `Area` with a non-empty `dungeon_id_strings` (named/gated off that sequence's first
+  `Dungeon`, so selecting "Forest" enters Forest 1 and the exit teleporter walks the rest via
+  `NextDungeonInArea`), plus one row per `Dungeon` that isn't part of any `Area`'s sequence at all
+  (a placeholder dungeon authored before its `Area` exists, same fallback `test_dungeon.json`
+  already relied on) — a plain `std::unordered_set<std::string>` of every sequenced
+  `dungeon_id_string` is what tells the second loop which dungeons to skip. `IsDungeonUnlocked`
+  itself is unchanged; later levels in a sequence are still only reachable by playing through the
+  earlier ones and hitting an `advance_level` teleporter, not by a Mission Select row of their own.
+  `MissionSelectSnapshotTests.cpp` extended to cover the one-row-per-Area collapse and the
+  unsequenced-dungeon fallback.
 
 ## M5 — Entity & Stat Framework
 
@@ -1048,7 +1053,12 @@ additions bundled here because none is large enough for its own milestone bullet
   `HealthComponent`, no regen mechanic this round. `CombatMath::ComputeTechniqueDamage` mirrors
   `ComputeDamage`'s formula keyed on `mst` (`StatsComponent`'s technique-power field, unused until
   now). `App/Source/Combat/TargetResolution.h/.cpp` lifts `AttackAction`'s own tile-geometry
-  helper out of its anonymous namespace (plus a new `SnapToCardinalDirection`) so
+  helper out of its anonymous namespace (plus a new `SnapToCardinalDirection`, since renamed
+  `SnapToDirection` and widened to snap to any of the 8 surrounding tiles — 4 cardinal + 4
+  diagonal, tie-broken at the 22.5°-from-axis boundary — rather than only the 4 cardinals, so a
+  freely-picked diagonal target actually reaches `WeaponRangeShape::Cone3`'s flanking case instead
+  of always rounding to a cardinal; `TargetSelectionState`'s own `Directional` cursor and numpad
+  key handling were widened to match, arrow keys still cardinal-only) so
   `PhotonArtAction`/`TechniqueAction` (`App/Source/Actions/`, new) can share it against their own
   `range_shape`/`range` fields — both read their target from a new non-authorable
   `SelectedTargetComponent` (`{Vec2 tile}`, mirrors the sibling's own component of the same name)
@@ -1876,7 +1886,15 @@ attacking, hurt, or dying.
   camera shake with a magnitude scaled by damage relative to max HP. Screen-space flash on player
   damage. All of these are cheap and all of them are the difference between "the number changed"
   and "that hurt." Editor: shake and hit-stop magnitudes belong on the Weapon / Technique /
-  Photon Art cards as authored values, not constants in C++.
+  Photon Art cards as authored values, not constants in C++. **Note:** the directional knockback
+  half of this bullet already existed ahead of this milestone being started
+  (`WeaponAttackAction.cpp`'s `ApplyKnockback`, a fixed 1-tile push on a landed melee hit) — this
+  file's own "not started" status above is stale on that point specifically; hit-stop and camera
+  shake are still unstarted. A new `KnockbackMultiplierComponent`
+  (`App/Source/Components/KnockbackMultiplierComponent.h`) now lets a prefab opt out of that push
+  entirely via a `multiplier <= 0` gate (`player.json`, `box_metal.json`, `box_wood.json` all set
+  it to 0 — a shoved player or crate reads as a bug, not weight, since neither is meant to be
+  knocked around) — not yet a continuous scale, just a 0-vs-nonzero switch.
 - **13.3 Death & spawn presentation.** Engine: `DeathSystem` currently destroys an entity
   outright. A death animation clip, a dissolve or fade, and a brief corpse or scorch decal give
   a kill a beat. Spawn waves appearing instantly is likewise jarring — a telegraphed spawn (a
@@ -2088,7 +2106,20 @@ tier-reskin mechanics were never started.
   this is decision-making work rather than new mechanics. It does need grid pathfinding
   (see 15.3) and a line-of-sight query, neither of which exists. Editor: behavior selection and
   per-behavior parameters on the Prefab Editor's AI card, which today has only `behavior` and
-  `detection_range`.
+  `detection_range`. **Update:** `AiBehavior` is no longer a one-value enum by the time this bullet
+  was revisited — `ChaseAndAttack`, `FleeWhenHit`, `StationarySpawner`, `PackFollower`, and
+  `RangedTechAtDistance` all exist in `AiComponent.h`/`EnemyAiSystem.{h,cpp}` already (this file's
+  own "Evidence" paragraph above is stale and should be read as historical). What *was* still
+  missing — the line-of-sight query this bullet calls out by name — is now done:
+  `TargetResolution::HasLineOfSight` (`App/Source/Combat/TargetResolution.{h,cpp}`) is a Bresenham
+  tile-line walk treating any `IsWallTile` occupant strictly between the two endpoints as blocking,
+  and every `FindNearestHostileTile` call site in `EnemyAiSystem.cpp` (`ChaseAndAttack`,
+  `FleeWhenHit`, `RangedTechAtDistance`'s shared helper) now requires it alongside the existing
+  Manhattan-distance check, so a wall blocks detection regardless of range —
+  `AiComponent::detection_range`'s default was raised from 8 to 20 to compensate, since line of
+  sight is now doing the actual gating a short range used to approximate. Grid pathfinding (15.3)
+  is still outstanding. `EnemyAiSystemTests.cpp` extended to cover a wall blocking detection
+  through direct sight despite being in range.
 - **17.2 Faction & hostility.** Engine: replace `IsHostile`'s placeholder with a real faction
   component and relationship table, so neutral wildlife, friendly NPCs, summoned allies, and
   enemy-infighting are all expressible. This also removes a latent trap — any hub NPC that ever
@@ -2124,7 +2155,30 @@ tier-reskin mechanics were never started.
   beyond the abstract lock/key annotation the stitcher records, no destructible terrain beyond the
   breakable boxes. The lock/key system in particular is worth finishing: M4.3 deliberately left it
   as a verified-solvable annotation on the layout with no in-world entities, and items and
-  interaction now both exist, so it can be made real.
+  interaction now both exist, so it can be made real. **Update — `RoomCleared` gating made real
+  and enterable:** `RoomCleared` was already stamping a real, in-world locked-door entity (per
+  M4.3/M4.4's own switch/key work), but only at generation time — a door the stitcher pre-locked
+  before the player could ever step inside to start the kill count that unlocks it was an
+  unenterable dead end, since nothing had killed anything yet. `DungeonStitcher::GenerateDungeon`'s
+  Phase 4 no longer picks `RoomCleared`-preferring pieces as lock candidates at all (only a piece
+  whose `preferred_unlock_condition` is `Switch` still is); instead, every plain always-open door
+  the instantiator already stamps at a connected socket bordering a non-Corridor piece is now
+  additionally recorded per-room in a new `DungeonInstantiation::room_entry_doors` map. The new
+  `Core/Source/Engine/Dungeon/DoorLock.{h,cpp}` (the mirror-image of the existing `DoorUnlock.h`)
+  destroys one of those plain doors and re-stamps a locked one in its place, tagged the same way a
+  generation-time lock already was; `RoomClearDoorSystem::LockRoomOnEntry` calls it for every
+  `room_entry_doors` entry the first time the player sets foot in a room that still has spawns
+  pending or alive, folding the freshly locked doors into the system's existing
+  `room_cleared_doors` bookkeeping so the same on-clear `DoorUnlock` path covers them either way.
+  `RoomClearDoorSystem::IsEntryThresholdTile` holds `GameplayLayer::EnterRoom` off calling
+  `LockRoomOnEntry` (and off the room-visibility update) while the player is still standing on the
+  doorway tile itself, so the door doesn't seal shut underfoot — it locks one tile later, once the
+  player has actually crossed the threshold. A room with no authored spawns, or an Entrance/Exit,
+  is never in `room_entry_doors` and stays open forever, unchanged from before. `DungeonInstantiator.h`
+  and `RoomClearDoorSystem.h` document the full mechanism in more detail. Catch2 coverage extended
+  in `DungeonInstantiatorTests.cpp` (room_entry_doors population, non-Corridor filtering) and
+  `DungeonStitcherTests.cpp` (no `RoomCleared` lock ever chosen). Traps, damaging tiles, and
+  destructible terrain beyond boxes remain unstarted.
 
 ## M18 — Release engineering & distribution
 

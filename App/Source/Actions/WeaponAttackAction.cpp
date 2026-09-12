@@ -10,6 +10,7 @@
 #include "Combat/TargetResolution.h"
 #include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/KnockbackMultiplierComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -42,7 +43,9 @@ namespace {
     // hit time) -- element-wise sign of the offset from origin to the
     // target's own tile, so it degrades correctly for any WeaponRangeShape
     // (a diagonal Cone3 hit, a far Line hit) as a single-tile unit step.
-    // Silently does nothing if the destination is out of bounds or blocked --
+    // Silently does nothing if the destination is out of bounds or blocked, or
+    // if the target's own KnockbackMultiplierComponent::multiplier is <= 0
+    // (player.json/box_*.json -- see KnockbackMultiplierComponent.h) --
     // damage and hit-stun (applied separately, see IncomingDamageEvent's own
     // hit_stun_energy field) still land either way. Melee-only: a projectile
     // hit never calls this (see ProjectileImpact.cpp).
@@ -52,6 +55,11 @@ namespace {
             return;
         Position* position = registry.TryGetComponent<Position>(target_handle);
         if (!position)
+            return;
+
+        const KnockbackMultiplierComponent* knockback_multiplier =
+            registry.TryGetComponent<KnockbackMultiplierComponent>(target_handle);
+        if (knockback_multiplier && knockback_multiplier->multiplier <= 0.0f)
             return;
 
         const Vec2 target_tile = position->tile;
@@ -98,7 +106,7 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
     {
         const Vec2 selected_tile =
             actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
-        direction = SnapToCardinalDirection(selected_tile - origin);
+        direction = SnapToDirection(selected_tile - origin);
     }
 
     // EquipmentComponent's own handler resolves the equipped weapon (if any)
