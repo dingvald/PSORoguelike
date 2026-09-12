@@ -21,19 +21,22 @@ class TechniqueLibrary;
 // The AI seam TurnCoordinator::SetNpcDecision expects: Decide(actor) picks
 // what a non-player actor with an AiComponent does this turn.
 //
-// - ChaseAndAttack: step toward the nearest PlayerControlledComponent entity
+// - ChaseAndAttack: paths toward the nearest PlayerControlledComponent entity
 //   within AiComponent::detection_range tiles (Manhattan distance) that it
 //   also has an unobstructed line of sight to (see TargetResolution.h's
 //   HasLineOfSight -- a wall blocks detection no matter how close the target
-//   is), one step (diagonal included) at a time, via MoveAction -- see
-//   StepToward. No separate "am I in range, should I attack instead" check
-//   exists:
-//   MoveAction's own bump-into-hostile fallback already turns a step into an
-//   adjacent hostile's tile into a WeaponAttackAction, so chasing into range is
+//   is), routing around obstacles via a real A* search (see Pathfinder.h)
+//   instead of a naive greedy step -- see StepTowardGoal. No separate "am I
+//   in range, should I attack instead" check exists: MoveAction's own
+//   bump-into-hostile fallback already turns a step into an adjacent
+//   hostile's tile into a WeaponAttackAction, so chasing into range is
 //   attacking in range.
 // - FleeWhenHit: behaves exactly like ChaseAndAttack until this entity's own
 //   HealthComponent shows any damage taken (current_hp < max_hp), then steps
-//   directly away from the nearest hostile every turn instead -- a
+//   directly away from the nearest hostile every turn instead (see
+//   StepAwayFrom -- a destination-seeking pathfinder has no notion of
+//   "maximize distance from X", so fleeing keeps the old greedy
+//   step-and-degrade logic rather than routing through FindPath) -- a
 //   simplified stand-in for PSO's Rag Rappy (which additionally never truly
 //   dies; that "play dead and revive" mechanic is out of scope here, per the
 //   user's explicit choice -- this entity dies normally at 0 HP).
@@ -88,11 +91,19 @@ private:
     IAction* DecideRangedTechAtDistance(Entity actor, const AiComponent& ai);
 
     // Shared by ChaseAndAttack/PackFollower/FleeWhenHit's approach phase and
-    // RangedTechAtDistance's close-the-distance fallback: one step (diagonal
-    // included) from self_tile toward self_tile+delta, degrading to a single
-    // cardinal axis (dominant delta first) if the diagonal is blocked.
-    // Passing -delta instead steps away (FleeWhenHit's fleeing phase).
-    IAction* StepToward(Entity actor, Vec2 self_tile, Vec2 delta);
+    // RangedTechAtDistance's close-the-distance fallback: routes actor from
+    // self_tile to goal_tile via FindPath (see Pathfinder.h) against
+    // TargetResolution.h's IsWalkableStep, and issues a MoveAction for the
+    // path's first step. nullptr if goal_tile is unreachable.
+    IAction* StepTowardGoal(Entity actor, Vec2 self_tile, Vec2 goal_tile);
+
+    // FleeWhenHit's fleeing phase only, since a destination-seeking
+    // pathfinder has no way to "maximize distance from X": one step
+    // (diagonal included) from self_tile toward self_tile+delta, degrading
+    // to a single cardinal axis (dominant delta first) if the diagonal is
+    // blocked. Callers pass delta already pointing away from whatever should
+    // be fled (e.g. self_tile - target_tile), not toward it.
+    IAction* StepAwayFrom(Entity actor, Vec2 self_tile, Vec2 delta);
 
     Grid* m_grid;
     Registry* m_registry;

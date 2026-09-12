@@ -521,3 +521,94 @@ TEST_CASE("EnemyAiSystem steps diagonally toward a diagonally-offset hostile tar
     CHECK(result.cost == psr::MoveAction::kMoveCost);
     CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{2, 2});
 }
+
+TEST_CASE("EnemyAiSystem routes around a multi-tile obstacle a greedy step-toward would permanently stall against",
+          "[EnemyAiSystem]")
+{
+    psr::Registry registry;
+    psr::Grid grid(5, 5);
+    psr::AffixLibrary affixes;
+    psr::TechniqueLibrary techniques;
+    std::mt19937 rng{0};
+    psr::EnemyAiSystem ai{grid, registry, affixes, techniques, rng};
+
+    const entt::entity actor = registry.CreateEntity();
+    registry.Emplace<psr::Position>(actor, psr::Position{psr::Vec2{0, 2}});
+    registry.Emplace<psr::AiComponent>(actor, psr::AiComponent{psr::AiBehavior::ChaseAndAttack, 20});
+    grid.AddEntity(psr::Vec2{0, 2}, actor);
+
+    const entt::entity target = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(target);
+    registry.Emplace<psr::Position>(target, psr::Position{psr::Vec2{4, 2}}); // dead ahead, same row
+    grid.AddEntity(psr::Vec2{4, 2}, target);
+
+    // A row of non-hostile, HealthComponent-bearing blockers spans the whole
+    // column x==2 except one gap at y==4 -- unlike a plain BlocksMovementComponent
+    // wall, these don't block IsWallTile/HasLineOfSight (only a Health-less
+    // occupant counts as a sight-blocking wall), so detection stays intact
+    // for every turn below; only IsWalkableStep treats them as impassable,
+    // since they're non-hostile (see Hostility.h). A same-row target means
+    // the old greedy StepToward's diagonal degrades to a pure cardinal step
+    // with no perpendicular fallback (its "second axis" is the zero vector
+    // when dy==0) -- it would take exactly one step onto {1,2}, then stall
+    // against the blocker at {2,2} forever. A* instead detours through the
+    // gap.
+    for (int y = 0; y <= 3; ++y)
+    {
+        const entt::entity blocker = registry.CreateEntity();
+        registry.Emplace<psr::HealthComponent>(blocker, psr::HealthComponent{10, 10});
+        registry.Emplace<psr::BlocksMovementComponent>(blocker);
+        grid.AddEntity(psr::Vec2{2, y}, blocker);
+    }
+
+    for (int turn = 0; turn < 4; ++turn)
+    {
+        psr::IAction* action = ai.Decide(psr::Entity(registry, actor));
+        REQUIRE(dynamic_cast<psr::MoveAction*>(action) != nullptr); // never stalls into a Wait
+        action->Perform(psr::Entity(registry, actor));
+    }
+
+    // Reaches the target in exactly 4 turns -- the same as ChebyshevDistance
+    // between the two tiles despite the detour, since a diagonal step costs
+    // the same as a cardinal one.
+    CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{4, 2});
+}
+
+TEST_CASE("EnemyAiSystem routes around a non-hostile blocker instead of stalling against it", "[EnemyAiSystem]")
+{
+    psr::Registry registry;
+    psr::Grid grid(3, 3);
+    psr::AffixLibrary affixes;
+    psr::TechniqueLibrary techniques;
+    std::mt19937 rng{0};
+    psr::EnemyAiSystem ai{grid, registry, affixes, techniques, rng};
+
+    const entt::entity actor = registry.CreateEntity();
+    registry.Emplace<psr::Position>(actor, psr::Position{psr::Vec2{0, 1}});
+    registry.Emplace<psr::AiComponent>(actor, psr::AiComponent{psr::AiBehavior::ChaseAndAttack, 8});
+    grid.AddEntity(psr::Vec2{0, 1}, actor);
+
+    const entt::entity target = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(target);
+    registry.Emplace<psr::Position>(target, psr::Position{psr::Vec2{2, 1}});
+    grid.AddEntity(psr::Vec2{2, 1}, target);
+
+    // A living but non-hostile blocker (no PlayerControlledComponent, same as
+    // actor -- see Hostility.h) directly in the straight-line path. Unlike a
+    // hostile HealthComponent occupant, IsWalkableStep never lets the actor
+    // step onto this tile (no bump-attack allowance applies), so the path
+    // must detour through row 0 or row 2.
+    const entt::entity blocker = registry.CreateEntity();
+    registry.Emplace<psr::HealthComponent>(blocker, psr::HealthComponent{10, 10});
+    registry.Emplace<psr::BlocksMovementComponent>(blocker);
+    grid.AddEntity(psr::Vec2{1, 1}, blocker);
+
+    for (int turn = 0; turn < 2; ++turn)
+    {
+        psr::IAction* action = ai.Decide(psr::Entity(registry, actor));
+        REQUIRE(dynamic_cast<psr::MoveAction*>(action) != nullptr);
+        action->Perform(psr::Entity(registry, actor));
+    }
+
+    CHECK(registry.GetComponent<psr::Position>(actor).tile == psr::Vec2{2, 1});
+}

@@ -84,3 +84,41 @@ TEST_CASE("TileToPixel subtracts camera_offset scaled by the zoomed tile size", 
     REQUIRE(pixel.x == 400.0f - 0.5f * 16.0f);
     REQUIRE(pixel.y == 300.0f + 0.25f * 24.0f);
 }
+
+// All three cases below place the pixel at the tile's centre (a {0.5,0.5}
+// sub-tile offset) rather than its origin corner -- PixelToTile floors to
+// the containing tile, and a point safely inside a tile is robust to the
+// hairline float error a multiply-then-divide round trip can introduce,
+// unlike a point sitting exactly on a tile boundary.
+
+TEST_CASE("PixelToTile inverts TileToPixel at zoom 1", "[TileVertexMath]")
+{
+    const psr::Vec2 tile{7, 3};
+    const psr::Vec2 camera{5, 5};
+    const psr::PixelPosition pixel = psr::TileToPixel(tile, psr::Vec2f{0.5f, 0.5f}, camera, 800, 600, 16.0f, 24.0f);
+
+    const psr::Vec2 recovered = psr::PixelToTile(pixel.x, pixel.y, camera, 800, 600, 16.0f, 24.0f);
+    REQUIRE(recovered == tile);
+}
+
+TEST_CASE("PixelToTile inverts TileToPixel at a non-1 zoom", "[TileVertexMath]")
+{
+    const psr::Vec2 tile{2, 9};
+    const psr::Vec2 camera{5, 5};
+    const psr::PixelPosition pixel = psr::TileToPixel(tile, psr::Vec2f{0.5f, 0.5f}, camera, 800, 600, 32.0f, 48.0f);
+
+    const psr::Vec2 recovered = psr::PixelToTile(pixel.x, pixel.y, camera, 800, 600, 32.0f, 48.0f);
+    REQUIRE(recovered == tile);
+}
+
+TEST_CASE("PixelToTile inverts TileToPixel with an off-center camera and a live camera_offset", "[TileVertexMath]")
+{
+    const psr::Vec2 tile{12, -4};
+    const psr::Vec2 camera{10, 1};
+    const psr::Vec2f camera_offset{0.3f, -0.7f};
+    const psr::PixelPosition pixel =
+        psr::TileToPixel(tile, psr::Vec2f{0.5f, 0.5f}, camera, 800, 600, 16.0f, 24.0f, camera_offset);
+
+    const psr::Vec2 recovered = psr::PixelToTile(pixel.x, pixel.y, camera, 800, 600, 16.0f, 24.0f, camera_offset);
+    REQUIRE(recovered == tile);
+}

@@ -78,6 +78,9 @@ struct ShopBuyRequestedMessage;
 struct ShopSellRequestedMessage;
 struct StorageItemActivatedMessage;
 struct StorageWithdrawRequestedMessage;
+struct WorldMouseDownMessage;
+struct WorldMouseMoveMessage;
+struct WorldMouseScrollMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -333,6 +336,36 @@ private:
     // TeleporterPromptMessage. Called from OnUpdate, dungeon scene only.
     void PublishTeleporterPrompt();
 
+    // Resolves a HudLayer-reported screen point to a world tile via
+    // PixelToTile (TileVertexMath.h), using m_camera and the window size
+    // cached from the last OnRender call -- the mouse's counterpart to
+    // PublishFloatingTextState's own TileToPixel use, just inverted.
+    Vec2 ResolveWorldMouseTile(float screen_x, float screen_y) const;
+
+    // Routes a left-click (button 0) to whichever of click-to-move/click-to-
+    // target applies, based on which GameState is on top: TargetSelection
+    // (already pushed by an in-progress Photon Art/Technique cast) calls
+    // m_target_selection_state.ConfirmTile directly, since mouse input never
+    // becomes a semantic Event and so can't reach GameState::HandleEvent's
+    // normal dispatch; Exploring recomputes m_pending_move_path via FindPath
+    // and starts consuming it (see OnUpdate). Any other GameState (a modal
+    // screen open) ignores the click -- HudLayer's own click listeners
+    // handle screen UI separately from this world-mouse path entirely.
+    void OnWorldMouseDown(const WorldMouseDownMessage& message);
+
+    // Resolves the hovered tile's first occupant (if any) into a
+    // WorldTileHoverMessage for HudLayer's tooltip -- see
+    // WorldTileHoverMessage.h. Re-publishes only when the hovered tile
+    // actually changes (m_last_hovered_tile), not on every pixel of mouse
+    // jitter.
+    void OnWorldMouseMove(const WorldMouseMoveMessage& message);
+
+    // Maps wheel_delta_y onto the same Camera::SetZoom/kCameraZoomStep the
+    // KP_PLUS/KP_MINUS binding already drives -- a second input for the same
+    // existing zoom mechanic, not a new camera capability (Camera tracks the
+    // player, not free-look, so there's no cursor-pivot to speak of here).
+    void OnWorldMouseScroll(const WorldMouseScrollMessage& message);
+
     Registry m_registry;
     AreaLibrary m_areas;
     PieceLibrary m_pieces;
@@ -365,6 +398,19 @@ private:
     // nothing can have spawned floating text before then.
     int m_last_render_width = 0;
     int m_last_render_height = 0;
+
+    // Click-to-move: remaining tiles to walk, next step at index 0; empty
+    // means no click-to-move is in flight. Recomputed wholesale by
+    // OnWorldMouseDown, consumed one step per turn from OnUpdate, and
+    // cleared on a new click, a keyboard move key, the next step becoming
+    // blocked, or arrival (see OnUpdate/OnEvent for each clear site).
+    std::vector<Vec2> m_pending_move_path;
+
+    // Hover-to-inspect: the tile OnWorldMouseMove last resolved a
+    // WorldTileHoverMessage for, so it only re-publishes when the hovered
+    // tile actually changes rather than on every pixel of mouse jitter.
+    // nullopt before the first mouse-move.
+    std::optional<Vec2> m_last_hovered_tile;
 
     // Generic short-lived colored-text-drifting-from-a-world-position system
     // (see FloatingTextSystem.h) -- damage numbers (m_damage_text_system

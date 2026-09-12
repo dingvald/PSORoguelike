@@ -31,6 +31,10 @@
 #include "Messages/ActionPaletteClosedMessage.h"
 #include "Messages/ActionPaletteSlotAssignedMessage.h"
 #include "Messages/TeleporterPromptMessage.h"
+#include "Messages/WorldMouseDownMessage.h"
+#include "Messages/WorldMouseMoveMessage.h"
+#include "Messages/WorldMouseScrollMessage.h"
+#include "Messages/WorldTileHoverMessage.h"
 
 #include "ApplicationFilepaths.h"
 #include "Engine/Events/Event.h"
@@ -39,6 +43,7 @@
 #include "Items/Equip.h"
 #include "UI/LogMarkup.h"
 #include "UI/RmlClickListener.h"
+#include "UI/RmlEventListener.h"
 #include "UI/RmlHoverListener.h"
 #include "UI/RmlScrollListener.h"
 #include "UI/RmlText.h"
@@ -171,6 +176,7 @@ void HudLayer::OnAttach()
 
     WireHotbarSlots();
     WireEventLogScroll();
+    WireWorldMouseInteraction();
 
     Subscribe<PlayerStatusMessage>(&HudLayer::OnPlayerStatus, this);
     Subscribe<HotbarStateMessage>(&HudLayer::OnHotbarState, this);
@@ -195,6 +201,7 @@ void HudLayer::OnAttach()
     Subscribe<ShopClosedMessage>(&HudLayer::OnShopScreenClosed, this);
     Subscribe<StorageMessage>(&HudLayer::OnStorageScreenState, this);
     Subscribe<StorageClosedMessage>(&HudLayer::OnStorageScreenClosed, this);
+    Subscribe<WorldTileHoverMessage>(&HudLayer::OnWorldTileHover, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -213,6 +220,7 @@ void HudLayer::OnDetach()
     m_storage_listeners.clear();
     m_context_menu_listeners.clear();
     m_log_scroll_listener.reset();
+    m_world_mouse_listeners.clear();
     if (m_document)
     {
         m_document->Close();
@@ -274,6 +282,48 @@ void HudLayer::WireEventLogScroll()
     m_log_scroll_listener->Attach(*log);
 }
 
+void HudLayer::WireWorldMouseInteraction()
+{
+    Rml::Element* body = m_document->GetElementById("hud-body");
+    if (!body)
+        return;
+
+    auto down = std::make_unique<RmlEventListener>("mousedown",
+                                                    [this](Rml::Event& event)
+                                                    {
+                                                        WorldMouseDownMessage message;
+                                                        message.screen_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+                                                        message.screen_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+                                                        message.button = event.GetParameter<int>("button", 0);
+                                                        Publish(message);
+                                                    });
+    down->Attach(*body);
+    m_world_mouse_listeners.push_back(std::move(down));
+
+    auto move = std::make_unique<RmlEventListener>("mousemove",
+                                                    [this](Rml::Event& event)
+                                                    {
+                                                        WorldMouseMoveMessage message;
+                                                        message.screen_x = static_cast<float>(event.GetParameter<int>("mouse_x", 0));
+                                                        message.screen_y = static_cast<float>(event.GetParameter<int>("mouse_y", 0));
+                                                        m_last_mouse_screen_x = message.screen_x;
+                                                        m_last_mouse_screen_y = message.screen_y;
+                                                        Publish(message);
+                                                    });
+    move->Attach(*body);
+    m_world_mouse_listeners.push_back(std::move(move));
+
+    auto scroll = std::make_unique<RmlEventListener>("mousescroll",
+                                                      [this](Rml::Event& event)
+                                                      {
+                                                          WorldMouseScrollMessage message;
+                                                          message.wheel_delta_y = event.GetParameter<float>("wheel_delta_y", 0.0f);
+                                                          Publish(message);
+                                                      });
+    scroll->Attach(*body);
+    m_world_mouse_listeners.push_back(std::move(scroll));
+}
+
 void HudLayer::OnPlayerStatus(const PlayerStatusMessage& message)
 {
     if (!m_document)
@@ -317,6 +367,27 @@ void HudLayer::OnTargetState(const TargetStateMessage& message)
         race->SetInnerRML(EscapeRml(message.race_label));
     if (Rml::Element* fill = m_document->GetElementById("target-hp-fill"))
         fill->SetProperty("width", PercentWidth(message.current_hp, message.max_hp));
+}
+
+void HudLayer::OnWorldTileHover(const WorldTileHoverMessage& message)
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* tooltip = m_document->GetElementById("tile-tooltip");
+    if (!tooltip)
+        return;
+
+    if (!message.has_content)
+    {
+        tooltip->SetProperty("display", "none");
+        return;
+    }
+
+    tooltip->SetInnerRML(EscapeRml(message.label));
+    tooltip->SetProperty("left", std::to_string(m_last_mouse_screen_x + 12.0f) + "px");
+    tooltip->SetProperty("top", std::to_string(m_last_mouse_screen_y + 12.0f) + "px");
+    tooltip->SetProperty("display", "block");
 }
 
 void HudLayer::OnHubInteractionPrompt(const HubInteractionPromptMessage& message)

@@ -710,3 +710,14 @@ body {
     font-size: 0.9em;
     color: #999;
 }
+
+#tile-tooltip {
+    display: none;
+    position: absolute;
+    padding: 0.3em 0.6em;
+    background-color: rgba(10, 8, 12, 220);
+    border: 1px #555;
+    font-size: 0.85em;
+    color: #eee;
+    pointer-events: none;
+}

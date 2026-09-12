@@ -4,7 +4,6 @@
 #include "Actions/TechniqueAction.h"
 #include "Combat/Hostility.h"
 #include "Combat/TargetResolution.h"
-#include "Components/BlocksMovementComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
@@ -16,6 +15,7 @@
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/Math/Vec2.h"
+#include "Engine/World/Pathfinder.h"
 
 #include <array>
 #include <cstdlib>
@@ -60,30 +60,6 @@ namespace {
         return best_tile;
     }
 
-    // Same occupancy check MoveAction::Perform itself does: a tile is a
-    // viable step if it's empty of BlocksMovementComponent occupants, or its
-    // (sole expected) blocking occupant is a hostile with HealthComponent --
-    // MoveAction's own bump fallback is what turns stepping there into a
-    // WeaponAttackAction.
-    bool IsViableStep(Grid& grid, Registry& registry, Entity actor, Vec2 target_tile)
-    {
-        if (!grid.Contains(target_tile))
-            return false;
-
-        bool blocked = false;
-        for (entt::entity occupant : grid.GetEntities(target_tile))
-        {
-            if (!registry.HasComponent<BlocksMovementComponent>(occupant))
-                continue;
-            blocked = true;
-
-            if (!registry.HasComponent<HealthComponent>(occupant))
-                continue;
-            if (IsHostile(actor, Entity(registry, occupant)))
-                return true;
-        }
-        return !blocked;
-    }
 } // namespace
 
 EnemyAiSystem::EnemyAiSystem(Grid& grid, Registry& registry, const AffixLibrary& affixes,
@@ -122,11 +98,22 @@ IAction* EnemyAiSystem::Decide(Entity actor)
     return action ? action : &m_wait_action;
 }
 
-IAction* EnemyAiSystem::StepToward(Entity actor, Vec2 self_tile, Vec2 delta)
+IAction* EnemyAiSystem::StepTowardGoal(Entity actor, Vec2 self_tile, Vec2 goal_tile)
+{
+    const std::vector<Vec2> path = FindPath(*m_grid, self_tile, goal_tile, [this, actor](Vec2 tile)
+                                            { return IsWalkableStep(*m_grid, *m_registry, actor, tile); });
+    if (path.empty())
+        return nullptr;
+
+    m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, path.front() - self_tile, *m_rng);
+    return m_pending_decision.get();
+}
+
+IAction* EnemyAiSystem::StepAwayFrom(Entity actor, Vec2 self_tile, Vec2 delta)
 {
     const Vec2 diagonal{delta.x > 0 ? 1 : (delta.x < 0 ? -1 : 0), delta.y > 0 ? 1 : (delta.y < 0 ? -1 : 0)};
 
-    if (IsViableStep(*m_grid, *m_registry, actor, self_tile + diagonal))
+    if (IsWalkableStep(*m_grid, *m_registry, actor, self_tile + diagonal))
     {
         m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, diagonal, *m_rng);
         return m_pending_decision.get();
@@ -140,13 +127,13 @@ IAction* EnemyAiSystem::StepToward(Entity actor, Vec2 self_tile, Vec2 delta)
     const Vec2 first_axis = x_dominant ? Vec2{diagonal.x, 0} : Vec2{0, diagonal.y};
     const Vec2 second_axis = x_dominant ? Vec2{0, diagonal.y} : Vec2{diagonal.x, 0};
 
-    if (first_axis != Vec2{0, 0} && IsViableStep(*m_grid, *m_registry, actor, self_tile + first_axis))
+    if (first_axis != Vec2{0, 0} && IsWalkableStep(*m_grid, *m_registry, actor, self_tile + first_axis))
     {
         m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, first_axis, *m_rng);
         return m_pending_decision.get();
     }
 
-    if (second_axis != Vec2{0, 0} && IsViableStep(*m_grid, *m_registry, actor, self_tile + second_axis))
+    if (second_axis != Vec2{0, 0} && IsWalkableStep(*m_grid, *m_registry, actor, self_tile + second_axis))
     {
         m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, second_axis, *m_rng);
         return m_pending_decision.get();
@@ -166,7 +153,7 @@ IAction* EnemyAiSystem::DecideChaseAndAttack(Entity actor, const AiComponent& ai
     if (!target_tile)
         return nullptr;
 
-    return StepToward(actor, self_position->tile, *target_tile - self_position->tile);
+    return StepTowardGoal(actor, self_position->tile, *target_tile);
 }
 
 IAction* EnemyAiSystem::DecideFleeWhenHit(Entity actor, const AiComponent& ai)
@@ -182,9 +169,10 @@ IAction* EnemyAiSystem::DecideFleeWhenHit(Entity actor, const AiComponent& ai)
 
     const HealthComponent* health = actor.TryGet<HealthComponent>();
     const bool has_been_hit = health && health->current_hp < health->max_hp;
-    const Vec2 delta = *target_tile - self_position->tile;
 
-    return StepToward(actor, self_position->tile, has_been_hit ? -delta : delta);
+    if (has_been_hit)
+        return StepAwayFrom(actor, self_position->tile, self_position->tile - *target_tile);
+    return StepTowardGoal(actor, self_position->tile, *target_tile);
 }
 
 IAction* EnemyAiSystem::DecideStationarySpawner(Entity actor)
@@ -218,7 +206,7 @@ IAction* EnemyAiSystem::DecideStationarySpawner(Entity actor)
     for (Vec2 offset : kCardinalOffsets)
     {
         const Vec2 candidate_tile = self_position->tile + offset;
-        if (IsViableStep(*m_grid, *m_registry, actor, candidate_tile))
+        if (IsWalkableStep(*m_grid, *m_registry, actor, candidate_tile))
         {
             spawn_tile = candidate_tile;
             break;
@@ -303,7 +291,7 @@ IAction* EnemyAiSystem::DecideRangedTechAtDistance(Entity actor, const AiCompone
         return m_pending_decision.get();
     }
 
-    return StepToward(actor, self_position->tile, delta);
+    return StepTowardGoal(actor, self_position->tile, *target_tile);
 }
 
 } // namespace psr

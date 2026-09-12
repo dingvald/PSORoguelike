@@ -1,5 +1,6 @@
 #include "Combat/TargetResolution.h"
 
+#include "Combat/Hostility.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 
@@ -167,6 +168,26 @@ Vec2 SnapToDirection(Vec2 offset)
     if (ax < ay * kHalfOctaveTan)
         return Vec2{0, sy};
     return Vec2{sx, sy};
+}
+
+bool IsWalkableStep(const Grid& grid, Registry& registry, Entity actor, Vec2 tile)
+{
+    if (!grid.Contains(tile))
+        return false;
+
+    bool blocked = false;
+    for (entt::entity occupant : grid.GetEntities(tile))
+    {
+        if (!registry.HasComponent<BlocksMovementComponent>(occupant))
+            continue;
+        blocked = true;
+
+        if (!registry.HasComponent<HealthComponent>(occupant))
+            continue;
+        if (IsHostile(actor, Entity(registry, occupant)))
+            return true;
+    }
+    return !blocked;
 }
 
 } // namespace psr

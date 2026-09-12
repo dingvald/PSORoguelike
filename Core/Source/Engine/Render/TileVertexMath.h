@@ -3,6 +3,8 @@
 #include "Engine/Math/Vec2.h"
 #include "Engine/Math/Vec2f.h"
 
+#include <cmath>
+
 namespace psr {
 
 struct NdcPosition
@@ -49,6 +51,23 @@ inline PixelPosition TileToPixel(Vec2 position, Vec2f offset, Vec2 camera_positi
     float y = static_cast<float>(window_height) / 2.0f +
               (static_cast<float>(position.y - camera_position.y) + offset.y - camera_offset.y) * zoomed_tile_height;
     return PixelPosition{x, y};
+}
+
+// The algebraic inverse of TileToPixel with offset={0,0}: which integer tile
+// a pixel-space point (top-left origin, +Y down) falls within, given the
+// same camera_position/window/zoomed-tile-size/camera_offset a caller used
+// to place tiles on screen. camera_offset should be the same live
+// Camera::GetRenderOffset() TileToPixel itself is fed, so a click during
+// camera ease-lag maps to the tile the player actually sees under the
+// cursor, not the un-eased logical one.
+inline Vec2 PixelToTile(float pixel_x, float pixel_y, Vec2 camera_position, int window_width, int window_height,
+                        float zoomed_tile_width, float zoomed_tile_height, Vec2f camera_offset = {})
+{
+    const float local_x = (pixel_x - static_cast<float>(window_width) / 2.0f) / zoomed_tile_width +
+                          static_cast<float>(camera_position.x) + camera_offset.x;
+    const float local_y = (pixel_y - static_cast<float>(window_height) / 2.0f) / zoomed_tile_height +
+                          static_cast<float>(camera_position.y) + camera_offset.y;
+    return Vec2{static_cast<int>(std::floor(local_x)), static_cast<int>(std::floor(local_y))};
 }
 
 } // namespace psr

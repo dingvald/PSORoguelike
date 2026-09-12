@@ -1958,17 +1958,19 @@ stop playing other than quitting.
 
 ## M15 — Input, options & accessibility
 
-**Status:** Not started. **Severity: high.**
+**Status:** 15.3 done; 15.1/15.2/15.4/15.5/15.6 not started. **Severity: high.**
 
-**Evidence:** `App/Source/Content/KeyBindings.cpp` hardcodes every binding at construction —
-arrows and numpad for movement, Space to wait, `G` to pick up. Another eight keys are intercepted
-directly inside `GameplayLayer::OnEvent` rather than going through `ActionMap` at all (`C`, `T`,
-`Tab`, `Escape`, `H`, `Space` in the hub, numpad `+`/`-`, and the digit row). Nothing reads a
-config file; nothing can be changed by a player. There is no gamepad code anywhere — searches for
-`gamepad`, `joystick`, and `controller` return nothing. Mouse support exists only where RmlUi
-provides it for free, so the world itself is keyboard-only: no click-to-move, no click-to-target,
-no scroll-to-zoom. And there is no options screen of any kind, no resolution or fullscreen
-control, and no persisted settings.
+**Evidence (mostly historical — see 15.3's own "Done" note below):** `App/Source/Content/
+KeyBindings.cpp` hardcodes every binding at construction — arrows and numpad for movement, Space
+to wait, `G` to pick up. Another eight keys are intercepted directly inside
+`GameplayLayer::OnEvent` rather than going through `ActionMap` at all (`C`, `T`, `Tab`, `Escape`,
+`H`, `Space` in the hub, numpad `+`/`-`, and the digit row). Nothing reads a config file; nothing
+can be changed by a player. There is no gamepad code anywhere — searches for `gamepad`, `joystick`,
+and `controller` return nothing. There is no options screen of any kind, no resolution or
+fullscreen control, and no persisted settings — none of that is 15.3's scope, so it's all still
+accurate. What's no longer accurate: "mouse support exists only where RmlUi provides it for free,
+so the world itself is keyboard-only" — the world now has click-to-move, click-to-target, hover,
+and scroll-to-zoom, see 15.3 below.
 
 - **15.1 Rebindable input.** Engine: consolidate the split — everything the player can press
   should be a named action in one table, including the eight keys currently special-cased inside
@@ -1990,6 +1992,69 @@ control, and no persisted settings.
   navigation logic in the project is `EnemyAiSystem`'s single-step cardinal snap with one
   perpendicular retry. A real A* or Dijkstra pass over the `Grid` is a prerequisite here, and it
   is shared with M17's smarter AI, so build it once in `Core` as a grid-navigation utility.
+  **Done.** `Core/Source/Engine/World/Pathfinder.{h,cpp}`'s `FindPath` is a binary-heap A* over
+  `Grid`, 8-directional, taking a `std::function<bool(Vec2)> is_walkable` predicate rather than
+  any component type — `Grid` stays a dumb tile-occupant store with no opinion on walkability, the
+  same split `TargetResolution.h`'s `HasLineOfSight` already established for sight queries over the
+  same `Grid`; the caller (`App`) injects its own `BlocksMovementComponent`/`HealthComponent`-based
+  definition. Uses a uniform per-step cost with a Chebyshev heuristic, not octile distance —
+  `MoveAction::kMoveCost` is a flat 100 regardless of direction, so a diagonal step costs the same
+  as a cardinal one, and Chebyshev is both admissible and exact for that cost model. `EnemyAiSystem`
+  is pathfinding's first real consumer (see M17.1's own update below); click-to-move/target/hover/
+  scroll-zoom are now built as this bullet's own remaining scope, all in `GameplayLayer`/`HudLayer`,
+  App-side, with no new editor/authoring surface (mouse settings are player-facing runtime
+  behavior, not authored content):
+  - **Mouse plumbing:** a new `App/Source/UI/RmlEventListener.{h,cpp}` (ported from
+    `Editor/Source/UI/RmlClickListener.h`'s own `RmlEventListener` — App can't include Editor
+    sources) backs `HudLayer::WireWorldMouseInteraction`, which attaches `mousedown`/`mousemove`/
+    `mousescroll` listeners to `hud.rml`'s now-identified `<body id="hud-body">` and republishes
+    each as a small `WorldMouseDownMessage`/`WorldMouseMoveMessage`/`WorldMouseScrollMessage` for
+    `GameplayLayer` to resolve — `HudLayer` itself holds no gameplay state, per its own class doc
+    comment, so it never interprets these. RmlUi's own listener dispatch fires independent of
+    `Application::Run`'s native/semantic event pass (mouse never becomes a semantic `Event` in this
+    codebase), so no `pointer-events` CSS surgery was needed — confirmed `hud.rcss`'s `body` already
+    had no such declaration. Screen→tile resolution is a new `PixelToTile` in
+    `Core/Source/Engine/Render/TileVertexMath.h`, the algebraic inverse of the existing
+    `TileToPixel`, fed `m_camera.GetRenderOffset()` (not `{}`) so a click during camera ease-lag
+    maps to the tile the player actually sees.
+  - **Click-to-move:** `GameplayLayer::OnWorldMouseDown` (left-click only, gated to
+    `GameStateId::Exploring`) computes `m_pending_move_path` via `FindPath` against a new
+    `TargetResolution::IsWalkableStep` (promoted, same semantics, from `EnemyAiSystem`'s own former
+    file-local `IsViableStep`); `OnUpdate` consumes one step per turn — only while `ExploringState`
+    is actually on top, which a queued move's `Tween`/`AnimationState` push naturally paces to one
+    step per real animation beat — via a locally-scoped `MoveAction` and
+    `TurnCoordinator::SetPendingAction`, the same "bypass `ActionMap`/`InputBuffer` for one `Step()`
+    call" hook `TargetSelectionState`'s own confirm path already uses. Interrupted (path cleared) by
+    a fresh click, any keypress (`OnEvent`), the next step failing a fresh `IsWalkableStep` check
+    (something wandered into the path), or arrival — no separate "combat started" signal, per the
+    user's brief to keep this simple.
+  - **Click-to-target:** a new `TargetSelectionState::ConfirmTile(context, tile)` — the mouse's
+    one-step equivalent of `HandleEvent`'s Space-confirm, reusing `IsReachable`/
+    `UpdateCursorVisual`/`UpdatePreview` exactly. `GameplayLayer::OnWorldMouseDown` checks
+    `GameStateId::TargetSelection` before the click-to-move branch (mutually exclusive by
+    construction) and calls it directly — mouse input never becomes a semantic `Event`, so this
+    bypasses `GameState::HandleEvent`'s normal dispatch entirely, a deliberate exception noted on
+    `ConfirmTile` itself.
+  - **Hover-to-inspect:** `GameplayLayer::OnWorldMouseMove` resolves the hovered tile's first
+    occupant via `Grid::GetEntities` (same lookup shape `FindInteractableAt`/`FindTeleporterAt`
+    already use, generalized) into a name-only `WorldTileHoverMessage` (reusing `DisplayName`),
+    republished only when the hovered tile changes; `HudLayer::OnWorldTileHover` shows/hides a new
+    `pointer-events:none` `#tile-tooltip` near the cached last mouse position. Deliberately
+    name-only — a richer stat-card tooltip is a natural follow-up, same relationship
+    `InventoryItemHoverChangedMessage` has to `CharacterScreenStatPreviewMessage`'s fuller payload.
+  - **Scroll-to-zoom:** `GameplayLayer::OnWorldMouseScroll` maps `wheel_delta_y` onto the exact same
+    `Camera::SetZoom`/`kCameraZoomStep` the `KP_PLUS`/`KP_MINUS` binding already drives — a second
+    input for the same existing mechanic, not a new camera capability; no cursor-pivot, since
+    `Camera` tracks the player rather than being free-look (unlike the Editor's own
+    `PreviewCanvas`, where cursor-pivoted zoom does make sense).
+  Catch2 coverage: `Core-Test/Source/PathfinderTests.cpp` (open/blocked/enclosed/out-of-bounds
+  paths, diagonal-shortcut optimality against `ChebyshevDistance`), `TileVertexMathTests.cpp`
+  (`PixelToTile` round-trips `TileToPixel` at zoom 1, a non-1 zoom, and with a live
+  `camera_offset`), and `EnemyAiSystemTests.cpp` additions (below). Mouse/RmlUi wiring itself has
+  no automated coverage, per this file's own established convention for that layer — verified by
+  launching the built `App.exe` (starts and stays up cleanly with the new `hud-body`/`tile-tooltip`
+  elements); a full interactive pass (actually clicking to move/target, hovering, scrolling) is the
+  user's own manual verification, same as every other RmlUi/input feature this file documents.
 - **15.4 Options screen & settings persistence.** Engine: a settings file in the platform's user
   data directory (`SDL_GetPrefPath`), covering display mode, resolution, vsync, frame cap, UI
   scale, master/music/SFX/UI volumes, bindings, and accessibility toggles — written on change,
@@ -2118,8 +2183,19 @@ tier-reskin mechanics were never started.
   Manhattan-distance check, so a wall blocks detection regardless of range —
   `AiComponent::detection_range`'s default was raised from 8 to 20 to compensate, since line of
   sight is now doing the actual gating a short range used to approximate. Grid pathfinding (15.3)
-  is still outstanding. `EnemyAiSystemTests.cpp` extended to cover a wall blocking detection
-  through direct sight despite being in range.
+  is also now done and already wired in: `StepToward` split into `StepTowardGoal`
+  (`FindPath`-backed, used by `ChaseAndAttack`/`PackFollower`/`RangedTechAtDistance`'s
+  close-distance fallback, and `FleeWhenHit`'s approach phase) and `StepAwayFrom` (the old greedy
+  step, kept only for `FleeWhenHit`'s actual fleeing phase, since a destination-seeking pathfinder
+  has no way to "maximize distance from X"). `EnemyAiSystemTests.cpp` extended to cover a wall
+  blocking detection through direct sight despite being in range, plus two routing regressions
+  (a multi-tile obstacle the old greedy step would permanently stall against, and a non-hostile
+  living blocker routed around rather than treated as attackable) — both built with
+  `HealthComponent`-bearing blockers rather than plain walls, since a plain
+  `BlocksMovementComponent`-only wall big enough to force a real detour also breaks
+  `HasLineOfSight` along the same line by definition, making detection fail before pathfinding is
+  ever exercised; a friendly/neutral living obstacle sidesteps that entirely (not a "wall" for
+  sight purposes, but still impassable for movement per `IsWalkableStep`'s hostility check).
 - **17.2 Faction & hostility.** Engine: replace `IsHostile`'s placeholder with a real faction
   component and relationship table, so neutral wildlife, friendly NPCs, summoned allies, and
   enemy-infighting are all expressible. This also removes a latent trap — any hub NPC that ever
@@ -2276,7 +2352,10 @@ scope — every row points at a bullet above.
 - [ ] Gamepad support, and hint lines that respect rebinding (15.2)
 - [ ] Facing and per-state animation clips (13.1)
 - [ ] Scene-transition fades and an area title card (13.4)
-- [ ] More than one AI behavior, including ranged and casting enemies (17.1)
+- [x] More than one AI behavior, including ranged and casting enemies (17.1) — `ChaseAndAttack`/
+      `FleeWhenHit`/`StationarySpawner`/`PackFollower`/`RangedTechAtDistance` all exist and are
+      pathfinding- and line-of-sight-aware; grid pathfinding and boss-framework work (17.3, still
+      open) were 17.1's own named prerequisites/follow-ons
 - [ ] A boss encounter framework, since `BossArena` is authored and unconsumed (17.3)
 - [ ] Multi-tile entities & footprints, so bosses can occupy more than one tile (5.4)
 - [ ] Area/biome schema and editor, which several other gaps depend on (3.2)

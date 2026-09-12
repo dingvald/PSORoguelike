@@ -174,6 +174,20 @@ bool TargetSelectionState::HandleEvent(Event& event, GameplayContext& context)
     return event.handled;
 }
 
+bool TargetSelectionState::ConfirmTile(GameplayContext& context, Vec2 tile)
+{
+    if (!context.grid.Contains(tile) || !IsReachable(tile))
+        return false;
+
+    context.grid.RemoveEntity(m_cursor, m_cursor_entity);
+    m_cursor = tile;
+    context.grid.AddEntity(m_cursor, m_cursor_entity);
+    UpdateCursorVisual(context);
+    UpdatePreview(context);
+    m_confirmed = true;
+    return true;
+}
+
 bool TargetSelectionState::IsReachable(Vec2 tile) const
 {
     switch (m_request.mode)

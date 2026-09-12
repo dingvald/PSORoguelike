@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/WeaponComponent.h" // WeaponRangeShape
+#include "Engine/ECS/Entity.h"
 #include "Engine/ECS/Registry.h"
 #include "Engine/Math/Vec2.h"
 #include "Engine/World/Grid.h"
@@ -56,5 +57,14 @@ std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2
 // doesn't block sight to/from that tile. Used by EnemyAiSystem's detection
 // gate so a larger detection_range doesn't see through walls.
 bool HasLineOfSight(const Grid& grid, Registry& registry, Vec2 from, Vec2 to);
+
+// True if tile is a viable step for actor: empty of BlocksMovementComponent
+// occupants, or its (sole expected) blocking occupant is a hostile entity
+// with a HealthComponent -- MoveAction's own bump fallback is what turns
+// stepping there into a WeaponAttackAction instead of a plain move. Out-of-
+// bounds is never viable. Shared by EnemyAiSystem's movement decisions and
+// FindPath's walkability predicate (see Pathfinder.h) for both AI and
+// player-driven click-to-move.
+bool IsWalkableStep(const Grid& grid, Registry& registry, Entity actor, Vec2 tile);
 
 } // namespace psr

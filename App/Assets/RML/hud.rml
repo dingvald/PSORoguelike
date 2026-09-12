@@ -3,7 +3,7 @@
         <title>PSORoguelike HUD</title>
         <link type="text/rcss" href="hud.rcss"/>
     </head>
-    <body>
+    <body id="hud-body">
         <div id="bars">
             <div id="identity-row">
                 <span id="level-text" class="level-text"></span>
@@ -99,5 +99,7 @@
             </div>
             <div id="storage-hint">Numpad to navigate, Space to store/withdraw, Esc to close</div>
         </div>
+
+        <div id="tile-tooltip"></div>
     </body>
 </rml>

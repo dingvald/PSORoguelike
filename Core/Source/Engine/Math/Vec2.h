@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 
 namespace psr {
@@ -23,5 +24,10 @@ struct Vec2
 
 // Tile-grid distance (4-directional movement cost) between a and b.
 inline int ManhattanDistance(Vec2 a, Vec2 b) { return std::abs(a.x - b.x) + std::abs(a.y - b.y); }
+
+// Tile-grid distance where a diagonal step costs the same as a cardinal one
+// (8-directional movement cost) -- the admissible A* heuristic to pair with a
+// uniform per-step cost, see Pathfinder.h.
+inline int ChebyshevDistance(Vec2 a, Vec2 b) { return std::max(std::abs(a.x - b.x), std::abs(a.y - b.y)); }
 
 } // namespace psr

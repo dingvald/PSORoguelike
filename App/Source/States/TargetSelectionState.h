@@ -53,6 +53,14 @@ public:
     StateTransition Update(GameplayContext& context, float delta_time) override;
     bool HandleEvent(Event& event, GameplayContext& context) override;
 
+    // Mouse's one-step equivalent of HandleEvent's Space-confirm path --
+    // moves the cursor to tile and confirms immediately if it's reachable
+    // (see IsReachable) and in bounds; otherwise a no-op, returning false.
+    // Reachable only while this state is on top -- GameplayLayer checks that
+    // itself before calling this, since mouse input never becomes a semantic
+    // Event and so can't reach HandleEvent's own dispatch.
+    bool ConfirmTile(GameplayContext& context, Vec2 tile);
+
 private:
     bool IsReachable(Vec2 tile) const;
     void MoveCursor(GameplayContext& context, Vec2 direction);

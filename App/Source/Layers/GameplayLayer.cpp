@@ -1,6 +1,7 @@
 #include "Layers/GameplayLayer.h"
 
 #include "Actions/DropAction.h"
+#include "Actions/MoveAction.h"
 #include "Actions/PhotonArtAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Actions/UseItemAction.h"
@@ -11,6 +12,7 @@
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibraryFile.h"
 #include "Combat/StatusEffectLibraryFile.h"
+#include "Combat/TargetResolution.h"
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibraryFile.h"
 #include "Components/ActorComponent.h"
@@ -52,6 +54,7 @@
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 #include "Engine/Render/TileVertexMath.h"
+#include "Engine/World/Pathfinder.h"
 #include "Hub/HubDefinitionFile.h"
 #include "Hub/HubInteraction.h"
 #include "Items/CharacterScreenSnapshot.h"
@@ -88,6 +91,10 @@
 #include "Messages/TargetStateMessage.h"
 #include "Messages/ActionPaletteSlotAssignedMessage.h"
 #include "Messages/TeleporterPromptMessage.h"
+#include "Messages/WorldMouseDownMessage.h"
+#include "Messages/WorldMouseMoveMessage.h"
+#include "Messages/WorldMouseScrollMessage.h"
+#include "Messages/WorldTileHoverMessage.h"
 #include "Missions/AreaProgression.h"
 #include "Missions/TeleporterInteraction.h"
 #include "Progression/GrowthCurveFile.h"
@@ -171,6 +178,9 @@ void GameplayLayer::OnAttach()
     Subscribe<ShopSellRequestedMessage>(&GameplayLayer::OnShopSellRequested, this);
     Subscribe<StorageItemActivatedMessage>(&GameplayLayer::OnStorageItemActivated, this);
     Subscribe<StorageWithdrawRequestedMessage>(&GameplayLayer::OnStorageWithdrawRequested, this);
+    Subscribe<WorldMouseDownMessage>(&GameplayLayer::OnWorldMouseDown, this);
+    Subscribe<WorldMouseMoveMessage>(&GameplayLayer::OnWorldMouseMove, this);
+    Subscribe<WorldMouseScrollMessage>(&GameplayLayer::OnWorldMouseScroll, this);
 
     PushOverlay<HudLayer>();
 
@@ -632,6 +642,29 @@ void GameplayLayer::OnUpdate(float delta_time)
     if (!m_turn_coordinator || !m_grid)
         return;
 
+    // Click-to-move: only feeds a step while ExploringState is actually on
+    // top -- that's precisely when the player is next up to resolve a turn
+    // (a queued MoveAction's Tween pushes AnimationState until it finishes,
+    // naturally pacing one step per real animation beat, same granularity
+    // keyboard movement already has). A local MoveAction is enough: it only
+    // needs to outlive this call's own m_state_machine.Update below, which
+    // is exactly where TurnCoordinator::Step consumes it.
+    std::optional<MoveAction> click_to_move_action;
+    if (!m_pending_move_path.empty() && m_state_machine.Top() && m_state_machine.Top()->GetId() == GameStateId::Exploring &&
+        m_registry.IsValid(m_player))
+    {
+        const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+        const Vec2 next_tile = m_pending_move_path.front();
+        if (!IsWalkableStep(*m_grid, m_registry, Entity(m_registry, m_player), next_tile))
+            m_pending_move_path.clear(); // something moved into the path since it was computed
+        else
+        {
+            click_to_move_action.emplace(*m_grid, m_affixes, next_tile - player_tile, m_rng);
+            m_turn_coordinator->SetPendingAction(&*click_to_move_action);
+            m_pending_move_path.erase(m_pending_move_path.begin());
+        }
+    }
+
     GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
     m_state_machine.Update(context, delta_time);
 
@@ -1011,6 +1044,62 @@ void GameplayLayer::PublishTeleporterPrompt()
     Publish(state);
 }
 
+Vec2 GameplayLayer::ResolveWorldMouseTile(float screen_x, float screen_y) const
+{
+    const float zoomed_tile_width = static_cast<float>(kTileWidth) * m_camera.GetZoom();
+    const float zoomed_tile_height = static_cast<float>(kTileHeight) * m_camera.GetZoom();
+    return PixelToTile(screen_x, screen_y, m_camera.GetPosition(), m_last_render_width, m_last_render_height,
+                       zoomed_tile_width, zoomed_tile_height, m_camera.GetRenderOffset());
+}
+
+void GameplayLayer::OnWorldMouseDown(const WorldMouseDownMessage& message)
+{
+    if (message.button != 0 || !m_grid || !m_registry.IsValid(m_player))
+        return;
+
+    const Vec2 clicked_tile = ResolveWorldMouseTile(message.screen_x, message.screen_y);
+
+    if (m_state_machine.Top() && m_state_machine.Top()->GetId() == GameStateId::TargetSelection)
+    {
+        GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+        m_target_selection_state.ConfirmTile(context, clicked_tile);
+        return;
+    }
+
+    if (!m_state_machine.Top() || m_state_machine.Top()->GetId() != GameStateId::Exploring)
+        return;
+
+    const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
+    m_pending_move_path = FindPath(*m_grid, player_tile, clicked_tile,
+                                   [this](Vec2 tile)
+                                   { return IsWalkableStep(*m_grid, m_registry, Entity(m_registry, m_player), tile); });
+}
+
+void GameplayLayer::OnWorldMouseMove(const WorldMouseMoveMessage& message)
+{
+    if (!m_grid || !m_registry.IsValid(m_player))
+        return;
+
+    const Vec2 hovered_tile = ResolveWorldMouseTile(message.screen_x, message.screen_y);
+    if (m_last_hovered_tile == hovered_tile)
+        return;
+    m_last_hovered_tile = hovered_tile;
+
+    WorldTileHoverMessage state;
+    for (entt::entity occupant : m_grid->GetEntities(hovered_tile))
+    {
+        state.has_content = true;
+        state.label = DisplayName(m_registry, occupant, m_player);
+        break;
+    }
+    Publish(state);
+}
+
+void GameplayLayer::OnWorldMouseScroll(const WorldMouseScrollMessage& message)
+{
+    m_camera.SetZoom(m_camera.GetZoom() + (message.wheel_delta_y > 0.0f ? kCameraZoomStep : -kCameraZoomStep));
+}
+
 void GameplayLayer::OnHudReady(const HudReadyMessage& /*message*/)
 {
     PublishHotbarState();
@@ -1073,6 +1162,19 @@ void GameplayLayer::OnEvent(Event& event)
 {
     if (!m_turn_coordinator || !m_grid)
         return;
+
+    // Any keypress interrupts an in-flight click-to-move -- simplest correct
+    // rule (matches this bullet's own scope note: no separate "combat
+    // started" signal, just whichever interruption is cheapest to detect
+    // correctly). Doesn't mark the event handled -- normal handling below
+    // still applies.
+    EventDispatcher move_interrupt_dispatcher(event);
+    move_interrupt_dispatcher.Dispatch<KeyPressedEvent>(
+        [this](KeyPressedEvent&)
+        {
+            m_pending_move_path.clear();
+            return false;
+        });
 
     // Key-up must reach the input buffer no matter which GameState is on
     // top -- unlike presses, releases aren't gated to ExploringState, since a

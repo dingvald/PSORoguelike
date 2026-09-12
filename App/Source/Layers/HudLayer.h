@@ -25,6 +25,7 @@ class ElementDocument;
 namespace psr {
 
 class RmlClickListener;
+class RmlEventListener;
 class RmlHoverListener;
 class RmlScrollListener;
 struct PlayerStatusMessage;
@@ -44,6 +45,7 @@ struct MissionCompletedMessage;
 struct MissionSelectClosedMessage;
 struct ShopClosedMessage;
 struct StorageClosedMessage;
+struct WorldTileHoverMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -154,6 +156,16 @@ private:
     void WireHotbarSlots();
     void WireEventLogScroll();
 
+    // Attaches mousedown/mousemove/mousescroll RmlEventListeners to hud.rml's
+    // full-screen body, publishing WorldMouseDownMessage/WorldMouseMoveMessage/
+    // WorldMouseScrollMessage for GameplayLayer to resolve against its own
+    // Camera/Grid -- this layer holds no gameplay state of its own (see class
+    // doc comment), so it never interprets these itself. RmlUi's own listener
+    // dispatch fires independent of Application::Run's native/semantic event
+    // pass, so no pointer-events CSS changes are needed (mirrors
+    // Editor/Source/Layers/PieceEditorLayer.cpp's WireGridInteraction).
+    void WireWorldMouseInteraction();
+
     void OnPlayerStatus(const PlayerStatusMessage& message);
     void OnHotbarState(const HotbarStateMessage& message);
     void OnLogEntry(const CombatLogEntryMessage& message);
@@ -247,6 +259,11 @@ private:
     // race text and HP bar fill -- same PercentWidth/EscapeRml idioms as
     // OnPlayerStatus's own bar update.
     void OnTargetState(const TargetStateMessage& message);
+
+    // Shows/hides #tile-tooltip near the last known mouse position (cached
+    // from the mousemove listener that also publishes WorldMouseMoveMessage,
+    // see WireWorldMouseInteraction), labelled from message.label.
+    void OnWorldTileHover(const WorldTileHoverMessage& message);
 
     void AppendLogLine(const std::string& text);
 
@@ -412,6 +429,14 @@ private:
     // still reflect the previous frame's layout).
     bool m_log_scroll_pending = false;
     std::unique_ptr<RmlScrollListener> m_log_scroll_listener;
+
+    std::vector<std::unique_ptr<RmlEventListener>> m_world_mouse_listeners;
+
+    // Cached by the mousemove listener, read by OnWorldTileHover to position
+    // #tile-tooltip -- the listener itself only has the Rml::Event, not
+    // anywhere else to stash the position for a later, separate message.
+    float m_last_mouse_screen_x = 0.0f;
+    float m_last_mouse_screen_y = 0.0f;
 };
 
 } // namespace psr
