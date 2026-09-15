@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StatusEffectComponent.h"
@@ -176,6 +177,9 @@ TEST_CASE("MoveAction bumping into a hostile attackable occupant falls back to a
     enemy_health.current_hp = 10;
     enemy_health.max_hp = 10;
     enemy.Emplace<psr::HealthComponent>(enemy_health);
+    // GetFaction's own inference (AiComponent -> Enemy) doesn't apply to this
+    // bare test fixture, which never carries one.
+    enemy.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     grid.AddEntity(psr::Vec2{2, 1}, enemy_handle);
 
     std::mt19937 rng{1};
@@ -225,6 +229,9 @@ TEST_CASE("MoveAction bumping into a hostile with a fires_projectile weapon equi
     enemy_health.current_hp = 10;
     enemy_health.max_hp = 10;
     enemy.Emplace<psr::HealthComponent>(enemy_health);
+    // GetFaction's own inference (AiComponent -> Enemy) doesn't apply to this
+    // bare test fixture, which never carries one.
+    enemy.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     grid.AddEntity(psr::Vec2{2, 1}, enemy_handle);
 
     std::mt19937 rng{1};

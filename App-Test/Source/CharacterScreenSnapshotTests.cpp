@@ -136,7 +136,7 @@ TEST_CASE("BuildCharacterScreenMessage populates meseta and level/xp fields", "[
     registry.Emplace<psr::LevelComponent>(player, psr::LevelComponent{3, 40, 340});
 
     psr::GrowthCurve growth_curve;
-    growth_curve.levels.push_back(psr::GrowthCurveLevel{4, 100});
+    growth_curve.xp_to_next = {.base = 100.0f};
 
     const psr::CharacterScreenMessage message =
         psr::BuildCharacterScreenMessage(registry, player, g_no_affixes, growth_curve);
@@ -148,7 +148,7 @@ TEST_CASE("BuildCharacterScreenMessage populates meseta and level/xp fields", "[
     REQUIRE(message.stats.total_xp == 340);
 }
 
-TEST_CASE("BuildCharacterScreenMessage's xp_to_next is 0 past the authored growth curve", "[CharacterScreenSnapshot]")
+TEST_CASE("BuildCharacterScreenMessage's xp_to_next is 0 for an empty (all-zero) growth curve", "[CharacterScreenSnapshot]")
 {
     psr::Registry registry;
     entt::entity player = registry.CreateEntity();

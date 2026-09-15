@@ -23,8 +23,11 @@ public:
 
     // Tab: a fresh Manhattan-distance-sorted scan of every hostile
     // HealthComponent entity from player's tile (Hostility.h's IsHostile --
-    // excludes the player itself; projectiles never carry HealthComponent,
-    // so they're naturally excluded too) whose room is RoomVisibility::Visible
+    // excludes the player itself, and now that IsHostile is a real
+    // Faction-relationship query, excludes Neutral/Ally entities too, not
+    // just anything sharing the player's own faction; projectiles never
+    // carry HealthComponent, so they're naturally excluded as well) whose
+    // room is RoomVisibility::Visible
     // (matches FogOfWarRenderableLookup's own actor-hiding rule, so you can
     // never lock onto something the fog isn't drawing). Finds the current
     // target's index in that fresh list, if still present, and advances to
@@ -37,12 +40,14 @@ public:
     void ClearTarget(Entity player);
 
     // Call once per frame: if the current target died, was destroyed, or its
-    // room fell out of RoomVisibility::Visible, clears it; otherwise
+    // room fell out of RoomVisibility::Visible, retargets to the nearest
+    // remaining hostile (clearing instead if none remain); otherwise
     // repositions the marker if the target's tile changed since last call.
     void Update(Entity player);
 
 private:
     bool IsVisible(entt::entity target) const;
+    void RetargetNearest(Entity player);
     void RepositionMarker(Vec2 tile);
     void RemoveMarker();
 

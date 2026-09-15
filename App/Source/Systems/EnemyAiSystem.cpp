@@ -27,10 +27,12 @@ namespace {
 
     // Nearest PlayerControlledComponent entity's tile within detection_range
     // (Manhattan distance) AND with an unobstructed line of sight (see
-    // TargetResolution.h's HasLineOfSight) -- mirrors Hostility.h's own
-    // player-vs-everyone-else placeholder rather than a general
-    // hostile-faction query, since that's the only opposing faction that
-    // exists today.
+    // TargetResolution.h's HasLineOfSight) -- still scoped to the player
+    // specifically rather than a general Hostility.h-driven scan (the shape
+    // TabTargetSystem's own SortedHostilesByDistance already uses), since no
+    // AiBehavior yet acts on Ally/summoned-ally targets; broadening this is
+    // an AiBehavior addition (M17.1), not something the faction system itself
+    // (M17.2) needs to force.
     std::optional<Vec2> FindNearestHostileTile(Grid& grid, Registry& registry, Entity actor, Vec2 self_tile,
                                                 int detection_range)
     {

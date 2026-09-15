@@ -1,0 +1,26 @@
+{
+    "schema_version": 1,
+    "class_id": "force",
+    "name": "Force",
+    "starting_weapon_prefab_id": "weapons.wand",
+    "starting_technique_id_strings": ["foie"],
+    "starting_armor_prefab_id": "armor.frame",
+    "starting_inventory": [
+        { "item_prefab_id": "monomate", "quantity": 1 },
+        { "item_prefab_id": "monofluid", "quantity": 3 },
+        { "item_prefab_id": "TechniqueDisks.resta_disk", "quantity": 1 }
+    ],
+    "base_hp": 30,
+    "base_tp": 30,
+    "curves": {
+        "xp_to_next": { "base": 50, "rate": 30, "exponent": 1.26 },
+        "max_hp": { "base": 32, "rate": 4 },
+        "max_tp": { "base": 40, "rate": 6 },
+        "atp": { "base": 28, "rate": 2 },
+        "ata": { "base": 55, "rate": 2 },
+        "mst": { "base": 55, "rate": 5 },
+        "dfp": { "base": 12, "rate": 1 },
+        "evp": { "base": 42, "rate": 1 },
+        "lck": { "base": 13, "rate": 1 }
+    }
+}

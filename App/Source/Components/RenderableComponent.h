@@ -19,9 +19,13 @@ namespace psr {
 //
 // frames/frame_time optionally animate uv: when frames > 1, the renderer
 // cycles uv's column through a horizontal strip of frames cells (looping),
-// spending frame_time seconds on each. Entities sharing the same frame_time
-// change frame in lock-step (see AnimationClock). Defaults (frames = 1) mean
-// "not animated" -- uv is drawn as-is.
+// spending frame_time seconds on each. When is_synced is true (default),
+// entities sharing the same frame_time change frame in lock-step (see
+// AnimationClock) -- good for ambient/looping content. Set is_synced to
+// false for one-shot content (hit flashes, technique VFX) that should
+// instead play its own strip from its own spawn, independent of any other
+// entity sharing its frame_time. Defaults (frames = 1) mean "not animated"
+// -- uv is drawn as-is.
 struct RenderableComponent
 {
     std::uint32_t texture_id = 0;
@@ -32,6 +36,7 @@ struct RenderableComponent
     int render_layer = 0;
     int frames = 1;
     float frame_time = 0.0f;
+    bool is_synced = true;
 
     static void Register(ComponentSchemaRegistrar& reg)
     {
@@ -43,7 +48,8 @@ struct RenderableComponent
             .Data<&RenderableComponent::color_2>("color_2")
             .Data<&RenderableComponent::render_layer>("render_layer")
             .Data<&RenderableComponent::frames>("frames")
-            .Data<&RenderableComponent::frame_time>("frame_time");
+            .Data<&RenderableComponent::frame_time>("frame_time")
+            .Data<&RenderableComponent::is_synced>("is_synced");
     }
 };
 

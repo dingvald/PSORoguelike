@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/KnockbackMultiplierComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
@@ -76,6 +77,12 @@ psr::Entity MakeActor(psr::Registry& registry, psr::Grid& grid, psr::Vec2 tile, 
     actor.Emplace<psr::StatsComponent>(stats);
     if (player)
         actor.Emplace<psr::PlayerControlledComponent>();
+    else
+        // GetFaction's own inference (AiComponent -> Enemy) doesn't apply to
+        // this bare test fixture, which never carries one -- mark it Enemy
+        // directly so it's hostile to the player side, same as every
+        // real enemy prefab (which always does carry AiComponent).
+        actor.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     return actor;
 }
 

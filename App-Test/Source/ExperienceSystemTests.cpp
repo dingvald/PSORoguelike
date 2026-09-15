@@ -17,6 +17,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <random>
 #include <string>
 #include <vector>
 
@@ -60,14 +61,20 @@ TEST_CASE("ExperienceSystem reports only the stats that increased on level-up", 
     psr::MessageBus bus;
     psr::MessageQueue hud_queue;
     psr::FloatingTextSystem floating_text;
+    std::mt19937 rng{42};
 
-    psr::GrowthCurveLevel level_2;
-    level_2.level = 2;
-    level_2.xp_to_next = 10;
-    level_2.max_hp = 120;
-    level_2.max_tp = 55;
-    level_2.stats = psr::StatsComponent{/*atp=*/15, /*ata=*/10, /*mst=*/10, /*dfp=*/12, /*evp=*/10, /*lck=*/8};
-    psr::GrowthCurve growth_curve{{level_2}};
+    // Gains are now randomized (see GrowthCurve::EvaluateRandomGain), so
+    // this only pins which stats have a nonzero `rate` (and therefore must
+    // appear in the log line) vs. a zero rate (which must stay omitted,
+    // since Jitter(0, rng) == 0 deterministically) -- not their exact values.
+    psr::GrowthCurve growth_curve;
+    growth_curve.xp_to_next = {.base = 10.0f};
+    growth_curve.max_hp = {.rate = 20.0f};
+    growth_curve.max_tp = {.rate = 5.0f};
+    growth_curve.atp = {.rate = 5.0f};
+    growth_curve.dfp = {.rate = 2.0f};
+    growth_curve.lck = {.rate = 3.0f};
+    // ata/mst/evp left at rate = 0 -- must not appear.
 
     psr::StatsComponent starting_stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
     psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, starting_stats);
@@ -78,7 +85,7 @@ TEST_CASE("ExperienceSystem reports only the stats that increased on level-up", 
                                                           { log_lines.push_back(message.text); });
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
 
-    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text, rng);
     system.Subscribe(player);
 
     psr::AfterDamageEvent event{.target = target, .amount = 10, .target_defeated = true};
@@ -87,9 +94,16 @@ TEST_CASE("ExperienceSystem reports only the stats that increased on level-up", 
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 2);
-    REQUIRE(log_lines[1] == "[b][c=#f6470a]Player reached level 2![/c][/b] HP +[c=#7ee787]20[/c], "
-                            "TP +[c=#7ee787]5[/c], ATP +[c=#7ee787]5[/c], DFP +[c=#7ee787]2[/c], "
-                            "LCK +[c=#7ee787]3[/c]");
+    const std::string& level_up_line = log_lines[1];
+    REQUIRE(level_up_line.starts_with("[b][c=#f6470a]Player reached level 2![/c][/b] "));
+    CHECK(level_up_line.find("HP +") != std::string::npos);
+    CHECK(level_up_line.find("TP +") != std::string::npos);
+    CHECK(level_up_line.find("ATP +") != std::string::npos);
+    CHECK(level_up_line.find("DFP +") != std::string::npos);
+    CHECK(level_up_line.find("LCK +") != std::string::npos);
+    CHECK(level_up_line.find("ATA") == std::string::npos);
+    CHECK(level_up_line.find("MST") == std::string::npos);
+    CHECK(level_up_line.find("EVP") == std::string::npos);
 }
 
 TEST_CASE("ExperienceSystem omits stats a level-up didn't move", "[ExperienceSystem]")
@@ -98,16 +112,14 @@ TEST_CASE("ExperienceSystem omits stats a level-up didn't move", "[ExperienceSys
     psr::MessageBus bus;
     psr::MessageQueue hud_queue;
     psr::FloatingTextSystem floating_text;
+    std::mt19937 rng{42};
 
     psr::StatsComponent unchanged_stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
 
-    psr::GrowthCurveLevel level_2;
-    level_2.level = 2;
-    level_2.xp_to_next = 10;
-    level_2.max_hp = 120;
-    level_2.max_tp = 50; // unchanged
-    level_2.stats = unchanged_stats;
-    psr::GrowthCurve growth_curve{{level_2}};
+    psr::GrowthCurve growth_curve;
+    growth_curve.xp_to_next = {.base = 10.0f};
+    growth_curve.max_hp = {.rate = 20.0f};
+    // max_tp and every stat left at rate = 0 -- must stay unchanged/omitted.
 
     psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, unchanged_stats);
     psr::Entity target = MakeExperienceTarget(registry, /*xp=*/10);
@@ -117,7 +129,7 @@ TEST_CASE("ExperienceSystem omits stats a level-up didn't move", "[ExperienceSys
                                                           { log_lines.push_back(message.text); });
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
 
-    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text, rng);
     system.Subscribe(player);
 
     psr::AfterDamageEvent event{.target = target, .amount = 10, .target_defeated = true};
@@ -126,7 +138,9 @@ TEST_CASE("ExperienceSystem omits stats a level-up didn't move", "[ExperienceSys
     hud_queue.HandleQueuedMessages();
 
     REQUIRE(log_lines.size() == 2);
-    REQUIRE(log_lines[1] == "[b][c=#f6470a]Player reached level 2![/c][/b] HP +[c=#7ee787]20[/c]");
+    const std::string& level_up_line = log_lines[1];
+    REQUIRE(level_up_line.starts_with("[b][c=#f6470a]Player reached level 2![/c][/b] HP +"));
+    CHECK(level_up_line.find(", ") == std::string::npos); // exactly one stat in the gain list
 }
 
 TEST_CASE("ExperienceSystem spawns exactly one LEVEL UP floating text across a multi-level jump", "[ExperienceSystem]")
@@ -135,24 +149,13 @@ TEST_CASE("ExperienceSystem spawns exactly one LEVEL UP floating text across a m
     psr::MessageBus bus;
     psr::MessageQueue hud_queue;
     psr::FloatingTextSystem floating_text;
+    std::mt19937 rng{42};
 
     psr::StatsComponent stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
 
-    psr::GrowthCurveLevel level_2;
-    level_2.level = 2;
-    level_2.xp_to_next = 10;
-    level_2.max_hp = 110;
-    level_2.max_tp = 50;
-    level_2.stats = stats;
-
-    psr::GrowthCurveLevel level_3;
-    level_3.level = 3;
-    level_3.xp_to_next = 10;
-    level_3.max_hp = 120;
-    level_3.max_tp = 50;
-    level_3.stats = stats;
-
-    psr::GrowthCurve growth_curve{{level_2, level_3}};
+    psr::GrowthCurve growth_curve;
+    growth_curve.xp_to_next = {.base = 10.0f};
+    growth_curve.max_hp = {.rate = 10.0f};
 
     psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, stats);
     psr::Entity target = MakeExperienceTarget(registry, /*xp=*/20); // crosses both levels at once
@@ -162,7 +165,7 @@ TEST_CASE("ExperienceSystem spawns exactly one LEVEL UP floating text across a m
                                                           { log_lines.push_back(message.text); });
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
 
-    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text, rng);
     system.Subscribe(player);
 
     psr::AfterDamageEvent event{.target = target, .amount = 20, .target_defeated = true};
@@ -182,15 +185,14 @@ TEST_CASE("ExperienceSystem's total_xp accumulates across kills and survives a l
     psr::MessageBus bus;
     psr::MessageQueue hud_queue;
     psr::FloatingTextSystem floating_text;
+    std::mt19937 rng{42};
 
-    psr::GrowthCurveLevel level_2;
-    level_2.level = 2;
-    level_2.xp_to_next = 10;
-    psr::GrowthCurve growth_curve{{level_2}};
+    psr::GrowthCurve growth_curve;
+    growth_curve.xp_to_next = {.base = 10.0f};
 
     psr::StatsComponent stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
     psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, stats);
-    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text, rng);
     system.Subscribe(player);
 
     psr::Entity first_kill = MakeExperienceTarget(registry, /*xp=*/6);
@@ -218,11 +220,10 @@ TEST_CASE("ExperienceSystem publishes no level-up line or floating text when no 
     psr::MessageBus bus;
     psr::MessageQueue hud_queue;
     psr::FloatingTextSystem floating_text;
+    std::mt19937 rng{42};
 
-    psr::GrowthCurveLevel level_2;
-    level_2.level = 2;
-    level_2.xp_to_next = 100;
-    psr::GrowthCurve growth_curve{{level_2}};
+    psr::GrowthCurve growth_curve;
+    growth_curve.xp_to_next = {.base = 100.0f};
 
     psr::StatsComponent stats{/*atp=*/10, /*ata=*/10, /*mst=*/10, /*dfp=*/10, /*evp=*/10, /*lck=*/5};
     psr::Entity player = MakePlayer(registry, /*hp=*/100, /*max_hp=*/100, /*tp=*/50, /*max_tp=*/50, stats);
@@ -233,7 +234,7 @@ TEST_CASE("ExperienceSystem publishes no level-up line or floating text when no 
                                                           { log_lines.push_back(message.text); });
     bus.Subscribe<psr::CombatLogEntryMessage>(hud_queue);
 
-    psr::ExperienceSystem system(bus, growth_curve, floating_text);
+    psr::ExperienceSystem system(bus, growth_curve, floating_text, rng);
     system.Subscribe(player);
 
     psr::AfterDamageEvent event{.target = target, .amount = 10, .target_defeated = true};

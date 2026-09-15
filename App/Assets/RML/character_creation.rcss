@@ -1,0 +1,19 @@
+#class-panel,
+#section-panel {
+    width: 480px;
+}
+
+#section-panel {
+    display: none;
+}
+
+.row-title {
+    display: block;
+    font-weight: bold;
+}
+
+.row-desc {
+    display: block;
+    font-size: 0.75em;
+    color: #aaa;
+}

@@ -26,8 +26,10 @@
 #include "Engine/World/Grid.h"
 #include "Hub/HubDefinition.h"
 #include "Items/AffixLibrary.h"
+#include "Items/SectionId.h"
 #include "Missions/RunProgress.h"
-#include "Progression/GrowthCurve.h"
+#include "Progression/CharacterClass.h"
+#include "Progression/ClassDefinition.h"
 #include "Render/FogOfWarRenderableLookup.h"
 #include "Render/RegistryRenderableLookup.h"
 #include "Shop/ShopStock.h"
@@ -42,6 +44,7 @@
 #include "States/TargetSelectionState.h"
 #include "States/ActionPaletteState.h"
 #include "Systems/CombatLogBridge.h"
+#include "Systems/DamageEffectSystem.h"
 #include "Systems/DamageTextSystem.h"
 #include "Systems/EnemyAiSystem.h"
 #include "Systems/ExperienceSystem.h"
@@ -119,7 +122,11 @@ struct WorldMouseScrollMessage;
 class GameplayLayer : public Layer
 {
 public:
-    GameplayLayer();
+    // chosen_class/chosen_section_id are the player's character-creation
+    // picks (see CharacterCreationLayer), fixed for the whole run -- read by
+    // SpawnNewCharacter to load the matching ClassDefinition and set
+    // SectionIdComponent.
+    GameplayLayer(ClassId chosen_class, SectionId chosen_section_id);
     ~GameplayLayer() override;
 
     GameplayLayer(const GameplayLayer&) = delete;
@@ -149,14 +156,27 @@ private:
 
     // One-time setup, called once from OnAttach(): a fresh Registry/schema/
     // content libraries, the player entity and its permanent components
-    // (Health/TP/TabTarget/Level/SectionId/Currency/Inventory/Storage,
-    // hardcoded until M10.3 character creation exists). Hands off to
+    // (Health/TP/TabTarget/Level/Class/SectionId/Currency/Inventory/Storage --
+    // Class/SectionId/starting HP-TP/starting weapon/starting known
+    // Techniques all come from m_chosen_class's ClassDefinition, see
+    // CharacterCreationLayer). Hands off to
     // TransitionToWorld(Hub) for everything scene-shaped (Grid/dungeon/
     // per-world systems), then -- now that the player is placed and
     // TurnCoordinator exists -- does the innate-weapon auto-equip and
     // default-hotbar-loadout blocks, finishing with ActorComponent to
     // enqueue the player into the turn queue.
     void SpawnNewCharacter();
+
+    // The player's own DeathEvent handler, subscribed in SpawnNewCharacter in
+    // place of DeathSystem's/InnateWeaponComponent's (both unsubscribed there
+    // for this entity only) -- unlike every other HealthComponent-bearing
+    // entity, the player must survive its own death with gear/Meseta/level
+    // intact (see the class doc comment and OnRestartRequested), so this
+    // mirrors DeathSystem's grid removal but removes PlayerControlledComponent
+    // instead of destroying the entity: enough for TurnCoordinator's
+    // live-player count (see TurnCoordinator::OnPlayerControlledDestroyed) to
+    // report PlayerDefeated without losing anything else on the entity.
+    void OnPlayerDeath(entt::entity self);
 
     // (Re)builds everything scene-shaped: destroys every world entity except
     // the player and everything reachable from its Inventory/Equipment/
@@ -241,9 +261,11 @@ private:
     void OnTeleporterActivated(TeleporterDestination destination);
 
     // Responds to RestartRequestedMessage (published by GameOverState on the
-    // first key press while it's on top of the state stack) by transitioning
-    // back to the hub (full-heal, gear/Meseta/level intact -- see the class
-    // doc comment) and popping GameOverState back off the stack.
+    // first key press while it's on top of the state stack) by restoring
+    // PlayerControlledComponent (removed by OnPlayerDeath, never destroyed
+    // along with the rest of the entity) before transitioning back to the hub
+    // (full-heal, gear/Meseta/level intact -- see the class doc comment) and
+    // popping GameOverState back off the stack.
     void OnRestartRequested(const RestartRequestedMessage& message);
 
     // If slot_index names a Technique/PhotonArt hotbar slot (see
@@ -252,6 +274,15 @@ private:
     // slot was consumed (Item/Empty slots, or an unaffordable ability,
     // return false).
     bool TryActivateSlot(int slot_index);
+
+    // Routes a built TargetRequest either through the interactive
+    // target-select detour (TurnCoordinator::RequestTargeting) or, for
+    // TargetingMode::SelfTarget, straight to SetPendingAction with
+    // SelectedTargetComponent pre-set to the caster's own tile -- the
+    // reachable set for SelfTarget is always {origin} (see
+    // TargetSelectionState::IsReachable), so making the player confirm a
+    // cursor that can't move is a no-op detour, not a real choice.
+    void BeginTargeting(TargetRequest request);
 
     void OnHotbarSlotActivated(const HotbarSlotActivatedMessage& message);
 
@@ -366,6 +397,12 @@ private:
     // player, not free-look, so there's no cursor-pivot to speak of here).
     void OnWorldMouseScroll(const WorldMouseScrollMessage& message);
 
+    // The player's character-creation picks (see CharacterCreationLayer),
+    // fixed for the whole run -- set once via the constructor, read by
+    // SpawnNewCharacter.
+    ClassId m_chosen_class;
+    SectionId m_chosen_section_id;
+
     Registry m_registry;
     AreaLibrary m_areas;
     PieceLibrary m_pieces;
@@ -377,11 +414,12 @@ private:
     PhotonArtLibrary m_photon_arts;
     TechniqueLibrary m_techniques;
     StatusEffectLibrary m_status_effects;
-    // The player's class-agnostic level-up table -- see GrowthCurve.h. A
-    // single hand-authored JSON document (App/Assets/Data/growth_curve.json),
-    // not a per-item content library like the ones above, so it's loaded via
-    // LoadGrowthCurve rather than one of the LoadXLibrary functions.
-    GrowthCurve m_growth_curve;
+    // m_chosen_class's starting kit and level-up table -- see
+    // ClassDefinition.h. Loaded via LoadClassDefinition (one hand-authored
+    // App/Assets/Data/Classes/<class-id>.json document, not a per-item
+    // content library like the ones above), replacing the old single
+    // class-agnostic growth_curve.json now that ClassId exists.
+    ClassDefinition m_class_definition;
     std::mt19937 m_rng{std::random_device{}()};
 
     SceneKind m_scene = SceneKind::Hub;
@@ -528,7 +566,7 @@ private:
 
     // Awards XP and applies level-ups when the player lands a killing blow --
     // see ExperienceSystem.h. Holds only pointers into the Layer's own
-    // MessageBus and m_growth_curve (both long-lived) -- lazy-once/
+    // MessageBus and m_class_definition.growth (both long-lived) -- lazy-once/
     // never-rebuilt, same reasoning as m_combat_log_bridge.
     std::optional<ExperienceSystem> m_experience_system;
 
@@ -615,7 +653,7 @@ private:
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
-    CharacterScreenState m_character_screen_state{m_affixes, m_growth_curve};
+    CharacterScreenState m_character_screen_state{m_affixes, m_class_definition.growth};
     ActionPaletteState m_action_palette_state{m_techniques, m_photon_arts};
     MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};

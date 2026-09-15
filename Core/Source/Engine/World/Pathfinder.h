@@ -12,7 +12,9 @@ class Grid;
 // A* over grid's tiles, 8-directional (diagonal steps cost the same as
 // cardinal -- see MoveAction::kMoveCost, a flat per-step cost regardless of
 // direction -- so the search uses a uniform g-cost and a Chebyshev heuristic,
-// not octile distance). is_walkable is queried for every candidate tile
+// not octile distance, plus a cross-track tiebreaker so ties between
+// equally-short paths favor the one hugging the straight start->goal line
+// instead of an arbitrary zigzag). is_walkable is queried for every candidate tile
 // other than start (including goal); FindPath checks grid.Contains() itself
 // first, so callers' predicates don't need to duplicate bounds logic. Corner
 // -cutting past a diagonal's flanking tiles is not prevented, matching the

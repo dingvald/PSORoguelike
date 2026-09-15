@@ -32,6 +32,59 @@ namespace {
                 return true;
         return false;
     }
+
+    // The `count` grid tiles a Bresenham line from origin through target
+    // follows, continuing past target along the same slope rather than
+    // stopping there -- an any-angle generalization of the direction*i
+    // stepping ResolveTargetTiles/BuildProjectilePath use for their fixed
+    // 8-way directions. Empty when origin == target (no slope to continue).
+    std::vector<Vec2> BresenhamRay(Vec2 origin, Vec2 target, int count)
+    {
+        std::vector<Vec2> tiles;
+        if (origin == target || count <= 0)
+            return tiles;
+
+        int dx = target.x - origin.x;
+        int dy = target.y - origin.y;
+        const int sx = (dx > 0) - (dx < 0);
+        const int sy = (dy > 0) - (dy < 0);
+        dx = std::abs(dx);
+        dy = std::abs(dy);
+
+        int x = origin.x;
+        int y = origin.y;
+        int error = 0;
+        tiles.reserve(count);
+        if (dx >= dy)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                x += sx;
+                error += dy;
+                if (2 * error >= dx)
+                {
+                    y += sy;
+                    error -= dx;
+                }
+                tiles.push_back(Vec2{x, y});
+            }
+        }
+        else
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                y += sy;
+                error += dx;
+                if (2 * error >= dy)
+                {
+                    x += sx;
+                    error -= dy;
+                }
+                tiles.push_back(Vec2{x, y});
+            }
+        }
+        return tiles;
+    }
 } // namespace
 
 std::vector<Vec2> ResolveTargetTiles(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction,
@@ -104,6 +157,55 @@ std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2
     for (int i = 1; i <= range; ++i)
     {
         const Vec2 tile = origin + direction * i;
+        if (!grid.Contains(tile))
+            break;
+        if (IsWallTile(registry, grid, tile))
+            break;
+        path.push_back(tile);
+        if (!pierces && IsCreatureTile(registry, grid, tile))
+            break;
+    }
+    return path;
+}
+
+std::vector<Vec2> ResolveTargetTilesToward(const Grid& grid, Registry& registry, Vec2 origin, Vec2 target,
+                                           WeaponRangeShape shape, int range)
+{
+    switch (shape)
+    {
+    case WeaponRangeShape::SingleTarget:
+    {
+        std::vector<Vec2> tiles;
+        if (grid.Contains(target))
+            tiles.push_back(target);
+        return tiles;
+    }
+    case WeaponRangeShape::Line:
+    {
+        std::vector<Vec2> tiles;
+        for (Vec2 tile : BresenhamRay(origin, target, range))
+        {
+            if (!grid.Contains(tile))
+                break;
+            if (IsWallTile(registry, grid, tile))
+                break;
+            tiles.push_back(tile);
+        }
+        return tiles;
+    }
+    case WeaponRangeShape::Cone3:
+    case WeaponRangeShape::Surrounding:
+    default:
+        return ResolveTargetTiles(grid, registry, origin, SnapToDirection(target - origin), shape, range);
+    }
+}
+
+std::vector<Vec2> BuildProjectilePathToward(const Grid& grid, Registry& registry, Vec2 origin, Vec2 target, int range,
+                                            bool pierces)
+{
+    std::vector<Vec2> path;
+    for (Vec2 tile : BresenhamRay(origin, target, range))
+    {
         if (!grid.Contains(tile))
             break;
         if (IsWallTile(registry, grid, tile))

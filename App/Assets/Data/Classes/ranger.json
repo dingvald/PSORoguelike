@@ -1,0 +1,25 @@
+{
+    "schema_version": 1,
+    "class_id": "ranger",
+    "name": "Ranger",
+    "starting_weapon_prefab_id": "weapons.handgun",
+    "starting_technique_id_strings": [],
+    "starting_armor_prefab_id": "armor.frame",
+    "starting_inventory": [
+        { "item_prefab_id": "monomate", "quantity": 2 },
+        { "item_prefab_id": "monofluid", "quantity": 2 }
+    ],
+    "base_hp": 40,
+    "base_tp": 20,
+    "curves": {
+        "xp_to_next": { "base": 50, "rate": 30, "exponent": 1.26 },
+        "max_hp": { "base": 40, "rate": 6 },
+        "max_tp": { "base": 28, "rate": 4 },
+        "atp": { "base": 38, "rate": 3 },
+        "ata": { "base": 80, "rate": 3 },
+        "mst": { "base": 25, "rate": 2 },
+        "dfp": { "base": 15, "rate": 1 },
+        "evp": { "base": 50, "rate": 2 },
+        "lck": { "base": 12, "rate": 1 }
+    }
+}

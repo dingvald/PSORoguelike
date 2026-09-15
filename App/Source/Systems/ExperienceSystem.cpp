@@ -43,8 +43,8 @@ namespace {
 } // namespace
 
 ExperienceSystem::ExperienceSystem(MessageBus& message_bus, const GrowthCurve& growth_curve,
-                                   FloatingTextSystem& floating_text)
-    : m_message_bus(&message_bus), m_growth_curve(&growth_curve), m_floating_text(&floating_text)
+                                   FloatingTextSystem& floating_text, std::mt19937& rng)
+    : m_message_bus(&message_bus), m_growth_curve(&growth_curve), m_floating_text(&floating_text), m_rng(&rng)
 {
 }
 
@@ -75,16 +75,15 @@ void ExperienceSystem::OnDamage(Entity player, AfterDamageEvent& event)
         CombatLogEntryMessage{"Player gained [c=#f6470a]" + std::to_string(xp_value->xp) + "[/c] XP"});
 
     bool leveled_up = false;
-    while (const GrowthCurveLevel* next = m_growth_curve->Find(level.level + 1))
+    for (GrowthCurveLevel next = m_growth_curve->Evaluate(level.level + 1); level.xp >= next.xp_to_next;
+        next = m_growth_curve->Evaluate(level.level + 1))
     {
-        if (level.xp < next->xp_to_next)
-            break;
-
-        level.xp -= next->xp_to_next;
-        level.level = next->level;
+        level.xp -= next.xp_to_next;
+        level.level = next.level;
         leveled_up = true;
 
-        const std::string deltas = ApplyLevelUp(player, *next);
+        const GrowthCurveLevel gain = m_growth_curve->EvaluateRandomGain(level.level, *m_rng);
+        const std::string deltas = ApplyLevelUp(player, gain);
         std::string log_line = "[b][c=#f6470a]Player reached level " + std::to_string(level.level) + "![/c][/b]";
         if (!deltas.empty())
             log_line += " " + deltas;
@@ -100,33 +99,38 @@ void ExperienceSystem::OnDamage(Entity player, AfterDamageEvent& event)
     }
 }
 
-std::string ExperienceSystem::ApplyLevelUp(Entity player, const GrowthCurveLevel& level_data)
+std::string ExperienceSystem::ApplyLevelUp(Entity player, const GrowthCurveLevel& gain)
 {
     std::string deltas;
 
     if (HealthComponent* health = player.TryGet<HealthComponent>())
     {
-        deltas = AppendDelta(std::move(deltas), "HP", level_data.max_hp - health->max_hp);
-        health->max_hp = level_data.max_hp;
-        health->current_hp = level_data.max_hp;
+        deltas = AppendDelta(std::move(deltas), "HP", gain.max_hp);
+        health->max_hp += gain.max_hp;
+        health->current_hp = health->max_hp;
     }
 
     if (TPComponent* tp = player.TryGet<TPComponent>())
     {
-        deltas = AppendDelta(std::move(deltas), "TP", level_data.max_tp - tp->max_tp);
-        tp->max_tp = level_data.max_tp;
-        tp->current_tp = level_data.max_tp;
+        deltas = AppendDelta(std::move(deltas), "TP", gain.max_tp);
+        tp->max_tp += gain.max_tp;
+        tp->current_tp = tp->max_tp;
     }
 
     if (StatsComponent* stats = player.TryGet<StatsComponent>())
     {
-        deltas = AppendDelta(std::move(deltas), "ATP", level_data.stats.atp - stats->atp);
-        deltas = AppendDelta(std::move(deltas), "ATA", level_data.stats.ata - stats->ata);
-        deltas = AppendDelta(std::move(deltas), "MST", level_data.stats.mst - stats->mst);
-        deltas = AppendDelta(std::move(deltas), "DFP", level_data.stats.dfp - stats->dfp);
-        deltas = AppendDelta(std::move(deltas), "EVP", level_data.stats.evp - stats->evp);
-        deltas = AppendDelta(std::move(deltas), "LCK", level_data.stats.lck - stats->lck);
-        *stats = level_data.stats;
+        deltas = AppendDelta(std::move(deltas), "ATP", gain.stats.atp);
+        stats->atp += gain.stats.atp;
+        deltas = AppendDelta(std::move(deltas), "ATA", gain.stats.ata);
+        stats->ata += gain.stats.ata;
+        deltas = AppendDelta(std::move(deltas), "MST", gain.stats.mst);
+        stats->mst += gain.stats.mst;
+        deltas = AppendDelta(std::move(deltas), "DFP", gain.stats.dfp);
+        stats->dfp += gain.stats.dfp;
+        deltas = AppendDelta(std::move(deltas), "EVP", gain.stats.evp);
+        stats->evp += gain.stats.evp;
+        deltas = AppendDelta(std::move(deltas), "LCK", gain.stats.lck);
+        stats->lck += gain.stats.lck;
     }
 
     return deltas;

@@ -157,29 +157,27 @@ ActionResult TechniqueAction::Perform(Entity actor)
         return ActionResult(EffectiveActCost(actor, kTechniqueCost));
     }
 
-    // A directional Heal cast has nothing to resolve against -- there is no
-    // ally-targeting concept in this codebase (Hostility.h's IsHostile is
-    // player-vs-everyone), so Heal only ever applies on the self-target
-    // branch above. The turn is still spent, matching every other directional
-    // cast's "cost is charged once a cast executes" convention.
+    // A directional Heal cast has nothing to resolve against -- TechniqueAction
+    // has no ally-targeting resolution branch yet, so Heal only ever applies
+    // on the self-target branch above. The turn is still spent, matching
+    // every other directional cast's "cost is charged once a cast executes"
+    // convention.
     if (technique->effect_family == EffectFamily::Heal)
         return ActionResult(EffectiveActCost(actor, kTechniqueCost));
-
-    const Vec2 direction = SnapToDirection(offset);
 
     // projectile_speed > 0 (foie/barta): spawn a real travelling entity
     // instead of resolving damage inline -- see ProjectileComponent.h/
     // ProjectileAdvanceAction.h. Only meaningful for SingleTarget/Line
-    // (BuildProjectilePath is a straight cardinal walk); any other
-    // range_shape falls through to the instant resolution below, same as
-    // projectile_speed == 0 (zonde).
+    // (BuildProjectilePathToward is a straight walk toward selected_tile, any
+    // angle); any other range_shape falls through to the instant resolution
+    // below, same as projectile_speed == 0 (zonde).
     if (technique->projectile_speed > 0 &&
         (technique->range_shape == WeaponRangeShape::SingleTarget || technique->range_shape == WeaponRangeShape::Line))
     {
         if (registry.HasPrefab(technique->projectile_prefab_id))
         {
-            const std::vector<Vec2> path = BuildProjectilePath(*m_grid, registry, origin, direction, technique->range,
-                                                               technique->projectile_pierces);
+            const std::vector<Vec2> path = BuildProjectilePathToward(*m_grid, registry, origin, selected_tile,
+                                                                     technique->range, technique->projectile_pierces);
             if (!path.empty())
             {
                 // Spawned at origin (the caster's own tile), not path.front():
@@ -214,7 +212,7 @@ ActionResult TechniqueAction::Perform(Entity actor)
     }
 
     const std::vector<Vec2> target_tiles =
-        ResolveTargetTiles(*m_grid, registry, origin, direction, technique->range_shape, technique->range);
+        ResolveTargetTilesToward(*m_grid, registry, origin, selected_tile, technique->range_shape, technique->range);
 
     for (Vec2 tile : target_tiles)
     {

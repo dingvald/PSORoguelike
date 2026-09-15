@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Progression/CharacterClass.h"
+
 #include <filesystem>
 
 class ApplicationFilepaths
@@ -18,7 +20,10 @@ public:
     static const std::filesystem::path PhotonArtsPath;
     static const std::filesystem::path TechniquesPath;
     static const std::filesystem::path StatusEffectsPath;
-    static const std::filesystem::path GrowthCurvePath;
+    static const std::filesystem::path ClassesPath;
     static const std::filesystem::path HubPath;
     static const std::filesystem::path ShopStockPath;
+
+    // App/Assets/Data/Classes/<class-id>.json -- see ClassDefinitionFile.h.
+    static std::filesystem::path ClassDefinitionPath(psr::ClassId class_id);
 };

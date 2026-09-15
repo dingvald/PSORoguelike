@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "renderable": {
-            "texture_id": "rectangle",
+            "texture_id": "saber_slash_effect",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -11,11 +11,12 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#0bff0ecc",
+            "color_1": "#0aff0dcc",
             "color_2": "#29ff2ccc",
             "render_layer": 9,
-            "frames": 1,
-            "frame_time": 0.0
+            "frames": 4,
+            "frame_time": 0.05,
+            "is_synced": false
         }
     }
 }

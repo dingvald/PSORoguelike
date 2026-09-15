@@ -3,6 +3,7 @@
     "name": "forest_large_square_room",
     "area_tag": "forest",
     "category": "room",
+    "preferred_unlock_condition": "room_cleared",
     "can_rotate": false,
     "can_mirror": false,
     "tags": [],
@@ -3121,14 +3122,6 @@
         },
         {
             "cell_offset": {
-                "x": 7,
-                "y": 7
-            },
-            "prefab_id": "enemies.booma",
-            "wave": 0
-        },
-        {
-            "cell_offset": {
                 "x": 14,
                 "y": 10
             },
@@ -3137,24 +3130,8 @@
         },
         {
             "cell_offset": {
-                "x": 17,
-                "y": 7
-            },
-            "prefab_id": "enemies.booma",
-            "wave": 0
-        },
-        {
-            "cell_offset": {
                 "x": 14,
                 "y": 13
-            },
-            "prefab_id": "enemies.booma",
-            "wave": 0
-        },
-        {
-            "cell_offset": {
-                "x": 17,
-                "y": 16
             },
             "prefab_id": "enemies.booma",
             "wave": 0
@@ -3169,11 +3146,51 @@
         },
         {
             "cell_offset": {
-                "x": 7,
+                "x": 12,
+                "y": 8
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 12,
                 "y": 16
             },
             "prefab_id": "enemies.booma",
-            "wave": 0
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 7,
+                "y": 11
+            },
+            "prefab_id": "enemies.barbarous_wolf",
+            "wave": 2
+        },
+        {
+            "cell_offset": {
+                "x": 7,
+                "y": 12
+            },
+            "prefab_id": "enemies.rag_rappy",
+            "wave": 2
+        },
+        {
+            "cell_offset": {
+                "x": 17,
+                "y": 11
+            },
+            "prefab_id": "enemies.barbarous_wolf",
+            "wave": 2
+        },
+        {
+            "cell_offset": {
+                "x": 17,
+                "y": 12
+            },
+            "prefab_id": "enemies.rag_rappy",
+            "wave": 2
         }
     ]
 }

@@ -69,8 +69,7 @@ CharacterScreenMessage BuildCharacterScreenMessage(Registry& registry, entt::ent
         message.stats.level = level->level;
         message.stats.xp = level->xp;
         message.stats.total_xp = level->total_xp;
-        if (const GrowthCurveLevel* next = growth_curve.Find(level->level + 1))
-            message.stats.xp_to_next = next->xp_to_next;
+        message.stats.xp_to_next = growth_curve.Evaluate(level->level + 1).xp_to_next;
     }
 
     if (const CurrencyComponent* currency = registry.TryGetComponent<CurrencyComponent>(player))

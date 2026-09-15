@@ -40,6 +40,26 @@ TEST_CASE("FindPath prefers a diagonal shortcut over a cardinal-only route in op
     REQUIRE(path.size() == static_cast<std::size_t>(psr::ChebyshevDistance(psr::Vec2{0, 0}, psr::Vec2{3, 3})));
 }
 
+TEST_CASE("FindPath hugs the straight line instead of zigzagging when dx and dy differ", "[Pathfinder]")
+{
+    psr::Grid grid{10, 10};
+
+    // (0,0) -> (5,2): the optimal step count is Chebyshev distance (5), which
+    // ties for many step orderings (e.g. diagonal-then-straight vs.
+    // diagonal/cardinal interleaved unevenly). The canonical, straight-
+    // looking path front-loads the 2 diagonal steps then finishes cardinal,
+    // so y should move monotonically toward the goal with no backtracking.
+    const std::vector<psr::Vec2> path = psr::FindPath(grid, psr::Vec2{0, 0}, psr::Vec2{5, 2}, AlwaysWalkable);
+
+    REQUIRE(path.size() == static_cast<std::size_t>(psr::ChebyshevDistance(psr::Vec2{0, 0}, psr::Vec2{5, 2})));
+    int previous_y = 0;
+    for (psr::Vec2 tile : path)
+    {
+        REQUIRE(tile.y >= previous_y);
+        previous_y = tile.y;
+    }
+}
+
 TEST_CASE("FindPath routes around a blocked row rather than failing", "[Pathfinder]")
 {
     psr::Grid grid{5, 5};

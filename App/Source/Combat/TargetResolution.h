@@ -50,6 +50,29 @@ Vec2 SnapToDirection(Vec2 offset);
 std::vector<Vec2> BuildProjectilePath(const Grid& grid, Registry& registry, Vec2 origin, Vec2 direction, int range,
                                       bool pierces);
 
+// TargetingMode::TargetSquare's own resolution: SingleTarget hits target
+// itself (whatever the player picked, anywhere within the reachable range
+// TargetSelectionState already validated -- unlike ResolveTargetTiles's
+// SingleTarget case, which only ever reaches the one tile adjacent to
+// origin); Line walks a Bresenham ray from origin through target, continued
+// past it for the full range tiles so target conveys aim, not distance --
+// this also produces the correct 8 unit directions when target happens to be
+// one of origin's 8 neighbours (Directional mode's own cursor never leaves
+// that set), so callers can use this for every TargetingMode uniformly for
+// these two shapes. Cone3/Surrounding fall back to ResolveTargetTiles via
+// SnapToDirection(target - origin): no authored content combines
+// TargetSquare with either shape, and their flanking/cardinal math assumes
+// one of the 8 unit directions.
+std::vector<Vec2> ResolveTargetTilesToward(const Grid& grid, Registry& registry, Vec2 origin, Vec2 target,
+                                           WeaponRangeShape shape, int range);
+
+// BuildProjectilePath's own target-tile counterpart: walks the same
+// Bresenham ray ResolveTargetTilesToward's Line case uses instead of a fixed
+// unit direction, so a projectile can travel toward any angle, not just the
+// 8 SnapToDirection unit vectors.
+std::vector<Vec2> BuildProjectilePathToward(const Grid& grid, Registry& registry, Vec2 origin, Vec2 target,
+                                            int range, bool pierces);
+
 // Bresenham tile-line test: true if no wall tile (a BlocksMovementComponent
 // occupant with no HealthComponent, same definition ResolveTargetTiles/
 // BuildProjectilePath use) lies strictly between from and to. Endpoints

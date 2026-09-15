@@ -252,16 +252,18 @@ body {
     pointer-events: none;
 }
 
-/* Zero-size, positioned at a tile's centre in screen space (see
-   GameplayLayer::PublishFloatingTextState); its .floating-text child is
-   centred on that point via align-items/justify-content, which -- unlike a
-   transform: translate(-50%, -50%) on the text itself -- centres correctly
-   regardless of the child's own rendered width/height. */
+/* left/top/width/height are set inline per-entry by HudLayer::OnFloatingTextState,
+   sized so the box is centred on a tile's screen-space centre (see
+   GameplayLayer::PublishFloatingTextState) and comfortably larger than the
+   .floating-text child, which is centred within it via align-items/
+   justify-content. Needs a real, positive-size box rather than a
+   width:0/height:0 one -- RmlUi's flex layout doesn't centre a child that
+   overflows a zero-size container, it left/top-aligns it instead, which is
+   why a transform: translate(-50%, -50%) on the text itself was also tried
+   and abandoned before this. */
 .floating-text-anchor {
     display: flex;
     position: absolute;
-    width: 0;
-    height: 0;
     align-items: center;
     justify-content: center;
     pointer-events: none;

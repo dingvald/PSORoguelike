@@ -73,6 +73,16 @@ namespace {
     // staying a fixed screen size while the world underneath it magnifies.
     constexpr float kFloatingTextBaseFontSizeEm = 0.9f;
 
+    // Baseline anchor box size (Camera::GetZoom() == 1), scaled by each
+    // entry's scale alongside the font size -- generously larger than any
+    // damage/heal number the font size ever produces, so .floating-text-anchor
+    // (see hud.rcss) always centers its child within real, positive space
+    // instead of relying on a flex container overflowing negative free space
+    // (RmlUi's flex layout doesn't center overflow past a zero-size
+    // container -- it left/top-aligns instead).
+    constexpr float kFloatingTextAnchorBaseWidth = 160.0f;
+    constexpr float kFloatingTextAnchorBaseHeight = 32.0f;
+
     // Must match #character-screen-hint's initial text in hud.rml -- swapped
     // back in by CancelAwaitingHotbarSlot, same "must match markup"
     // reasoning as kContextMenuWidth/kContextMenuMaxHeight above.
@@ -1452,9 +1462,8 @@ void HudLayer::RenderStatsPanel()
     std::string markup;
     markup += "<div class=\"stat-row character-name\">Player</div>";
     markup += "<div class=\"stat-row\">Lv: " + std::to_string(stats.level) + "</div>";
-    markup += stats.xp_to_next > 0 ? "<div class=\"stat-row\">XP to Next: " + std::to_string(stats.xp) + " / " +
-                                          std::to_string(stats.xp_to_next) + "</div>"
-                                    : std::string("<div class=\"stat-row\">XP to Next: MAX</div>");
+    markup += "<div class=\"stat-row\">XP to Next: " + std::to_string(stats.xp) + " / " +
+              std::to_string(stats.xp_to_next) + "</div>";
     markup += "<div class=\"stat-row\">Total EXP: " + std::to_string(stats.total_xp) + "</div>";
     markup += "<div class=\"stats-separator\"></div>";
     markup +=
@@ -2057,14 +2066,18 @@ void HudLayer::OnFloatingTextState(const FloatingTextStateMessage& message)
     std::string markup;
     for (const FloatingTextStateMessage::Entry& entry : message.entries)
     {
-        // A zero-size flex anchor centered on (screen_x, screen_y), its
-        // .floating-text child centered within it by align-items/
-        // justify-content regardless of the child's own rendered
-        // width/height -- see the .floating-text-anchor doc comment in
-        // hud.rcss for why this replaced a transform: translate(-50%, -50%)
-        // on the text span itself.
-        markup += "<div class=\"floating-text-anchor\" style=\"left:" + std::to_string(entry.screen_x) +
-                  "px; top:" + std::to_string(entry.screen_y) + "px;\"><span class=\"floating-text\" style=\"font-size:" +
+        // A real-size flex anchor box, positioned so it's centered on
+        // (screen_x, screen_y) by construction (left/top offset by half the
+        // box's own width/height), with its .floating-text child centered
+        // within that box by align-items/justify-content -- see the
+        // .floating-text-anchor doc comment in hud.rcss for why the box
+        // can't be zero-size.
+        const float box_width = kFloatingTextAnchorBaseWidth * entry.scale;
+        const float box_height = kFloatingTextAnchorBaseHeight * entry.scale;
+        markup += "<div class=\"floating-text-anchor\" style=\"left:" + std::to_string(entry.screen_x - box_width / 2.0f) +
+                  "px; top:" + std::to_string(entry.screen_y - box_height / 2.0f) + "px; width:" +
+                  std::to_string(box_width) + "px; height:" + std::to_string(box_height) +
+                  "px;\"><span class=\"floating-text\" style=\"font-size:" +
                   std::to_string(kFloatingTextBaseFontSizeEm * entry.scale) + "em; color:" +
                   ColorToRgbaCss(entry.color) + ";\">" + EscapeRml(entry.text) + "</span></div>";
     }

@@ -15,7 +15,7 @@ ShopStock LoadShopStock(const std::filesystem::path& path);
 
 // Writes stock to path as the shop_stock.json document -- the inverse of
 // LoadShopStock, used by ShopStockEditorLayer's Save button (unlike
-// GrowthCurveFile, this content type has an editor, so it needs a save
+// ClassDefinitionFile, this content type has an editor, so it needs a save
 // path).
 void SaveShopStock(const std::filesystem::path& path, const ShopStock& stock);
 

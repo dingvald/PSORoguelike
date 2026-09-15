@@ -31,12 +31,15 @@
                 "y": 24
             },
             "uv": {
-                "x": 0,
-                "y": 0
+                "x": 30,
+                "y": 13
             },
             "color_1": "#d15a7aff",
-            "color_2": "#f2b8c9ff",
-            "render_layer": 1
+            "color_2": "#fbf420ff",
+            "render_layer": 1,
+            "frames": 1,
+            "frame_time": 0.0,
+            "is_synced": true
         },
         "drop_table": {
             "entries": [
@@ -52,6 +55,10 @@
         },
         "experience_value": {
             "xp": 8
+        },
+        "actor": {
+            "movement_speed": 60,
+            "act_speed": 100
         }
     }
 }

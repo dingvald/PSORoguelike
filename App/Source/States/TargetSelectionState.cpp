@@ -245,9 +245,8 @@ void TargetSelectionState::UpdatePreview(GameplayContext& context)
     if (offset == Vec2{0, 0})
         return;
 
-    const Vec2 direction = SnapToDirection(offset);
-    const std::vector<Vec2> path = BuildProjectilePath(context.grid, context.registry, m_origin, direction,
-                                                       m_request.range, m_request.projectile_pierces);
+    const std::vector<Vec2> path = BuildProjectilePathToward(context.grid, context.registry, m_origin, m_cursor,
+                                                             m_request.range, m_request.projectile_pierces);
     if (path.empty())
         return;
 

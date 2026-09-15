@@ -1,0 +1,21 @@
+<rml>
+    <head>
+        <title>Character Creation</title>
+        <link type="text/rcss" href="main_menu.rcss"/>
+        <link type="text/rcss" href="character_creation.rcss"/>
+    </head>
+    <body>
+        <div id="menu-shell">
+            <div id="class-panel" class="panel">
+                <h1>Choose Your Class</h1>
+                <p class="subtitle">Up/Down to browse, Enter to choose, Esc to go back</p>
+                <ul id="class-list" class="menu-list"></ul>
+            </div>
+            <div id="section-panel" class="panel">
+                <h1>Choose Your Section ID</h1>
+                <p class="subtitle">Up/Down to browse, Enter to confirm, Esc to go back</p>
+                <ul id="section-list" class="menu-list"></ul>
+            </div>
+        </div>
+    </body>
+</rml>

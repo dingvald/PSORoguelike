@@ -5,6 +5,7 @@
 #include "Combat/StatusEffectApplication.h"
 #include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -76,6 +77,10 @@ psr::Entity MakeDefender(psr::Registry& registry, psr::Grid& grid, psr::Vec2 til
     health.current_hp = hp;
     health.max_hp = hp;
     defender.Emplace<psr::HealthComponent>(health);
+    // Marks this as the opposing side to MakeActor's PlayerControlledComponent
+    // -- GetFaction's own inference (AiComponent -> Enemy) doesn't apply here
+    // since this bare test fixture never carries one.
+    defender.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     return defender;
 }
 

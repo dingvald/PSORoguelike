@@ -6,6 +6,7 @@
 #include "CombatRegistrySetup.h"
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/KnownTechniquesComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RaceComponent.h"
@@ -80,6 +81,10 @@ psr::Entity MakeDefender(psr::Registry& registry, psr::Grid& grid, psr::Vec2 til
     health.current_hp = hp;
     health.max_hp = hp;
     defender.Emplace<psr::HealthComponent>(health);
+    // Marks this as the opposing side to MakeActor's PlayerControlledComponent
+    // -- GetFaction's own inference (AiComponent -> Enemy) doesn't apply here
+    // since this bare test fixture never carries one.
+    defender.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     return defender;
 }
 
@@ -230,6 +235,96 @@ TEST_CASE("TechniqueAction eventually destroys a hostile Directional-cast occupa
     {
         psr::ActionResult result = action.Perform(actor);
         REQUIRE(result.cost == psr::TechniqueAction::kTechniqueCost);
+        if (!registry.IsValid(enemy_handle))
+            destroyed = true;
+    }
+
+    REQUIRE(destroyed);
+}
+
+TEST_CASE("TechniqueAction TargetSquare SingleTarget hits the exact selected tile, not just an adjacent one",
+          "[TechniqueAction]")
+{
+    // Regression pin for the ResolveTargetTilesToward fix: SnapToDirection +
+    // ResolveTargetTiles's SingleTarget case used to resolve to origin +
+    // direction (always one tile away) regardless of how far the player
+    // actually pointed the TargetSquare cursor -- zonde (range 5,
+    // single_target, target_square) could then never hit anything past the
+    // caster's own adjacent tile. selected_tile here is 3 tiles out, well
+    // past adjacent, so this only passes once the exact tile is used.
+    psr::Registry registry;
+    psr::Grid grid{6, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    psr::Technique technique;
+    technique.tp_cost = 0;
+    technique.targeting_mode = psr::TargetingMode::TargetSquare;
+    technique.range_shape = psr::WeaponRangeShape::SingleTarget;
+    technique.range = 5;
+    technique.effect_family = psr::EffectFamily::Damage;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*mst=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{4, 1}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {4, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10);
+    const entt::entity enemy_handle = enemy.Handle();
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+
+    bool destroyed = false;
+    for (int attempt = 0; attempt < 50 && !destroyed; ++attempt)
+    {
+        action.Perform(actor);
+        if (!registry.IsValid(enemy_handle))
+            destroyed = true;
+    }
+
+    REQUIRE(destroyed);
+}
+
+TEST_CASE("TechniqueAction TargetSquare Line follows the exact angle to the selected tile, not the nearest of 8",
+          "[TechniqueAction]")
+{
+    // Regression pin for the ResolveTargetTilesToward fix: SnapToDirection
+    // used to round a TargetSquare-picked tile to the nearest of 8 unit
+    // directions before walking the Line shape, so a shallow-angle pick like
+    // {6,1} from {0,2} (mostly horizontal, snaps to {1,0}) would walk along
+    // y=2 and never reach a target sitting off that snapped line. The exact
+    // Bresenham ray from {0,2} toward {6,1} passes through {3,1} instead --
+    // see BresenhamRay's own math in TargetResolution.cpp.
+    psr::Registry registry;
+    psr::Grid grid{7, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    psr::Technique technique;
+    technique.tp_cost = 0;
+    technique.targeting_mode = psr::TargetingMode::TargetSquare;
+    technique.range_shape = psr::WeaponRangeShape::Line;
+    technique.range = 3;
+    technique.effect_family = psr::EffectFamily::Damage;
+    psr::TechniqueLibrary techniques = MakeLibrary(technique);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {0, 2}, /*mst=*/80, /*ata=*/200, /*tp=*/100000);
+    entt::entity weapon = MakeWeapon(registry);
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    actor.Emplace<psr::SelectedTargetComponent>(psr::SelectedTargetComponent{psr::Vec2{6, 1}});
+
+    psr::Entity enemy = MakeDefender(registry, grid, {3, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/10);
+    const entt::entity enemy_handle = enemy.Handle();
+
+    psr::TechniqueAction action(grid, techniques, affixes, kTechniqueId, rng);
+
+    bool destroyed = false;
+    for (int attempt = 0; attempt < 50 && !destroyed; ++attempt)
+    {
+        action.Perform(actor);
         if (!registry.IsValid(enemy_handle))
             destroyed = true;
     }

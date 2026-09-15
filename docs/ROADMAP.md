@@ -147,7 +147,7 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | Gap | Severity | Milestone |
 |---|---|---|
 | No audio subsystem of any kind | Blocker | M12 |
-| No title screen, pause, settings, or quit confirmation | Blocker | M14 |
+| ~~No title screen~~ — resolved; pause, settings, and quit confirmation still missing | Blocker | M14 |
 | No save/load; a closed window loses the character | Blocker | M11.2 |
 | Escape quits to desktop instantly from gameplay | Blocker | M14 |
 | No key rebinding, no gamepad, minimal mouse support | High | M15 |
@@ -159,7 +159,7 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | Entities are always 1x1; no multi-tile entities or bosses | High | M5.4 / M17.3 |
 | ~~An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters~~ — resolved (Mission Select still lists every dungeon individually, see 4.6's own note) | Medium | M4.6 |
 | ~~Area/biome schema (M3.2) never built, so no per-area theming~~ — resolved | High | M3 |
-| No character creation, no classes, no difficulty tiers | High | M10 |
+| ~~No character creation, no classes~~ — resolved; no difficulty tiers | High | M10 |
 | Mag companion not started | Medium | M9 |
 | No localization seam; strings hardcoded in C++ and RML | Medium | M16 |
 
@@ -1597,7 +1597,9 @@ project builds Windows-only (MSVC + vcpkg x64-windows, per Setup-Windows.bat/vcp
 session that wrote this milestone ran in a Linux sandbox with no Windows toolchain, no vcpkg, and
 no network access to fetch entt/rapidjson/Catch2 headers for even a syntax-only check — every
 other "Done" entry in this file states a real build/test/manual-run result; this one can't yet,
-so it's flagged instead of claimed. 10.2/10.3 not started.
+so it's flagged instead of claimed. 10.3 done (built and verified via a live
+Debug|x64 MSBuild run + both Catch2 suites, unlike 10.1's own still-unverified caveat above — see
+its own entry). 10.2 not started.
 
 - **10.1 Persistent hub:** Engine: non-procedural hub scene, shop buy/sell, storage,
   mission-select gated by per-character unlocks. Editor: none new (consumes M4/M5.3 data). UI:
@@ -1696,16 +1698,33 @@ so it's flagged instead of claimed. 10.2/10.3 not started.
   creation, persisted for the run. Editor: none (player-facing flow, not content data). UI:
   character-creation screen.
 
-  **Ship-readiness gap detail: promoted to a blocker.** Today `GameplayLayer::SpawnNewCharacter`
-  creates one hardcoded player from `player.json`, hardcodes `SectionId::Viridia`, and assigns no
-  class at all. Two of the GDD's three central identity choices therefore do not exist in the
-  game, and the class triad that the entire weapon, Photon Art, and Technique design rests on is
-  unrepresented in code: there is no class component anywhere, and M11.1's growth curve was
-  deliberately built class-agnostic precisely because there was nothing to key it on. This bullet
-  needs a class component and its per-class starting kit, per-class growth curves replacing the
-  single `growth_curve.json`, a Section ID choice that actually affects something, and the
-  creation screen itself — which attaches to M14.1's title-screen "New Character" row, not to
-  `OnAttach`.
+  **Done — pulled forward and built alongside M14.1, per the user's explicit choice**, rather than
+  landing separately once M14.1's title screen gave "New Character" somewhere to attach to (this
+  bullet's own prior text anticipated exactly that dependency). See M14.1's own write-up below for
+  the shared `CharacterCreationLayer`/`ClassId`/`ClassDefinition` implementation — this entry only
+  records the pieces specific to *this* bullet's scope: a real fixed `ClassId` enum
+  (`App/Source/Progression/CharacterClass.h`, `Hunter`/`Ranger`/`Force`, same
+  `EnumNames<E>`-table shape as `SectionId.h`) and `ClassComponent`
+  (`App/Source/Components/ClassComponent.h`, schema-registered like `SectionIdComponent` even
+  though nothing authors it in a prefab), both emplaced on the player in
+  `GameplayLayer::SpawnNewCharacter` from the two choices `CharacterCreationLayer` collects.
+  `SectionIdComponent` is now set from the player's actual choice instead of a hardcoded
+  `SectionId::Viridia` — it still affects nothing yet (that's M8.2's drop-table work), but the
+  choice itself is real and persisted for the run. The single class-agnostic `growth_curve.json`
+  (M11.1) is retired outright and replaced by a `ClassDefinition` per class (see M14.1) — each
+  authors that class's own level-up curve *and* its starting kit (starting weapon, starting known
+  Techniques, base HP/TP), closing the "M11.1's growth curve was deliberately built class-agnostic"
+  gap this bullet's own text used to name. Placeholder numbers throughout
+  (`App/Assets/Data/Classes/{hunter,ranger,force}.json`, plus a new minimal placeholder
+  `weapons/wand.json` for Force, since no Cane/Wand weapon existed yet) are explicitly the user's
+  own future balancing pass, same "throwaway fixture, not real content" carve-out `CLAUDE.md`
+  already allows and M10.1's own placeholder hub/shop content already used. No editor: same
+  "fixed, tiny roster, not worth one" call `growth_curve.json` itself already made. Catch2 coverage
+  in `App-Test/Source/ClassDefinitionFileTests.cpp`; `GrowthCurveFileTests.cpp` never existed
+  despite an earlier note in this file claiming it did (only `GrowthCurve.h`'s own `Find()` was
+  ever exercised, inline, by other tests' fixtures) — nothing was actually retired there beyond the
+  loader itself (`GrowthCurveFile.h/.cpp`, `ApplicationFilepaths::GrowthCurvePath`,
+  `growth_curve.json`).
 
 ## M11 — Progression & Permadeath
 
@@ -1911,15 +1930,19 @@ attacking, hurt, or dying.
 
 ## M14 — Front end & session flow
 
-**Status:** Not started. **Severity: blocker.**
+**Status:** 14.1/14.4 done; 14.2/14.3/14.5/14.6 not started. **Severity: blocker** (the
+Escape-quits-instantly defect the Evidence paragraph below names is 14.2's fix, not 14.1's — still
+open).
 
-**Evidence:** `App/Source/main.cpp` pushes `GameplayLayer` directly and calls `Run()`. There is no
-title screen, no menu layer, and no state before gameplay. Worse, `Application::OnKeyPressed`
-handles `SDLK_ESCAPE` by calling `RequestQuit()` — so from the Exploring state, where no layer
-consumes Escape, pressing it closes the game instantly, with no confirmation and (since M11.2 has
-not started) no save. That single line is the most severe player-facing defect in the project.
-There is also no pause: closing a modal returns straight to the turn loop, and there is no way to
-stop playing other than quitting.
+**Evidence (14.1/14.4 resolved; the rest still stands):** `App/Source/main.cpp` used to push
+`GameplayLayer` directly and call `Run()`, with no title screen, no menu layer, and no state before
+gameplay — it now pushes `MainMenuLayer` instead (see 14.1 below). `Application::OnKeyPressed`
+still handles `SDLK_ESCAPE` by calling `RequestQuit()` unconditionally, though — so from the
+Exploring state, where no layer consumes Escape, pressing it still closes the game instantly, with
+no confirmation and (since M11.2 has not started) no save. That single line is still the most
+severe player-facing defect in the project; fixing it is 14.2's job, not 14.1's. There is also
+still no pause: closing a modal returns straight to the turn loop, and there is no way to stop
+playing other than quitting.
 
 - **14.1 Title screen & app state machine.** Engine: `main.cpp` should push a `MainMenuLayer`
   rather than `GameplayLayer`, with the existing `Application::TransitionTo` doing the swap — the
@@ -1928,6 +1951,28 @@ stop playing other than quitting.
   art, the game name, and rows for Continue (disabled without a save), New Character, Options,
   Credits, and Quit — the `EditorMenuLayer` keyboard-navigable row shell is a direct model.
   Editor: none; this is a player-facing flow, the same call M10.3 already makes.
+
+  **Done — built together with M10.3/M14.4, per the user's explicit choice**, rather than leaving
+  "New Character" as a dead-end stub calling the old hardcoded `SpawnNewCharacter` path.
+  `App/Source/Layers/MainMenuLayer` (+ `App/Assets/RML/main_menu.rml`/`.rcss`) is the new
+  `main.cpp` entry point, mirroring `EditorMenuLayer`'s exact shape (keyboard Up/Down/Enter/Space
+  row nav + `RmlClickListener` mouse clicks, `RefreshSelectionHighlight`/`MoveSelection`/
+  `SelectIndex`/`ConfirmSelection`) rather than inventing a new one — styled off `hud.rcss`'s own
+  dark/orange (`#f6470a`) palette and "Pixel Code" font rather than the Editor's cyan theme, since
+  App has no shared theme file to `<link>` the way Editor's sub-editors do. Rows: **Continue**
+  (disabled outright — skipped by keyboard nav, no click listener attached, since no save exists
+  yet, M11.2), **New Character** (→ `CharacterCreationLayer`, see 14.4 below), **Options**/
+  **Credits** (selectable, but only ever show an inert "Coming Soon" placeholder panel with a Back
+  row — M15.4/M14.6 aren't built yet, so there's nothing real to show), **Quit** (→ `RequestQuit()`,
+  same as `EditorMenuLayer`'s own Exit row, no confirmation — M14.3's confirm-guard work is
+  separate, not-yet-started scope). **Deviates from this bullet's own "app-level state distinction
+  (Title / Playing / Paused)" wording:** no new `AppState` enum was introduced — which top-level
+  `Layer` is currently attached already fully encodes Title vs. Playing (`TransitionTo` always
+  holds exactly one at a time), and a real state distinction has no work to do until Paused exists
+  (M14.2, still not started) — Paused needs to *suspend* `GameplayLayer` while keeping it alive
+  underneath, not just replace it with another layer, so building the enum now would have had
+  nothing correct to model. No title art (none exists) — placeholder text/theme only, per the
+  user's own choice.
 - **14.2 Pause menu & escape hierarchy.** Engine: remove the unconditional Escape-quits handler
   from `Application::OnKeyPressed` and replace it with a proper hierarchy — Escape closes the
   topmost modal if one is open, otherwise cancels targeting, otherwise opens the pause menu, and
@@ -1946,6 +1991,20 @@ stop playing other than quitting.
   — the title's New Character row leads into class and Section ID selection, then into
   `SpawnNewCharacter`. Today `SpawnNewCharacter` is called unconditionally on attach with a
   hardcoded `player.json`, `Viridia`, and no class. See M10.3's own expanded entry.
+
+  **Done.** New `App/Source/Layers/CharacterCreationLayer` (+ `App/Assets/RML/
+  character_creation.rml`/`.rcss`) is a plain top-level `Layer` (not a `GameStateMachine` state —
+  it runs entirely before `GameplayLayer` exists, so there's no in-game state machine to join yet),
+  reached from `MainMenuLayer`'s New Character row. Two sequential row-list steps in one document:
+  Class (Hunter/Ranger/Force, each with a one-line GDD-sourced blurb) then Section ID (all ten),
+  both rendered by iterating `EnumNames<ClassId>`/`EnumNames<SectionId>` directly into generated
+  `<li>` markup (mirrors `HudLayer`'s own dynamic-row-building idiom for Mission Select, e.g.) rather
+  than hand-typing rows in the `.rml` — the row list can't drift from the enum it represents.
+  Confirming a Section ID is the final step: calls
+  `TransitionTo<GameplayLayer>(chosen_class, chosen_section_id)` directly, no separate confirm
+  button. Escape steps back (Section ID → Class → `MainMenuLayer`), keeping the class pick if you
+  back out of the Section ID step. `GameplayLayer`'s constructor now takes `(ClassId, SectionId)`
+  instead of being default-constructed; `main.cpp` no longer constructs it at all (see 14.1 above).
 - **14.5 Loading & first-frame cost.** Engine: `GameplayLayer::OnAttach` loads every content
   library, generates a dungeon, instantiates it, and builds GPU resources synchronously. That is
   fine at today's content volume and will not stay fine. A loading state with a visible indicator,
@@ -2159,8 +2218,9 @@ is no boss component, no boss health bar, no arena lock, no phase system, and mi
 is triggered by walking onto an `Exit` piece rather than by defeating anything.
 `Combat/Hostility.h` is a two-line placeholder declaring the player hostile to every other entity
 and vice versa, which makes friendly or neutral entities impossible — including the hub NPCs,
-which are only safe today because they carry no `HealthComponent`. And M5.3's rare-enemy and
-tier-reskin mechanics were never started.
+which are only safe today because they carry no `HealthComponent`. (This sentence is now stale
+too — see 17.2's own "Update" below, same as 17.1's caveat about this paragraph.) And M5.3's
+rare-enemy and tier-reskin mechanics were never started.
 
 - **17.1 AI behavior library.** Engine: `AiBehavior` needs to become a real set — ranged attacker
   (kite to preferred distance, fire), caster (spend TP on Techniques with the existing target
@@ -2200,7 +2260,28 @@ tier-reskin mechanics were never started.
   component and relationship table, so neutral wildlife, friendly NPCs, summoned allies, and
   enemy-infighting are all expressible. This also removes a latent trap — any hub NPC that ever
   gains a `HealthComponent` becomes attackable today. Editor: a faction field on the Prefab
-  Editor.
+  Editor. **Update:** done. `App/Source/Combat/Faction.h` adds a four-value `Faction` enum
+  (`Player`/`Ally`/`Enemy`/`Neutral`) and `App/Source/Components/FactionComponent.h` an optional,
+  authorable `FactionComponent` wrapping it. `Combat/Hostility.h`'s `IsHostile` is now
+  `GetFaction(entity)` (authored `FactionComponent` if present; else inferred —
+  `PlayerControlledComponent` → `Player`, `AiComponent` → `Enemy`, otherwise `Neutral` — so every
+  existing prefab needs no migration) fed through a fixed symmetric relationship table
+  (`Player`/`Ally` hostile only to `Enemy`; `Neutral` hostile to nothing; a faction is never
+  hostile to itself, though flipping the `Enemy`-`Enemy` cell is all real infighting would take).
+  The `Neutral` fallback for anything without `AiComponent` or `PlayerControlledComponent` is what
+  actually closes the latent trap this bullet called out. Every existing `IsHostile` call site
+  (`MoveAction`'s bump-attack fallback, `WeaponAttackAction`, `PhotonArtAction`, `TechniqueAction`,
+  `ProjectileImpact`, `TargetResolution::IsWalkableStep`, `TabTargetSystem`) is unchanged at the
+  call site — same two-`Entity` signature — so this was a drop-in swap; `EnemyAiSystem`'s own
+  `FindNearestHostileTile` deliberately stays scoped to `PlayerControlledComponent` targets rather
+  than a general faction scan, since no `AiBehavior` yet acts on non-player targets (that's an
+  M17.1 addition, not something the faction system needs to force). Editor: a `Faction` card on
+  the Prefab Editor (`field-faction`, an enum dropdown identical in shape to the AI card's
+  `behavior` field), optional like every other component card and offered only because
+  `FactionComponent::Register` marks it authorable. The concrete payoff: `TabTargetSystem` calls
+  `IsHostile` unchanged, but now that it's faction-aware, Tab-cycling naturally skips
+  Neutral/Ally `HealthComponent` entities instead of locking onto anything that merely isn't the
+  player.
 - **17.3 Boss encounter framework.** Engine: a `BossComponent`, arena entry and exit locking
   (the `BossArena` piece category is already authored and already reaches the stitcher), an HP
   threshold phase system with per-phase behavior and ability sets, telegraphed multi-turn attacks,
@@ -2367,7 +2448,7 @@ scope — every row points at a bullet above.
 - [ ] Impact weight: hit-stop, knockback, camera shake (13.2)
 - [ ] Death and spawn presentation, including telegraphed spawns (13.3)
 - [ ] Localization seam, even if only English ships (16.7)
-- [ ] Faction system replacing the placeholder hostility rule (17.2)
+- [x] Faction system replacing the placeholder hostility rule (17.2)
 - [ ] Rare enemies and tier roster substitution (5.3, 17.4)
 - [ ] Per-area weighted spawn tables (17.5)
 - [ ] Mag companion (9.1)

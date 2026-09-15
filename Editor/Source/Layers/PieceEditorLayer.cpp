@@ -49,6 +49,14 @@ namespace {
     constexpr float kPainterDropdownWidth = 200.0f;
     constexpr float kPainterDropdownMaxHeight = 280.0f;
 
+    // Marks a cell holding a PieceSpawn -- reuses the same "cursor" atlas
+    // sprite as the in-game target-select cursor (see
+    // Assets/Data/Entities/ui/target_select_cursor.json), tinted yellow
+    // instead of that entity's cyan so it reads as an editor-only overlay.
+    const std::uint32_t kSpawnCursorTextureId = entt::hashed_string::value("cursor");
+    constexpr Vec2 kSpawnCursorSize{16, 24};
+    constexpr Color kSpawnCursorColor{255, 224, 32, 255};
+
     // Turns an entered id ("forest.l_corridor") into its file path
     // ("Pieces/forest/l_corridor.json"), mirroring LoadJsonDirectory's reverse
     // rule ('.' -> path separator, ".json" appended).
@@ -1483,6 +1491,22 @@ void PieceEditorLayer::RenderEditContent(SDL_Renderer& renderer, int output_w, i
                         AppendSpriteQuad(grid_vertices, ZoomedSizeRect(box, r.texture_size, m_preview_canvas.GetZoom()),
                                          *src, atlas_size, r.color_1, r.color_2, output_w, output_h);
                 }
+            }
+
+        if (have_grid)
+            for (const PieceSpawn& spawn : m_draft.spawns)
+            {
+                // Same fixed-grid-vs-preview bound as the cell loop above.
+                if (!previewing && (spawn.cell_offset.x < 0 || spawn.cell_offset.y < 0 ||
+                                    spawn.cell_offset.x >= kEditCols || spawn.cell_offset.y >= kEditRows))
+                    continue;
+                const Vec2 draw_offset =
+                    previewing ? ApplyPieceTransform(spawn.cell_offset, m_preview_transform) : spawn.cell_offset;
+                const SDL_FRect box = CellBox(draw_offset);
+                if (std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(
+                        kSpawnCursorTextureId, kSpawnCursorSize.x, kSpawnCursorSize.y, 0, 0))
+                    AppendSpriteQuad(grid_vertices, ZoomedSizeRect(box, kSpawnCursorSize, m_preview_canvas.GetZoom()),
+                                     *src, atlas_size, kSpawnCursorColor, kSpawnCursorColor, output_w, output_h);
             }
 
         if (m_painter_dropdown_open)

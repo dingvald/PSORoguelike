@@ -226,6 +226,7 @@ namespace {
             renderable.render_layer = layer->value.GetInt();
         renderable.frames = ReadInt(body, "frames", renderable.frames);
         renderable.frame_time = ReadFloat(body, "frame_time", renderable.frame_time);
+        renderable.is_synced = ReadBool(body, "is_synced", renderable.is_synced);
         return renderable;
     }
 
@@ -241,6 +242,7 @@ namespace {
         object.AddMember("render_layer", renderable.render_layer, allocator);
         object.AddMember("frames", renderable.frames, allocator);
         object.AddMember("frame_time", renderable.frame_time, allocator);
+        object.AddMember("is_synced", renderable.is_synced, allocator);
         return object;
     }
 
@@ -429,6 +431,20 @@ namespace {
         rapidjson::Value object(rapidjson::kObjectType);
         object.AddMember("behavior", StringValue(std::string{EnumName(ai.behavior)}, allocator), allocator);
         object.AddMember("detection_range", ai.detection_range, allocator);
+        return object;
+    }
+
+    FactionComponent ReadFactionBody(const rapidjson::Value& body)
+    {
+        FactionComponent faction;
+        faction.faction = ReadEnum<Faction>(body, "faction", faction.faction);
+        return faction;
+    }
+
+    rapidjson::Value WriteFactionBody(const FactionComponent& faction, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("faction", StringValue(std::string{EnumName(faction.faction)}, allocator), allocator);
         return object;
     }
 
@@ -711,7 +727,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 18> kComponentKinds = {
+    constexpr std::array<ComponentKind, 19> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -720,7 +736,8 @@ namespace {
           "<div id=\"field-color-2\" class=\"field-row\"></div>"
           "<div id=\"field-render-layer\" class=\"field-row\"></div>"
           "<div id=\"field-frames\" class=\"field-row\"></div>"
-          "<div id=\"field-frame-time\" class=\"field-row\"></div>"},
+          "<div id=\"field-frame-time\" class=\"field-row\"></div>"
+          "<div id=\"field-is-synced\" class=\"field-row\"></div>"},
          {"stats", "Stats", "#e8a33d",
           "<div id=\"field-atp\" class=\"field-row\"></div>"
           "<div id=\"field-ata\" class=\"field-row\"></div>"
@@ -731,6 +748,7 @@ namespace {
          {"actor", "Actor", "#7ee8e0",
           "<div id=\"field-movement-speed\" class=\"field-row\"></div>"
           "<div id=\"field-act-speed\" class=\"field-row\"></div>"},
+         {"faction", "Faction", "#e85d9c", "<div id=\"field-faction\" class=\"field-row\"></div>"},
          {"race", "Race", "#b17ce8", "<div id=\"field-race-id\" class=\"field-row\"></div>"},
          {"health", "Health", "#5de88f",
           "<div id=\"field-current-hp\" class=\"field-row\"></div>"
@@ -1005,8 +1023,8 @@ void PrefabEditorLayer::WirePreviewInteraction()
     // scoping).
     if (Rml::Element* panel = m_editor->GetElementById("grid-panel"))
     {
-        auto scroll = std::make_unique<RmlEventListener>(
-            "mousescroll", [this](Rml::Event& event) { HandlePreviewMouseScroll(event); });
+        auto scroll = std::make_unique<RmlEventListener>("mousescroll", [this](Rml::Event& event)
+                                                         { HandlePreviewMouseScroll(event); });
         scroll->Attach(*panel);
         m_preview_listeners.push_back(std::move(scroll));
     }
@@ -1194,8 +1212,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     for (auto it = components.MemberBegin(); it != components.MemberEnd(); ++it)
     {
         const std::string_view key{it->name.GetString(), it->name.GetStringLength()};
-        if (key == "renderable" || key == "stats" || key == "actor" || key == "race" || key == "health" ||
-            key == "weapon" || key == "armor" || key == "mod" || key == "item" || key == "rarity" ||
+        if (key == "renderable" || key == "stats" || key == "actor" || key == "faction" || key == "race" ||
+            key == "health" || key == "weapon" || key == "armor" || key == "mod" || key == "item" || key == "rarity" ||
             key == "consumable" || key == "drop_table" || key == "on_hit_effect" || key == "experience_value" ||
             key == "ai" || key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech")
             m_component_order.emplace_back(key);
@@ -1210,6 +1228,8 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_actor = components.HasMember("actor") ? ReadActorBody(components["actor"]) : ActorComponent{};
 
     m_ai = components.HasMember("ai") ? ReadAiBody(components["ai"]) : AiComponent{};
+
+    m_faction = components.HasMember("faction") ? ReadFactionBody(components["faction"]) : FactionComponent{};
 
     m_race = components.HasMember("race") ? ReadRaceBody(components["race"]) : RaceComponent{};
     m_race_name = LabelFor(m_race.race_id);
@@ -1460,6 +1480,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                                m_renderable.frame_time = v;
                                                MarkDirty();
                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-is-synced"))
+        keep(fieldwidgets::BuildBoolField(*row, "is_synced", m_renderable.is_synced,
+                                          [this](bool v)
+                                          {
+                                              m_renderable.is_synced = v;
+                                              MarkDirty();
+                                          }));
     if (Rml::Element* row = m_editor->GetElementById("field-atp"))
         keep(fieldwidgets::BuildIntField(*row, "atp", m_stats.atp,
                                          [this](int v)
@@ -1531,6 +1558,15 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_ai.detection_range = v;
                                              MarkDirty();
                                          }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-faction"))
+        keep(fieldwidgets::BuildEnumField(*row, "faction", EnumOptions<Faction>(),
+                                          std::string{EnumName(m_faction.faction)},
+                                          [this](std::string v)
+                                          {
+                                              m_faction.faction = EnumFromString(v, Faction::Neutral);
+                                              MarkDirty();
+                                          }));
 
     if (Rml::Element* row = m_editor->GetElementById("field-race-id"))
         keep(fieldwidgets::BuildNameIdField(*row, "race_id", m_race.race_id, m_race_name,
@@ -1673,18 +1709,18 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
     if (Rml::Element* row = m_editor->GetElementById("field-weapon-projectile-prefab"))
-        keep(fieldwidgets::BuildNameIdField(
-            *row, "projectile_prefab_id", m_weapon.projectile_prefab_id, m_weapon_projectile_prefab_name,
-            [this](std::uint32_t id, std::string name)
-            {
-                m_weapon.projectile_prefab_id = id;
-                if (!name.empty())
-                {
-                    NameIdRegistry::Register(id, name);
-                    m_weapon_projectile_prefab_name = std::move(name);
-                }
-                MarkDirty();
-            }));
+        keep(fieldwidgets::BuildNameIdField(*row, "projectile_prefab_id", m_weapon.projectile_prefab_id,
+                                            m_weapon_projectile_prefab_name,
+                                            [this](std::uint32_t id, std::string name)
+                                            {
+                                                m_weapon.projectile_prefab_id = id;
+                                                if (!name.empty())
+                                                {
+                                                    NameIdRegistry::Register(id, name);
+                                                    m_weapon_projectile_prefab_name = std::move(name);
+                                                }
+                                                MarkDirty();
+                                            }));
     if (Rml::Element* row = m_editor->GetElementById("field-weapon-hit-stun-energy"))
         keep(fieldwidgets::BuildIntField(*row, "hit_stun_energy", m_weapon.hit_stun_energy,
                                          [this](int v)
@@ -2137,9 +2173,9 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // component cards actually persist to disk: JSON member order is
     // otherwise only affected by add/remove, never by in-place value
     // updates.
-    for (const char* key :
-         {"renderable", "stats", "actor", "race", "health", "weapon", "armor", "mod", "item", "rarity", "consumable",
-          "drop_table", "on_hit_effect", "experience_value", "ai", "spawner_ai", "pack_follower", "ranged_tech"})
+    for (const char* key : {"renderable", "stats", "actor", "faction", "race", "health", "weapon", "armor", "mod",
+                            "item", "rarity", "consumable", "drop_table", "on_hit_effect", "experience_value", "ai",
+                            "spawner_ai", "pack_follower", "ranged_tech"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -2154,6 +2190,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WriteActorBody(m_actor, allocator);
         else if (key == "ai")
             body = WriteAiBody(m_ai, allocator);
+        else if (key == "faction")
+            body = WriteFactionBody(m_faction, allocator);
         else if (key == "race")
             body = WriteRaceBody(m_race, allocator);
         else if (key == "health")

@@ -1,0 +1,28 @@
+<rml>
+    <head>
+        <title>PSORoguelike</title>
+        <link type="text/rcss" href="main_menu.rcss"/>
+    </head>
+    <body>
+        <div id="menu-shell">
+            <div id="menu-panel" class="panel">
+                <h1>PSORoguelike</h1>
+                <p class="subtitle">A turn-based Phantasy Star Online tribute</p>
+                <ul class="menu-list">
+                    <li id="menu-continue" class="menu-row disabled">Continue</li>
+                    <li id="menu-new-character" class="menu-row">New Character</li>
+                    <li id="menu-options" class="menu-row">Options</li>
+                    <li id="menu-credits" class="menu-row">Credits</li>
+                    <li id="menu-quit" class="menu-row">Quit</li>
+                </ul>
+            </div>
+            <div id="placeholder-panel" class="panel">
+                <h1 id="placeholder-title">Options</h1>
+                <p class="subtitle">Coming soon.</p>
+                <ul class="menu-list">
+                    <li id="placeholder-back" class="menu-row selected">Back</li>
+                </ul>
+            </div>
+        </div>
+    </body>
+</rml>

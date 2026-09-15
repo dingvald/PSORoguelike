@@ -14,7 +14,7 @@ inline constexpr int kHubDefinitionVersion = 1;
 // library. Throws JsonFileError (the same type ReadJsonFile itself throws
 // for file/parse/schema_version problems) on a malformed document -- there's
 // no editor round-tripping this file, so a clear exception message is the
-// validation story, same precedent GrowthCurveFile.h already set.
+// validation story, same precedent ClassDefinitionFile.h already set.
 HubDefinition LoadHubDefinition(const std::filesystem::path& path);
 
 } // namespace psr

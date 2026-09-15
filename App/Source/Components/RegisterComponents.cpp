@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/AiComponent.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/ClassComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
 #include "Components/CurrencyPickupComponent.h"
@@ -10,6 +11,7 @@
 #include "Components/ElementalResistanceComponent.h"
 #include "Components/EquipmentComponent.h"
 #include "Components/ExperienceValueComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/HotbarComponent.h"
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InteractableComponent.h"
@@ -49,12 +51,14 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     AiComponent::Register(reg);
     ArmorComponent::Register(reg);
     BlocksMovementComponent::Register(reg);
+    ClassComponent::Register(reg);
     ConsumableComponent::Register(reg);
     CurrencyComponent::Register(reg);
     CurrencyPickupComponent::Register(reg);
     DropTableComponent::Register(reg);
     ElementalResistanceComponent::Register(reg);
     ExperienceValueComponent::Register(reg);
+    FactionComponent::Register(reg);
     HealthComponent::Register(reg);
     HotbarComponent::Register(reg);
     InnateWeaponComponent::Register(reg);

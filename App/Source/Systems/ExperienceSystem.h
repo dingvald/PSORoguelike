@@ -2,6 +2,7 @@
 
 #include "Engine/ECS/Entity.h"
 
+#include <random>
 #include <string>
 
 namespace psr {
@@ -19,11 +20,11 @@ struct AfterDamageEvent;
 // another enemy). Reads the defeated entity's own ExperienceValueComponent
 // (authored directly on the prefab, no separate library lookup, same
 // contract as DropTableComponent) and banks it on the player's
-// LevelComponent, looping through GrowthCurve::Find(level+1) to apply every
-// level-up a single kill's XP crosses (carrying any remainder xp forward),
-// overwriting HealthComponent::max_hp/TPComponent::max_tp/StatsComponent
-// from the growth curve's absolute per-level values and fully restoring
-// current HP/TP. No-ops silently if the defeated entity carries no
+// LevelComponent, looping through GrowthCurve::Evaluate(level+1) to apply
+// every level-up a single kill's XP crosses (carrying any remainder xp forward),
+// adding GrowthCurve::EvaluateRandomGain's randomized HP/TP/stat gains onto
+// the player's current totals (see ApplyLevelUp) and fully restoring current
+// HP/TP. No-ops silently if the defeated entity carries no
 // ExperienceValueComponent (most enemies grant nothing yet, same as loot).
 // Spawns one "LEVEL UP!" floating text via FloatingTextSystem regardless of
 // how many levels a single kill's XP crosses (see the leveled_up flag in
@@ -32,7 +33,8 @@ struct AfterDamageEvent;
 class ExperienceSystem
 {
 public:
-    ExperienceSystem(MessageBus& message_bus, const GrowthCurve& growth_curve, FloatingTextSystem& floating_text);
+    ExperienceSystem(MessageBus& message_bus, const GrowthCurve& growth_curve, FloatingTextSystem& floating_text,
+                     std::mt19937& rng);
 
     // Subscribed handler captures this instance's address -- neither copying
     // nor moving would keep it valid, same rationale as LootDropSystem's
@@ -49,13 +51,13 @@ public:
 private:
     void OnDamage(Entity player, AfterDamageEvent& event);
 
-    // Overwrites HealthComponent::max_hp/TPComponent::max_tp/StatsComponent
-    // from level_data's absolute totals, same as before, but now also diffs
-    // each against its pre-overwrite value and returns the gains as inline
-    // log markup (e.g. "HP +[c=#7ee787]20[/c], ATP +[c=#7ee787]3[/c]"),
-    // omitting any stat that didn't increase. Empty string if level_data
-    // grants nothing on top of what the player already had.
-    std::string ApplyLevelUp(Entity player, const GrowthCurveLevel& level_data);
+    // Adds `gain`'s (already-randomized, see GrowthCurve::EvaluateRandomGain)
+    // HP/TP/stat amounts onto HealthComponent::max_hp/TPComponent::max_tp/
+    // StatsComponent, restoring current HP/TP to the new max, and returns the
+    // gains as inline log markup (e.g. "HP +[c=#7ee787]20[/c], ATP
+    // +[c=#7ee787]3[/c]"), omitting any stat gain that isn't positive. Empty
+    // string if `gain` grants nothing this level.
+    std::string ApplyLevelUp(Entity player, const GrowthCurveLevel& gain);
 
     // Duplicates CombatLogBridge::PublishPlayerStatus's ~10-line body rather
     // than taking a CombatLogBridge& dependency this system otherwise has no
@@ -67,6 +69,7 @@ private:
     MessageBus* m_message_bus;
     const GrowthCurve* m_growth_curve;
     FloatingTextSystem* m_floating_text;
+    std::mt19937* m_rng;
 };
 
 } // namespace psr

@@ -8,9 +8,20 @@
 
 namespace psr {
 
-RegistryRenderableLookup::RegistryRenderableLookup(Registry& registry, const AnimationClock& animation_clock)
+RegistryRenderableLookup::RegistryRenderableLookup(Registry& registry, AnimationClock& animation_clock)
     : m_registry(&registry), m_animation_clock(&animation_clock)
 {
+    registry.OnDestroy<RenderableComponent, &RegistryRenderableLookup::OnRenderableDestroyed>(*this);
+}
+
+RegistryRenderableLookup::~RegistryRenderableLookup()
+{
+    m_registry->DisconnectComponentLifecycle<RenderableComponent>(*this);
+}
+
+void RegistryRenderableLookup::OnRenderableDestroyed(entt::registry&, entt::entity entity)
+{
+    m_animation_clock->Forget(entity);
 }
 
 std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::entity entity) const
@@ -21,7 +32,10 @@ std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::
 
     Vec2 uv = component->uv;
     if (component->frames > 1)
-        uv.x += m_animation_clock->GetFrameIndex(component->frame_time, component->frames);
+    {
+        uv.x += component->is_synced ? m_animation_clock->GetFrameIndex(component->frame_time, component->frames)
+                                      : m_animation_clock->GetFrameIndex(entity, component->frame_time, component->frames);
+    }
 
     return RenderableTile{component->texture_id, component->texture_size, uv,
                           component->color_1,    component->color_2,      component->render_layer};

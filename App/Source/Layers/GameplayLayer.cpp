@@ -16,6 +16,7 @@
 #include "Combat/Technique.h"
 #include "Combat/TechniqueLibraryFile.h"
 #include "Components/ActorComponent.h"
+#include "Components/ClassComponent.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
 #include "Components/EquipmentComponent.h"
@@ -32,6 +33,7 @@
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
 #include "Components/SectionIdComponent.h"
+#include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/StorageComponent.h"
 #include "Components/TPComponent.h"
@@ -39,12 +41,15 @@
 #include "Components/TeleporterComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Content/KeyBindings.h"
+#include "Engine/Combat/DamageEvent.h"
+#include "Engine/Combat/DeathSystem.h"
 #include "Engine/Dungeon/DungeonInstantiator.h"
 #include "Engine/Dungeon/DungeonLibraryFile.h"
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/EventHandlerComponent.h"
 #include "Engine/ECS/HealthComponent.h"
+#include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
 #include "Engine/ECS/LifetimeComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
@@ -97,7 +102,7 @@
 #include "Messages/WorldTileHoverMessage.h"
 #include "Missions/AreaProgression.h"
 #include "Missions/TeleporterInteraction.h"
-#include "Progression/GrowthCurveFile.h"
+#include "Progression/ClassDefinitionFile.h"
 #include "Shop/ShopStockFile.h"
 #include "States/GameState.h"
 
@@ -106,6 +111,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keycode.h>
 
+#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -130,14 +136,6 @@ namespace {
     // timing stays under this constructor's explicit control.
     constexpr const char* kPlayerPrefabId = "player";
 
-    // The two starter Item hotbar slots' bound consumable prefabs -- ids only,
-    // not authored data (see the "Default hotbar loadout" comment below).
-    // Both prefabs (App/Assets/Data/Entities/monomate.json, monofluid.json)
-    // are authored; an unauthored id here would simply never match anything
-    // in the player's inventory, leaving that slot inert rather than erroring.
-    constexpr const char* kMonomatePrefabId = "monomate";
-    constexpr const char* kMonofluidPrefabId = "monofluid";
-
     // Played over every freshly spawned enemy's tile (see on_enemy_spawned
     // below), one in-game turn long (LifetimeComponent{1}) -- signals to the
     // player that this enemy just appeared. App/Assets/Data/Entities/vfx/
@@ -158,7 +156,10 @@ namespace {
 
 } // namespace
 
-GameplayLayer::GameplayLayer() : Layer("GameplayLayer") {}
+GameplayLayer::GameplayLayer(ClassId chosen_class, SectionId chosen_section_id)
+    : Layer("GameplayLayer"), m_chosen_class(chosen_class), m_chosen_section_id(chosen_section_id)
+{
+}
 GameplayLayer::~GameplayLayer() = default;
 
 void GameplayLayer::OnAttach()
@@ -232,7 +233,8 @@ void GameplayLayer::SpawnNewCharacter()
     m_shop_stock = LoadShopStock(ApplicationFilepaths::ShopStockPath);
     m_photon_arts = LoadPhotonArtLibrary(ApplicationFilepaths::PhotonArtsPath);
     m_techniques = LoadTechniqueLibrary(ApplicationFilepaths::TechniquesPath);
-    m_growth_curve = LoadGrowthCurve(ApplicationFilepaths::GrowthCurvePath);
+    m_class_definition =
+        LoadClassDefinition(ApplicationFilepaths::ClassDefinitionPath(m_chosen_class), m_chosen_class);
 
     m_player = m_registry.CreateEntity(entt::hashed_string::value(kPlayerPrefabId));
     // Unlike piece/enemy entities, the player is never routed through
@@ -240,21 +242,39 @@ void GameplayLayer::SpawnNewCharacter()
     // code that emplaces Position), so TransitionToWorld's tile assignment
     // below needs the component to already exist.
     m_registry.Emplace<Position>(m_player);
-    m_registry.Emplace<HealthComponent>(m_player, HealthComponent{40, 40});
-    // Same "hardcoded until M10.3 character creation exists" deferral as
-    // HealthComponent above -- growth_curve.json's level-2 max_tp (24) is the
-    // first authored value, so this level-1 baseline is chosen below it the
-    // same way HealthComponent's 40 sits below level-2's max_hp of 48.
-    m_registry.Emplace<TPComponent>(m_player, TPComponent{20, 20});
+    m_registry.Emplace<HealthComponent>(
+        m_player, HealthComponent{m_class_definition.base_hp, m_class_definition.base_hp});
+    m_registry.Emplace<TPComponent>(m_player,
+                                    TPComponent{m_class_definition.base_tp, m_class_definition.base_tp});
     m_registry.Emplace<TabTargetComponent>(m_player);
     m_registry.Emplace<LevelComponent>(m_player);
-    // Same "hardcoded until M10.3 character creation exists" deferral as
-    // HealthComponent above -- there's no Section ID picker yet, and no drop
-    // has happened yet to credit any Meseta.
-    m_registry.Emplace<SectionIdComponent>(m_player);
+    m_registry.Emplace<ClassComponent>(m_player, ClassComponent{m_chosen_class});
+    m_registry.Emplace<SectionIdComponent>(m_player, SectionIdComponent{m_chosen_section_id});
     m_registry.Emplace<CurrencyComponent>(m_player);
     m_registry.Emplace<InventoryComponent>(m_player);
     m_registry.Emplace<StorageComponent>(m_player);
+
+    // The class's starting weapon overrides whatever player.json's own
+    // innate_weapon (if any) authored -- player.json no longer authors one,
+    // since it would otherwise be dead, misleading data now that the starting
+    // weapon always comes from ClassDefinition.
+    m_registry.GetOrEmplace<InnateWeaponComponent>(m_player).weapon_prefab_id =
+        entt::hashed_string::value(m_class_definition.starting_weapon_prefab_id.c_str());
+
+    // Force starts with Foie already known (see force.json) -- Hunter/Ranger
+    // have no starting_technique_id_strings, so this is a no-op for them,
+    // same "nothing known at spawn" behavior as before classes existed.
+    // Left unassigned on the hotbar, same manual-assign flow every other
+    // learned Technique already uses (see the default hotbar loadout comment
+    // below).
+    if (!m_class_definition.starting_technique_id_strings.empty())
+    {
+        KnownTechniquesComponent known;
+        for (const std::string& technique_id_string : m_class_definition.starting_technique_id_strings)
+            known.known.push_back(
+                KnownTechniqueEntry{entt::hashed_string::value(technique_id_string.c_str()), 1});
+        m_registry.Emplace<KnownTechniquesComponent>(m_player, known);
+    }
 
     // Hands off to TransitionToWorld for everything scene-shaped (Grid,
     // TurnCoordinator, per-world systems) -- see its own doc comment. The
@@ -263,29 +283,58 @@ void GameplayLayer::SpawnNewCharacter()
     // TransitionToWorld builds lazily on this first call.
     TransitionToWorld(SceneKind::Hub, std::nullopt);
 
-    // Default hotbar loadout: first 4 weapon-granted Photon Arts into slots
-    // 4-7 (mirrors the old placeholder cast trigger's fixed key ranges, now
-    // captured as data instead of re-derived by key range on every press).
-    // Technique slots (0-3) deliberately start Empty -- nothing is known at
-    // spawn (see KnownTechniquesComponent.h); the player assigns them
-    // manually via the Techniques/Photon Arts screen ('T') once something is
-    // learned, same manual-assign flow Item slots already use. Slots 8-9 are
-    // Item slots bound to the two starter consumable prefab ids (see
-    // kMonomatePrefabId/kMonofluidPrefabId above) -- same "bind by prefab
-    // NameId, resolve to an inventory index at activation time" style
-    // PhotonArt slots already use, see TryActivateSlot's Item case.
-    //
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
     // in TransitionToWorld) -- there's no interactive equip/inventory system
-    // yet beyond the Character screen, so the player's starting weapon is
-    // authored the same way an enemy's innate weapon is: a weapon_prefab_id
-    // on InnateWeaponComponent, resolved into a live weapon entity here.
+    // yet beyond the Character screen, so the player's starting weapon is set
+    // the same way an enemy's innate weapon is authored: a weapon_prefab_id
+    // on InnateWeaponComponent (set above, from ClassDefinition, rather than
+    // authored in JSON), resolved into a live weapon entity here.
     if (const auto* innate = m_registry.TryGetComponent<InnateWeaponComponent>(m_player))
     {
         const entt::entity weapon = m_registry.CreateEntity(innate->weapon_prefab_id);
         m_registry.Emplace<EquipmentComponent>(m_player, EquipmentComponent{weapon});
     }
 
+    // Class-authored starting inventory (see ClassDefinition::starting_inventory)
+    // -- one item entity per entry, quantity set directly rather than through
+    // PickupAction/Stacking's merge path, since there's nothing on the ground
+    // yet for it to merge with.
+    InventoryComponent& starting_inventory = m_registry.GetOrEmplace<InventoryComponent>(m_player);
+    for (const StartingInventoryEntry& entry : m_class_definition.starting_inventory)
+    {
+        const entt::entity item = m_registry.CreateEntity(entt::hashed_string::value(entry.item_prefab_id.c_str()));
+        if (ItemComponent* item_component = m_registry.TryGetComponent<ItemComponent>(item))
+            item_component->quantity = std::min(entry.quantity, item_component->max_stack);
+        starting_inventory.items.push_back(item);
+    }
+
+    // Class-authored starting armor (see ClassDefinition::starting_armor_prefab_id)
+    // -- routed into EquipmentComponent through the same ResolveEquipSlot/
+    // EquipItem path the Character screen uses (see Items/Equip.h), rather than
+    // reaching into EquipmentComponent's torso field directly, so this keeps
+    // working unchanged if a class is ever given a non-torso starting piece.
+    // Must run after the weapon-equip block above, which Emplaces a fresh
+    // EquipmentComponent -- EquipItem's GetOrEmplace would otherwise have its
+    // torso assignment overwritten by that Emplace if the order were reversed.
+    if (!m_class_definition.starting_armor_prefab_id.empty())
+    {
+        const entt::entity armor = m_registry.CreateEntity(
+            entt::hashed_string::value(m_class_definition.starting_armor_prefab_id.c_str()));
+        starting_inventory.items.push_back(armor);
+        EquipItem(Entity(m_registry, m_player), static_cast<int>(starting_inventory.items.size()) - 1);
+    }
+
+    // Default hotbar loadout: first 4 weapon-granted Photon Arts into slots
+    // 4-7 (mirrors the old placeholder cast trigger's fixed key ranges, now
+    // captured as data instead of re-derived by key range on every press).
+    // Technique slots (0-3) deliberately start Empty -- nothing is known at
+    // spawn (see KnownTechniquesComponent.h); the player assigns them
+    // manually via the Techniques/Photon Arts screen ('T') once something is
+    // learned, same manual-assign flow Item slots already use. Slots 8-9 bind
+    // to the class's first two starting_inventory prefabs (a class with fewer
+    // than two just leaves the remaining slot(s) Empty) -- same "bind by
+    // prefab NameId, resolve to an inventory index at activation time" style
+    // PhotonArt slots above already use, see TryActivateSlot's Item case.
     HotbarComponent hotbar;
     hotbar.slots[0] = HotbarSlot{HotbarSlotType::NormalAttack, 0};
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
@@ -302,8 +351,9 @@ void GameplayLayer::SpawnNewCharacter()
             }
         }
     }
-    hotbar.slots[8] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonomatePrefabId)};
-    hotbar.slots[9] = HotbarSlot{HotbarSlotType::Item, entt::hashed_string::value(kMonofluidPrefabId)};
+    for (std::size_t i = 0; i < 2 && i < m_class_definition.starting_inventory.size(); ++i)
+        hotbar.slots[8 + i] = HotbarSlot{
+            HotbarSlotType::Item, entt::hashed_string::value(m_class_definition.starting_inventory[i].item_prefab_id.c_str())};
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
 
     // Both emplaced only now, after TransitionToWorld has lazily constructed
@@ -316,6 +366,19 @@ void GameplayLayer::SpawnNewCharacter()
     // first call).
     m_registry.Emplace<PlayerControlledComponent>(m_player);
     m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
+
+    // Opts the player out of the two DeathEvent handlers every other
+    // HealthComponent-bearing entity gets (DeathSystem, which would destroy
+    // it, and InnateWeaponComponent, which would destroy its equipped
+    // weapon), replacing them with OnPlayerDeath -- see that method's own doc
+    // comment. Must come after every component above that either handler
+    // reads/reacts to (InnateWeaponComponent, EquipmentComponent).
+    Entity player_entity(m_registry, m_player);
+    EventHandlerComponent& player_events = player_entity.GetOrEmplace<EventHandlerComponent>();
+    player_events.Unsubscribe<DeathEvent, DeathSystem>();
+    player_events.Unsubscribe<DeathEvent, InnateWeaponComponent>();
+    player_events.Subscribe<DeathEvent, GameplayLayer>([this](Entity self, DeathEvent&)
+                                                        { OnPlayerDeath(self.Handle()); });
 }
 
 void GameplayLayer::DestroyWorldEntities()
@@ -356,8 +419,29 @@ void GameplayLayer::DestroyWorldEntities()
         m_registry.DestroyEntity(entity);
 }
 
+void GameplayLayer::OnPlayerDeath(entt::entity self)
+{
+    Entity player(m_registry, self);
+    if (const Position* position = player.TryGet<Position>())
+        m_registry.GetGrid().RemoveEntity(position->tile, self);
+    player.Remove<PlayerControlledComponent>();
+}
+
 void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::string> dungeon_id_string)
 {
+    // Tears down the outgoing dungeon's SpawnWaveComponent-reactive systems
+    // before DestroyWorldEntities bulk-destroys entities, not after (both are
+    // rebuilt from scratch below regardless) -- both hold a live
+    // on_destroy<SpawnWaveComponent> connection (see their own doc comments),
+    // and RoomClearDoorSystem's handler calls UnlockDoor, which itself
+    // destroys a door entity. Left connected during the bulk sweep, that
+    // reentrant destroy can fire mid-registry::destroy() for whichever enemy
+    // completes a room/wave, and the door it destroys may still be later in
+    // DestroyWorldEntities' own to_destroy list -- a double-destroy assert on
+    // an entity gone by the time the sweep reaches it.
+    m_spawn_wave_system.reset();
+    m_room_clear_door_system.reset();
+
     DestroyWorldEntities();
 
     DungeonLayout layout;
@@ -446,6 +530,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_combat_log_bridge->Subscribe(Entity(m_registry, m_player));
         m_damage_text_system.Subscribe(Entity(m_registry, m_player));
         m_heal_text_system.Subscribe(Entity(m_registry, m_player));
+        DamageEffectSystem::Subscribe(Entity(m_registry, m_player));
         m_turn_coordinator->Subscribe(Entity(m_registry, m_player));
     }
     if (!m_loot_drop_system)
@@ -455,7 +540,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
     }
     if (!m_experience_system)
     {
-        m_experience_system.emplace(GetMessageBus(), m_growth_curve, m_floating_text);
+        m_experience_system.emplace(GetMessageBus(), m_class_definition.growth, m_floating_text, m_rng);
         m_experience_system->Subscribe(Entity(m_registry, m_player));
     }
     if (!m_status_effect_markers)
@@ -502,6 +587,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
         m_miss_flash_effect_system->Subscribe(Entity(m_registry, entity));
         m_on_hit_effect_system->Subscribe(Entity(m_registry, entity));
         m_heal_effect_system->Subscribe(Entity(m_registry, entity));
+        DamageEffectSystem::Subscribe(Entity(m_registry, entity));
         m_turn_coordinator->Subscribe(Entity(m_registry, entity));
 
         if (const Position* position = m_registry.TryGetComponent<Position>(entity))
@@ -620,6 +706,12 @@ void GameplayLayer::OnTeleporterActivated(TeleporterDestination destination)
 
 void GameplayLayer::OnRestartRequested(const RestartRequestedMessage& /*message*/)
 {
+    // OnPlayerDeath removed PlayerControlledComponent instead of destroying
+    // the player entity (so gear/Meseta/level survive -- see the class doc
+    // comment); restore it here so the player is controllable again and
+    // TurnCoordinator's live-player count reflects it.
+    m_registry.GetOrEmplace<PlayerControlledComponent>(m_player);
+
     // Dying returns the player to the hub with gear/Meseta/level intact
     // (full-heal, no reset) instead of the old full-registry wipe -- see the
     // class doc comment. Real permadeath is M11.2's job.
@@ -678,6 +770,7 @@ void GameplayLayer::OnUpdate(float delta_time)
 
     m_floating_text.Update(delta_time);
     m_visual_effects->Update(delta_time);
+    DamageEffectSystem::Update(m_registry, delta_time);
     m_animation_clock.Update(delta_time);
     PublishFloatingTextState();
 
@@ -755,7 +848,7 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
                               technique->range};
         request.is_projectile = is_projectile;
         request.projectile_pierces = technique->projectile_pierces;
-        m_turn_coordinator->RequestTargeting(request);
+        BeginTargeting(request);
         return true;
     }
     case HotbarSlotType::PhotonArt:
@@ -768,8 +861,7 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
             return false;
 
         m_pending_slot_action = std::make_unique<PhotonArtAction>(*m_grid, m_photon_arts, m_affixes, slot.id, m_rng);
-        m_turn_coordinator->RequestTargeting(
-            TargetRequest{m_pending_slot_action.get(), art->targeting_mode, art->range_shape, art->range});
+        BeginTargeting(TargetRequest{m_pending_slot_action.get(), art->targeting_mode, art->range_shape, art->range});
         return true;
     }
     case HotbarSlotType::Item:
@@ -815,13 +907,25 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
                               weapon->range};
         request.is_projectile = weapon->fires_projectile;
         request.projectile_pierces = weapon->projectile_pierces;
-        m_turn_coordinator->RequestTargeting(request);
+        BeginTargeting(request);
         return true;
     }
     case HotbarSlotType::Empty:
     default:
         return false;
     }
+}
+
+void GameplayLayer::BeginTargeting(TargetRequest request)
+{
+    if (request.mode != TargetingMode::SelfTarget)
+    {
+        m_turn_coordinator->RequestTargeting(request);
+        return;
+    }
+
+    m_registry.GetOrEmplace<SelectedTargetComponent>(m_player).tile = m_registry.GetComponent<Position>(m_player).tile;
+    m_turn_coordinator->SetPendingAction(request.action);
 }
 
 void GameplayLayer::OnHotbarSlotActivated(const HotbarSlotActivatedMessage& message)
@@ -973,7 +1077,7 @@ void GameplayLayer::PublishCharacterScreenState()
     if (!m_registry.IsValid(m_player))
         return;
 
-    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes, m_growth_curve));
+    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes, m_class_definition.growth));
 }
 
 void GameplayLayer::PublishFloatingTextState()

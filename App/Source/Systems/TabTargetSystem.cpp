@@ -101,14 +101,28 @@ void TabTargetSystem::Update(Entity player)
 
     if (!m_registry->IsValid(tab_target->target) || !IsVisible(tab_target->target))
     {
-        tab_target->target = entt::null;
-        RemoveMarker();
+        RetargetNearest(player);
         return;
     }
 
     const Vec2 target_tile = m_registry->GetComponent<Position>(tab_target->target).tile;
     if (m_marker_entity == entt::null || target_tile != m_marker_tile)
         RepositionMarker(target_tile);
+}
+
+void TabTargetSystem::RetargetNearest(Entity player)
+{
+    const std::vector<entt::entity> sorted = SortedHostilesByDistance(*m_registry, player, *m_room_map, *m_visibility);
+    TabTargetComponent& tab_target = player.GetOrEmplace<TabTargetComponent>();
+    if (sorted.empty())
+    {
+        tab_target.target = entt::null;
+        RemoveMarker();
+        return;
+    }
+
+    tab_target.target = sorted.front();
+    RepositionMarker(m_registry->GetComponent<Position>(tab_target.target).tile);
 }
 
 void TabTargetSystem::RepositionMarker(Vec2 tile)

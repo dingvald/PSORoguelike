@@ -17,11 +17,10 @@ namespace psr {
 // loops). GDD ascribes Drain to Photon Arts specifically, but that's
 // authoring guidance, not an engine restriction -- nothing stops a Technique
 // from using Drain too. Heal restores the caster's own HP instead of dealing
-// damage (Resta) -- there is no ally-targeting concept in this codebase
-// (Hostility.h's IsHostile is player-vs-everyone), so TechniqueAction only
-// ever resolves Heal on its self-target branch; a directional Heal cast is a
-// no-op, same as self-target Status being out of scope for lack of a
-// buff-shaped use case.
+// damage (Resta) -- TechniqueAction has no ally-targeting resolution branch
+// yet, so it only ever resolves Heal on its self-target branch; a directional
+// Heal cast is a no-op, same as self-target Status being out of scope for
+// lack of a buff-shaped use case.
 enum class EffectFamily
 {
     Damage,

@@ -25,7 +25,7 @@
         },
         "on_hit_effect": {
             "effect_prefab_id": "vfx.generic_hit",
-            "duration": 0.3
+            "duration": 0.2
         },
         "value": {
             "base_price": 50

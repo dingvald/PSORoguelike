@@ -3,6 +3,7 @@
 #include "Actions/WeaponAttackAction.h"
 #include "CombatRegistrySetup.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/RegisterComponents.h"
 #include "Components/RenderableComponent.h"
@@ -235,6 +236,9 @@ TEST_CASE("MissFlashEffectSystem still spawns after the attacking enemy dies mid
     enemy_health.current_hp = 1; // dies to the player's first landed hit
     enemy_health.max_hp = 1;
     enemy.Emplace<psr::HealthComponent>(enemy_health);
+    // GetFaction's own inference (AiComponent -> Enemy) doesn't apply to this
+    // bare test fixture, which never carries one.
+    enemy.Emplace<psr::FactionComponent>(psr::FactionComponent{psr::Faction::Enemy});
     grid.AddEntity(psr::Vec2{3, 2}, enemy_handle);
 
     entt::entity enemy_weapon = registry.CreateEntity();

@@ -113,9 +113,8 @@ ActionResult PhotonArtAction::Perform(Entity actor)
         return ActionResult(EffectiveActCost(actor, kPhotonArtCost));
     }
 
-    const Vec2 direction = SnapToDirection(offset);
     const std::vector<Vec2> target_tiles =
-        ResolveTargetTiles(*m_grid, registry, origin, direction, art->range_shape, art->range);
+        ResolveTargetTilesToward(*m_grid, registry, origin, selected_tile, art->range_shape, art->range);
 
     for (Vec2 tile : target_tiles)
     {
