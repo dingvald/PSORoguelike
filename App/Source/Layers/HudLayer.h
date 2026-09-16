@@ -312,6 +312,17 @@ private:
     // changed progress value after a feed animates rather than snapping.
     void RenderMagPanel();
 
+    // Renders #character-screen-item-detail from whichever Inventory/
+    // Equipment row is currently hovered (taking priority) or keyboard-
+    // focused -- same target-resolution shape as UpdateStatPreview, except
+    // not restricted to equippable rows (a consumable/mod should still show
+    // its detail). Hidden (via display:none) when nothing resolves. Reads
+    // straight from m_character_screen_cache (every field the panel needs
+    // -- name, stars, description, stats, species bonuses -- is already
+    // resolved there), so unlike UpdateStatPreview this never needs a
+    // round-trip message.
+    void RenderItemDetailPanel();
+
     // Stat-change hover preview: recomputes which Inventory or Equipment row
     // (if any) is the current "preview target" -- an active mouse hover in
     // either panel takes priority over the keyboard-focused row, which is

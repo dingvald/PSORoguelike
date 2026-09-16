@@ -59,16 +59,25 @@ struct RaceBonusEntry
 // StatsComponent (reattached here to mean "stat bonus granted when
 // equipped," not an entity's own base stats) and RarityComponent.
 //
-// grind_level, race_bonuses, and the affix refs are authored *base/default*
-// values on the template -- randomly rolling race_bonuses and applying a
-// monogrinder consumable to raise grind_level are both M8.2/drop-table
-// concerns that don't exist yet; this schema only holds the data.
+// element, prefix_affix_id/suffix_affix_id, race_bonuses, and grind_level
+// are authored *base/default* values on the template -- EquipmentDropRoller
+// (see App/Source/Items/EquipmentDropRoller.h) fills in element/race_bonuses/
+// grind_level (bounded by max_grind_level) on the runtime clone when a
+// weapon is authored without them, at drop time. The affix refs are still
+// untouched by that roll -- no affix content is authored yet.
 struct WeaponComponent
 {
     WeaponRangeShape range_shape = WeaponRangeShape::SingleTarget;
     int range = 1;
     int hits_per_turn = 1;
     int grind_level = 0;
+
+    // The highest grind_level a drop roll may assign this weapon (see
+    // EquipmentDropRoller.cpp) -- an authored per-weapon ceiling, distinct
+    // from whatever higher cap a future grinder consumable might allow past
+    // this point (out of scope here; this field only bounds the drop roll).
+    int max_grind_level = 5;
+
     std::uint32_t prefix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::uint32_t suffix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::vector<RaceBonusEntry> race_bonuses;
@@ -124,6 +133,7 @@ struct WeaponComponent
             .Data<&WeaponComponent::range>("range")
             .Data<&WeaponComponent::hits_per_turn>("hits_per_turn")
             .Data<&WeaponComponent::grind_level>("grind_level")
+            .Data<&WeaponComponent::max_grind_level>("max_grind_level")
             .Data<&WeaponComponent::prefix_affix_id>("prefix_affix_id")
             .Data<&WeaponComponent::suffix_affix_id>("suffix_affix_id")
             .Data<&WeaponComponent::race_bonuses>("race_bonuses")

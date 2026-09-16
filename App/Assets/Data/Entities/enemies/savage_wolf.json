@@ -25,7 +25,7 @@
             "lck": 10
         },
         "race": {
-            "race_id": "a_beast_wolf"
+            "race_id": "a_beast"
         },
         "renderable": {
             "texture_id": "creature_sprites",

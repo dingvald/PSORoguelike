@@ -213,6 +213,14 @@ namespace {
         return it->value.GetBool();
     }
 
+    std::string ReadString(const rapidjson::Value& object, const char* key, const std::string& fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsString())
+            return fallback;
+        return it->value.GetString();
+    }
+
     RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
     {
         RenderableComponent renderable;
@@ -521,6 +529,7 @@ namespace {
         weapon.range = ReadInt(body, "range", weapon.range);
         weapon.hits_per_turn = ReadInt(body, "hits_per_turn", weapon.hits_per_turn);
         weapon.grind_level = ReadInt(body, "grind_level", weapon.grind_level);
+        weapon.max_grind_level = ReadInt(body, "max_grind_level", weapon.max_grind_level);
         weapon.prefix_affix_id = ReadNameId(body, "prefix_affix_id", 0);
         weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
@@ -544,6 +553,7 @@ namespace {
         object.AddMember("range", weapon.range, allocator);
         object.AddMember("hits_per_turn", weapon.hits_per_turn, allocator);
         object.AddMember("grind_level", weapon.grind_level, allocator);
+        object.AddMember("max_grind_level", weapon.max_grind_level, allocator);
         object.AddMember("prefix_affix_id", WriteNameId(weapon.prefix_affix_id, allocator), allocator);
         object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
@@ -586,6 +596,7 @@ namespace {
     {
         ItemComponent item;
         item.max_stack = ReadInt(body, "max_stack", item.max_stack);
+        item.description = ReadString(body, "description", item.description);
         return item;
     }
 
@@ -593,6 +604,7 @@ namespace {
     {
         rapidjson::Value object(rapidjson::kObjectType);
         object.AddMember("max_stack", item.max_stack, allocator);
+        object.AddMember("description", StringValue(item.description, allocator), allocator);
         return object;
     }
 
@@ -758,6 +770,7 @@ namespace {
           "<div id=\"field-range\" class=\"field-row\"></div>"
           "<div id=\"field-hits-per-turn\" class=\"field-row\"></div>"
           "<div id=\"field-grind-level\" class=\"field-row\"></div>"
+          "<div id=\"field-max-grind-level\" class=\"field-row\"></div>"
           "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
           "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
@@ -777,7 +790,9 @@ namespace {
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-         {"item", "Item", "#e8c15d", "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"},
+         {"item", "Item", "#e8c15d",
+          "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"
+          "<div id=\"field-item-description\" class=\"field-row\"></div>"},
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
@@ -1625,6 +1640,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_weapon.grind_level = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-max-grind-level"))
+        keep(fieldwidgets::BuildIntField(*row, "max_grind_level", m_weapon.max_grind_level,
+                                         [this](int v)
+                                         {
+                                             m_weapon.max_grind_level = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-prefix-affix"))
     {
         std::vector<std::pair<std::uint32_t, std::string>> prefix_options = {{0, "-- Select Affix --"}};
@@ -1750,6 +1772,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_item.max_stack = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-item-description"))
+        keep(fieldwidgets::BuildStringField(*row, "description", m_item.description,
+                                            [this](std::string v)
+                                            {
+                                                m_item.description = std::move(v);
+                                                MarkDirty();
+                                            }));
     if (Rml::Element* row = m_editor->GetElementById("field-stars"))
         keep(fieldwidgets::BuildIntField(*row, "stars", m_rarity.stars,
                                          [this](int v)

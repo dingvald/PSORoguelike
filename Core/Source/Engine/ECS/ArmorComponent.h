@@ -36,12 +36,15 @@ template <> struct EnumNames<ArmorSlot>
 // StatsComponent (the bonus it grants when equipped) and RarityComponent.
 //
 // mod_slot_count (0-4, a flat cap for every armor piece, more generous than
-// PSO's variable 0-4) is the template's *slot capacity* only -- which live
-// mod instance currently occupies which slot is runtime equip state with no
-// consumer yet (no mod-effect system, no inventory UI), so it isn't modeled
-// here. Nothing in this schema enforces the 0-4 bound generically (no
-// FieldKind has a min/max concept); the Prefab Editor enforces it with a
-// dropdown instead of a free-entry int field.
+// PSO's variable 0-4) is the template's *authored* slot capacity;
+// App/Source/Items/EquipmentDropRoller.h rerolls it (0-4, geometrically
+// weighted toward 0) on the runtime clone at drop time, overriding whatever
+// is authored here. Which live mod instance currently occupies which slot
+// is still runtime equip state with no consumer yet (no mod-effect system,
+// no inventory UI), so it isn't modeled here. Nothing in this schema
+// enforces the 0-4 bound generically (no FieldKind has a min/max concept);
+// the Prefab Editor enforces it with a dropdown instead of a free-entry int
+// field.
 struct ArmorComponent
 {
     ArmorSlot slot = ArmorSlot::Torso;

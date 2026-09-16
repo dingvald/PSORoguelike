@@ -10,6 +10,7 @@
 #include "Engine/Messages/MessageBus.h"
 #include "Engine/World/Grid.h"
 #include "Items/DropTableRoller.h"
+#include "Items/EquipmentDropRoller.h"
 #include "Messages/LootDropMessage.h"
 
 #include <entt/core/hashed_string.hpp>
@@ -60,6 +61,7 @@ void LootDropSystem::OnDamage(Entity /*player*/, AfterDamageEvent& event)
         return;
 
     const entt::entity item = m_registry->CreateEntity(item_prefab_id);
+    RollEquipmentVariation(*m_registry, item, *m_rng);
     m_registry->Emplace<Position>(item, Position{target_position->tile});
 
     if (result.kind == DropTableResult::Kind::Meseta)

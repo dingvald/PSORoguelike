@@ -75,9 +75,11 @@ TEST_CASE("Armor/Item/Mod/Rarity components register as authorable with the expe
     CHECK(item.id == "item");
     CHECK(item.authorable);
     CHECK_FALSE(item.is_tag);
-    REQUIRE(item.fields.size() == 1);
+    REQUIRE(item.fields.size() == 2);
     CHECK(item.fields[0].name == "max_stack");
     CHECK(item.fields[0].kind == psr::FieldKind::Integer);
+    CHECK(item.fields[1].name == "description");
+    CHECK(item.fields[1].kind == psr::FieldKind::String);
 
     const psr::ComponentSchema& mod = model.components[2];
     CHECK(mod.id == "mod");
@@ -107,7 +109,7 @@ TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")
                   "schema_version": 1,
                   "components": {
                       "armor": { "slot": "torso", "mod_slot_count": 4 },
-                      "item": {},
+                      "item": { "description": "A sturdy frame." },
                       "rarity": { "stars": 1 }
                   }
               })json");
@@ -126,7 +128,8 @@ TEST_CASE("JsonEntityLoader round-trips an armor entity", "[JsonEntityLoader]")
     const psr::ArmorComponent& armor = prefab_registry.get<psr::ArmorComponent>(it->second);
     CHECK(armor.slot == psr::ArmorSlot::Torso);
     CHECK(armor.mod_slot_count == 4);
-    CHECK(prefab_registry.all_of<psr::ItemComponent>(it->second));
+    REQUIRE(prefab_registry.all_of<psr::ItemComponent>(it->second));
+    CHECK(prefab_registry.get<psr::ItemComponent>(it->second).description == "A sturdy frame.");
 }
 
 TEST_CASE("JsonEntityLoader round-trips a mod entity with an empty body", "[JsonEntityLoader]")

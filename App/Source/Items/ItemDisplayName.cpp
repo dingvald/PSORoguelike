@@ -36,6 +36,26 @@ namespace {
 
 } // namespace
 
+const char* ElementDescription(Element element)
+{
+    switch (element)
+    {
+    case Element::Fire:
+        return "Deals bonus Fire damage and may ignite the target.";
+    case Element::Ice:
+        return "Deals bonus Ice damage and may freeze the target.";
+    case Element::Lightning:
+        return "Deals bonus Lightning damage and may shock the target.";
+    case Element::Light:
+        return "Deals bonus Light damage, especially potent against dark creatures.";
+    case Element::Dark:
+        return "Deals bonus Dark damage, especially potent against light-averse creatures.";
+    case Element::None:
+        return "";
+    }
+    return "";
+}
+
 std::string FormatItemDisplayName(const Registry& registry, entt::entity item, const AffixLibrary& affixes)
 {
     std::string base_name = "an item";
