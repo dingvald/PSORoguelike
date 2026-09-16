@@ -1955,7 +1955,82 @@ void HudLayer::RenderFocusHighlights()
     RenderRowFocus("character-screen-inventory", ".inventory-row", CharacterScreenPanel::Inventory);
 
     RenderMagPanel();
+    RenderItemDetailPanel();
     UpdateStatPreview();
+}
+
+void HudLayer::RenderItemDetailPanel()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* panel = m_document->GetElementById("character-screen-item-detail");
+    if (!panel)
+        return;
+
+    std::optional<int> inventory_target;
+    std::optional<EquipmentSlot> equipment_target;
+
+    if (m_hovered_inventory_index)
+        inventory_target = m_hovered_inventory_index;
+    else if (m_hovered_equipment_index)
+        equipment_target = static_cast<EquipmentSlot>(*m_hovered_equipment_index);
+    else if (m_focused_panel == CharacterScreenPanel::Inventory)
+        inventory_target = m_focused_row;
+    else if (m_focused_panel == CharacterScreenPanel::Equipment)
+        equipment_target = static_cast<EquipmentSlot>(m_focused_row);
+
+    const CharacterScreenMessage::ItemEntry* entry = nullptr;
+    if (m_character_screen_cache)
+    {
+        if (inventory_target && *inventory_target >= 0 &&
+            *inventory_target < static_cast<int>(m_character_screen_cache->inventory.size()))
+            entry = &m_character_screen_cache->inventory[static_cast<std::size_t>(*inventory_target)];
+        else if (equipment_target)
+        {
+            const std::size_t index = static_cast<std::size_t>(*equipment_target);
+            if (index < m_character_screen_cache->equipment.size() &&
+                m_character_screen_cache->equipment[index].has_value())
+                entry = &*m_character_screen_cache->equipment[index];
+        }
+    }
+
+    if (!entry)
+    {
+        panel->SetProperty("display", "none");
+        return;
+    }
+
+    std::string markup = "<div class=\"item-detail-title\">" + EscapeRml(entry->display_name) + "</div>";
+    markup += "<div class=\"item-detail-columns\">";
+    markup += "<div class=\"item-detail-image\"><span class=\"item-detail-image-placeholder\">?</span></div>";
+    markup += "<div class=\"item-detail-info\">";
+
+    if (entry->rarity_stars > 0)
+        markup += "<div class=\"item-detail-stars\">Stars: " + std::to_string(entry->rarity_stars) + "</div>";
+
+    if (!entry->description.empty())
+        markup += "<div class=\"item-detail-description\">" + EscapeRml(entry->description) + "</div>";
+
+    if (entry->stats)
+    {
+        const std::array<std::pair<const char*, int>, 6> stat_rows = {
+            {{"ATP", entry->stats->atp}, {"ATA", entry->stats->ata}, {"MST", entry->stats->mst},
+             {"DFP", entry->stats->dfp}, {"EVP", entry->stats->evp}, {"LCK", entry->stats->lck}}};
+        for (const auto& [label, value] : stat_rows)
+            if (value != 0)
+                markup += std::string("<div class=\"item-detail-stat-row\">") + label + ": " + std::to_string(value) +
+                          "</div>";
+    }
+
+    for (const auto& [race_name, bonus_percent] : entry->species_bonuses)
+        markup += "<div class=\"item-detail-stat-row\">vs " + EscapeRml(race_name) + ": +" +
+                  std::to_string(bonus_percent) + "%</div>";
+
+    markup += "</div></div>";
+
+    panel->SetInnerRML(markup);
+    panel->SetProperty("display", "flex");
 }
 
 void HudLayer::RenderMagPanel()

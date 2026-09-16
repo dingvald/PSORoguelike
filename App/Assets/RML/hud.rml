@@ -62,6 +62,7 @@
                 <div id="character-screen-inventory" class="character-screen-panel"></div>
             </div>
             <div id="character-screen-mag-panel"></div>
+            <div id="character-screen-item-detail"></div>
             <div id="character-screen-context-menu"></div>
             <div id="character-screen-hint">Numpad to navigate, Space to select, C / Esc to close</div>
         </div>

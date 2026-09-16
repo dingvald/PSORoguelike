@@ -1,6 +1,7 @@
 #include "Items/CharacterScreenSnapshot.h"
 
 #include "Combat/EffectiveStats.h"
+#include "Combat/Element.h"
 #include "Components/ConsumableComponent.h"
 #include "Components/CurrencyComponent.h"
 #include "Components/EquipmentComponent.h"
@@ -9,20 +10,28 @@
 #include "Components/MagComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/TPComponent.h"
+#include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/Entity.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/ItemComponent.h"
+#include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
+#include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Items/Equip.h"
 #include "Items/ItemDisplayName.h"
 #include "Items/Mag/MagFeeding.h" // kMagPointsPerLevel
+#include "Items/RaceIds.h"
 #include "Messages/CharacterScreenMessage.h"
 #include "Progression/GrowthCurve.h"
 
+#include <entt/core/hashed_string.hpp>
+
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <string>
 
 namespace psr {
 
@@ -41,6 +50,16 @@ namespace {
         return false;
     }
 
+    std::string RaceDisplayName(std::uint32_t race_id)
+    {
+        for (const auto& [id_string, display_name] : kCanonicalRaces)
+            if (entt::hashed_string::value(id_string.data()) == race_id)
+                return std::string(display_name);
+        if (const std::optional<std::string> label = NameIdRegistry::Find(race_id))
+            return *label;
+        return "Unknown";
+    }
+
     CharacterScreenMessage::ItemEntry BuildItemEntry(const Registry& registry, entt::entity item,
                                                       const AffixLibrary& affixes, const MagComponent* equipped_mag)
     {
@@ -49,10 +68,31 @@ namespace {
         entry.equip_slot = ResolveEquipSlot(registry, item);
         entry.is_consumable = registry.HasComponent<ConsumableComponent>(item);
         if (const ItemComponent* item_component = registry.TryGetComponent<ItemComponent>(item))
+        {
             entry.quantity = item_component->quantity;
+            entry.description = item_component->description;
+        }
         if (const ArmorComponent* armor = registry.TryGetComponent<ArmorComponent>(item))
             entry.mod_slot_labels.assign(static_cast<std::size_t>(armor->mod_slot_count), "(empty)");
         entry.is_mag_food = IsMagFood(registry, item, equipped_mag);
+
+        if (const RarityComponent* rarity = registry.TryGetComponent<RarityComponent>(item))
+            entry.rarity_stars = rarity->stars;
+        if (const StatsComponent* stats = registry.TryGetComponent<StatsComponent>(item))
+            entry.stats = *stats;
+
+        if (const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(item))
+        {
+            if (weapon->element != Element::None)
+            {
+                if (!entry.description.empty())
+                    entry.description += " ";
+                entry.description += ElementDescription(weapon->element);
+            }
+            for (const RaceBonusEntry& bonus : weapon->race_bonuses)
+                entry.species_bonuses.emplace_back(RaceDisplayName(bonus.race_id), bonus.bonus_percent);
+        }
+
         return entry;
     }
 

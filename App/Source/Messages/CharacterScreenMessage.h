@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Components/StatsComponent.h"
 #include "Items/Equip.h"
 
 #include <array>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace psr {
@@ -51,6 +53,22 @@ struct CharacterScreenMessage
         // to select. False when no mag is equipped, or this item isn't
         // equippable-mag food.
         bool is_mag_food = false;
+
+        // RarityComponent::stars, ItemComponent::description (an elemental
+        // weapon has ItemDisplayName.h's ElementDescription appended), and
+        // this item's own (post-drop-roll) StatsComponent -- all for the
+        // Character screen's item-detail panel (see HudLayer::
+        // RenderItemDetailPanel). stats is nullopt for an item with no
+        // StatsComponent at all (most consumables).
+        int rarity_stars = 0;
+        std::string description;
+        std::optional<StatsComponent> stats;
+
+        // A weapon's rolled WeaponComponent::race_bonuses, resolved to a
+        // display race name (e.g. "Native") + bonus_percent -- fully
+        // resolved so HudLayer never needs a race_id -> label lookup of its
+        // own. Empty for a non-weapon item or a weapon with no race bonus.
+        std::vector<std::pair<std::string, int>> species_bonuses;
     };
 
     // One PSO-style stat's mag progress -- level plus progress toward the

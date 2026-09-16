@@ -471,6 +471,77 @@ body {
     color: #999;
 }
 
+/* The currently hovered/focused Inventory or Equipment item's full detail --
+   centered below #character-screen-columns (and #character-screen-mag-panel,
+   when both show at once), shown only while a row resolves a target (see
+   HudLayer::RenderItemDetailPanel). Image placeholder on the left, name/
+   stars/description/stats/species-bonuses on the right, in two equal-width
+   boxes. */
+#character-screen-item-detail {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    max-width: 700px;
+    box-sizing: border-box;
+    padding: 0.5em 0.8em;
+    margin-bottom: 1em;
+    background-color: rgba(0, 0, 0, 160);
+    border: 2px #444;
+}
+
+.item-detail-title {
+    font-weight: bold;
+    color: #f6470a;
+    margin-bottom: 0.4em;
+}
+
+.item-detail-columns {
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+}
+
+.item-detail-image,
+.item-detail-info {
+    flex: 1 1 0;
+    box-sizing: border-box;
+}
+
+.item-detail-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 160px;
+    background-color: rgba(0, 0, 0, 200);
+    border: 1px #555;
+}
+
+.item-detail-image-placeholder {
+    font-size: 2em;
+    color: #666;
+}
+
+.item-detail-stars {
+    display: block;
+    font-size: 0.85em;
+    color: #d4c93f;
+    margin-bottom: 0.3em;
+}
+
+.item-detail-description {
+    display: block;
+    font-size: 0.8em;
+    color: #bbb;
+    margin-bottom: 0.4em;
+}
+
+.item-detail-stat-row {
+    display: block;
+    font-size: 0.85em;
+    color: #ddd;
+    padding: 0.1em 0;
+}
+
 /* Context menu for a Character-screen row's actions (Equip/Remove/Use/Drop)
    -- opened next to the focused/clicked row, mirrors the Editor's
    .painter-dropdown recipe (piece_editor.rcss). width/max-height are fixed
