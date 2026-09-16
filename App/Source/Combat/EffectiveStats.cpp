@@ -3,6 +3,7 @@
 #include "Combat/StatusEffectQueries.h"
 #include "Combat/StatusEffectType.h"
 #include "Components/EquipmentComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/StatusEffectComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/Registry.h"
@@ -14,6 +15,16 @@ namespace {
     constexpr float kShockEvpMultiplier = 0.85f;
     constexpr float kFreezeEvpMultiplier = 0.7f;
     constexpr float kShockAndFreezeEvpMultiplier = 0.55f;
+
+    // A mag doesn't carry its own StatsComponent like weapon/armor do (its
+    // four stats -- POW/DEF/DEX/MIND -- aren't PSO's six core stats, so
+    // they convert rather than sum). Sync/IQ are informational only (see
+    // docs/GDD.md's Mag section and MagComponent.h) -- these ratios apply at
+    // full value regardless of either.
+    constexpr int kMagPowToAtp = 2;
+    constexpr int kMagDefToDfp = 1;
+    constexpr int kMagMindToMst = 2;
+    constexpr int kMagDexPerAta = 2;
 
     void AddStats(StatsComponent& total, const StatsComponent& bonus)
     {
@@ -42,6 +53,20 @@ namespace {
             return;
         if (const WeaponComponent* weapon_component = registry.TryGetComponent<WeaponComponent>(weapon))
             total.atp += weapon_component->grind_level * kGrindAtpPerLevel;
+    }
+
+    void AddMagStats(StatsComponent& total, Registry& registry, entt::entity mag)
+    {
+        if (mag == entt::null)
+            return;
+        const MagComponent* mag_component = registry.TryGetComponent<MagComponent>(mag);
+        if (!mag_component)
+            return;
+
+        total.atp += mag_component->pow_level * kMagPowToAtp;
+        total.dfp += mag_component->def_level * kMagDefToDfp;
+        total.mst += mag_component->mind_level * kMagMindToMst;
+        total.ata += mag_component->dex_level / kMagDexPerAta;
     }
 
     // PSO: Shocked/Paralyzed EVP x0.85, Frozen x0.7, both x0.55 (a distinct
@@ -107,6 +132,7 @@ StatsComponent ComputeEffectiveStats(Entity actor, const AffixLibrary& affixes)
         AddEquippedStats(total, registry, equipment->torso);
         AddEquippedStats(total, registry, equipment->hands);
         AddEquippedStats(total, registry, equipment->legs);
+        AddMagStats(total, registry, equipment->mag);
 
         if (equipment->weapon != entt::null)
         {

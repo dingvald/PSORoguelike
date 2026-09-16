@@ -2,6 +2,7 @@
 
 #include "Components/EquipmentComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/Entity.h"
@@ -59,6 +60,40 @@ TEST_CASE("EquipItem routes armor to the EquipmentComponent slot matching its Ar
 
     REQUIRE(psr::EquipItem(actor, 0));
     REQUIRE(actor.Get<psr::EquipmentComponent>().head == helmet);
+}
+
+TEST_CASE("EquipItem routes a mag to the EquipmentComponent's mag slot", "[Equip][Mag]")
+{
+    psr::Registry registry;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+
+    entt::entity mag = registry.CreateEntity();
+    registry.Emplace<psr::MagComponent>(mag);
+    actor.Emplace<psr::InventoryComponent>(psr::InventoryComponent{{mag}, 20});
+
+    REQUIRE(psr::EquipItem(actor, 0));
+
+    REQUIRE(actor.Get<psr::EquipmentComponent>().mag == mag);
+    REQUIRE(actor.Get<psr::InventoryComponent>().items.empty());
+}
+
+TEST_CASE("UnequipSlot moves an equipped mag back into inventory and clears the mag slot", "[Equip][Mag]")
+{
+    psr::Registry registry;
+    entt::entity handle = registry.CreateEntity();
+    psr::Entity actor(registry, handle);
+
+    entt::entity mag = registry.CreateEntity();
+    registry.Emplace<psr::MagComponent>(mag);
+    psr::EquipmentComponent equipment;
+    equipment.mag = mag;
+    actor.Emplace<psr::EquipmentComponent>(equipment);
+
+    REQUIRE(psr::UnequipSlot(actor, psr::EquipmentSlot::Mag));
+
+    REQUIRE((actor.Get<psr::EquipmentComponent>().mag == entt::null));
+    REQUIRE(actor.Get<psr::InventoryComponent>().items == std::vector<entt::entity>{mag});
 }
 
 TEST_CASE("EquipItem is a no-op for an item with no equip slot", "[Equip]")

@@ -2,9 +2,11 @@
 
 #include "Components/EquipmentComponent.h"
 #include "Components/InventoryComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
 #include "Engine/ECS/Registry.h"
+#include "Items/Mag/MagCompanion.h"
 
 #include <cstddef>
 #include <optional>
@@ -31,6 +33,9 @@ std::optional<EquipmentSlot> ResolveEquipSlot(const Registry& registry, entt::en
         }
     }
 
+    if (registry.HasComponent<MagComponent>(item))
+        return EquipmentSlot::Mag;
+
     return std::nullopt;
 }
 
@@ -48,6 +53,8 @@ entt::entity& SlotRef(EquipmentComponent& equipment, EquipmentSlot slot)
         return equipment.hands;
     case EquipmentSlot::Legs:
         return equipment.legs;
+    case EquipmentSlot::Mag:
+        return equipment.mag;
     }
     return equipment.weapon; // unreachable for a valid enum value
 }
@@ -73,6 +80,13 @@ bool EquipItem(Entity actor, int inventory_index)
     if (previous != entt::null)
         inventory->items.push_back(previous);
 
+    if (*slot == EquipmentSlot::Mag)
+    {
+        if (previous != entt::null)
+            OnMagUnequipped(registry, previous);
+        OnMagEquipped(registry, actor.Handle(), item);
+    }
+
     return true;
 }
 
@@ -89,6 +103,9 @@ bool UnequipSlot(Entity actor, EquipmentSlot slot)
     InventoryComponent& inventory = actor.GetOrEmplace<InventoryComponent>();
     if (static_cast<int>(inventory.items.size()) >= inventory.capacity)
         return false;
+
+    if (slot == EquipmentSlot::Mag)
+        OnMagUnequipped(actor.GetRegistry(), slot_ref);
 
     inventory.items.push_back(slot_ref);
     slot_ref = entt::null;

@@ -402,6 +402,75 @@ body {
     border-left: 3px #f6470a;
 }
 
+/* The equipped mag's stats/level/IQ/sync -- centered below
+   #character-screen-columns, shown only while the Mag equipment-panel row
+   is hovered or keyboard-focused (see HudLayer::RenderMagPanel). */
+#character-screen-mag-panel {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 420px;
+    box-sizing: border-box;
+    padding: 0.5em 0.8em;
+    margin-bottom: 1em;
+    background-color: rgba(0, 0, 0, 160);
+    border: 2px #444;
+}
+
+.mag-panel-title {
+    font-weight: bold;
+    color: #f6470a;
+    margin-bottom: 0.4em;
+}
+
+.mag-stat-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 0.3em;
+}
+
+.mag-stat-label {
+    display: block;
+    width: 44px;
+    font-size: 0.8em;
+    color: #f6470a;
+    font-weight: bold;
+}
+
+.mag-stat-level {
+    display: block;
+    width: 28px;
+    font-size: 0.8em;
+    color: #ddd;
+    text-align: right;
+    margin-right: 0.5em;
+}
+
+.mag-stat-bar-track {
+    display: block;
+    flex: 1 1 auto;
+    height: 10px;
+    background-color: rgba(0, 0, 0, 160);
+    border: 1px #555;
+}
+
+.mag-stat-bar-fill {
+    display: block;
+    height: 100%;
+    width: 0%;
+    background-color: #3aa0ff;
+    transition: width 0.3s;
+}
+
+.mag-info-row {
+    display: block;
+    margin-top: 0.2em;
+    font-size: 0.8em;
+    color: #999;
+}
+
 /* Context menu for a Character-screen row's actions (Equip/Remove/Use/Drop)
    -- opened next to the focused/clicked row, mirrors the Editor's
    .painter-dropdown recipe (piece_editor.rcss). width/max-height are fixed

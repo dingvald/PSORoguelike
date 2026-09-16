@@ -1,0 +1,49 @@
+{
+    "schema_version": 1,
+    "components": {
+        "item": {
+            "max_stack": 1
+        },
+        "mag": {
+            "feed_cooldown_turns": 50,
+            "feed_response": [
+                {
+                    "item_prefab_id": "monomate",
+                    "pow": 15,
+                    "def": 5,
+                    "dex": 30,
+                    "mind": 0
+                },
+                {
+                    "item_prefab_id": "monofluid",
+                    "pow": 0,
+                    "def": 10,
+                    "dex": 10,
+                    "mind": 20
+                }
+            ],
+            "evolution_tree": [
+                {
+                    "condition": "LEVEL >= 1",
+                    "target_prefab_id": "mags.mag"
+                }
+            ]
+        },
+        "renderable": {
+            "texture_id": "item_pickup",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#000000ff",
+            "color_2": "#3aa0ffff",
+            "render_layer": 1,
+            "frames": 1,
+            "frame_time": 0.0
+        }
+    }
+}

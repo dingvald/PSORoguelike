@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/ECS/ComponentMeta.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/EntityDescriber.h"
 #include "Engine/ECS/EventHandlerComponent.h"
@@ -54,6 +55,30 @@ public:
 
     std::uint32_t GetPrefabId(entt::entity prefab_entity) const { return m_entity_to_prefab_map.at(prefab_entity); }
     entt::entity GetPrefabEntity(std::uint32_t prefab_id) const { return m_prefab_to_entity_map.at(prefab_id); }
+
+    // Re-clones a single TComponent from prefab_id's template onto entity,
+    // overwriting whatever entity currently has (or adding it fresh) --
+    // reuses CloneComponent<T>, the same per-component clone step
+    // CreateEntity(prefab_id) applies to every registered component. Unlike
+    // CreateEntity(prefab_id), this touches only TComponent -- every other
+    // component already on entity is left untouched. For a live entity that
+    // needs to re-sync its identity/visuals against a (possibly different)
+    // prefab without being destroyed and recreated -- e.g. an entity
+    // evolving into another species while its own runtime progress persists.
+    template <typename TComponent> void CopyFromPrefab(entt::entity entity, std::uint32_t prefab_id)
+    {
+        CloneComponent<TComponent>(*m_prefab_registry, GetPrefabEntity(prefab_id), *m_runtime_registry, entity);
+    }
+
+    // Read-only access to a single TComponent as authored on prefab_id's own
+    // template entity -- e.g. so a live entity re-syncing against a
+    // (possibly different) prefab can read the new prefab's authored config
+    // values before deciding which of its own fields to overwrite, without
+    // touching itself via CopyFromPrefab's blind whole-component copy.
+    template <typename TComponent> const TComponent& GetPrefabComponent(std::uint32_t prefab_id) const
+    {
+        return m_prefab_registry->get<TComponent>(GetPrefabEntity(prefab_id));
+    }
 
     void DestroyEntity(entt::entity entity);
     bool IsValid(entt::entity entity) const;

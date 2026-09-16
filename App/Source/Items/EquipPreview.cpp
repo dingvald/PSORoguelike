@@ -46,4 +46,24 @@ std::optional<StatsComponent> ComputeEquipStatDelta(Registry& registry, entt::en
     return Subtract(after, before);
 }
 
+std::optional<StatsComponent> ComputeUnequipStatDelta(Registry& registry, entt::entity actor, EquipmentSlot slot,
+                                                       const AffixLibrary& affixes)
+{
+    EquipmentComponent* equipment = registry.TryGetComponent<EquipmentComponent>(actor);
+    if (!equipment)
+        return std::nullopt;
+
+    entt::entity& slot_ref = SlotRef(*equipment, slot);
+
+    Entity self(registry, actor);
+    const StatsComponent before = ComputeEffectiveStats(self, affixes);
+
+    const entt::entity original = slot_ref;
+    slot_ref = entt::null;
+    const StatsComponent after = ComputeEffectiveStats(self, affixes);
+    slot_ref = original;
+
+    return Subtract(after, before);
+}
+
 } // namespace psr

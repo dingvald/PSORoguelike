@@ -74,6 +74,8 @@ struct RestartRequestedMessage;
 struct InventoryItemActivatedMessage;
 struct InventoryItemHoverChangedMessage;
 struct EquipmentSlotActivatedMessage;
+struct EquipmentSlotHoverChangedMessage;
+struct MagFeedRequestedMessage;
 struct HotbarSlotAssignedMessage;
 struct ActionPaletteSlotAssignedMessage;
 struct MissionSelectedMessage;
@@ -312,6 +314,18 @@ private:
     // responds, even for a non-equippable row (with active=false).
     void OnInventoryItemHoverChanged(const InventoryItemHoverChangedMessage& message);
     void OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage& message);
+
+    // Equipment-panel sibling of OnInventoryItemHoverChanged -- see
+    // ComputeUnequipStatDelta and EquipmentSlotHoverChangedMessage's own doc
+    // comment. Same "always responds, even for an empty slot" contract.
+    void OnEquipmentSlotHoverChanged(const EquipmentSlotHoverChangedMessage& message);
+
+    // Published by HudLayer once the player selects a food item while
+    // feeding the equipped mag (see HudLayer's "Feed" context-menu action
+    // and its mag-food-selection sub-state). Free/instant, same reasoning as
+    // OnEquipmentSlotActivated -- calls ApplyMagFood, consumes one unit of
+    // the food item, and republishes the screen's contents.
+    void OnMagFeedRequested(const MagFeedRequestedMessage& message);
 
     // Handles HudLayer's "Assign to Hotbar" flow -- free/instant, same
     // reasoning as OnEquipmentSlotActivated, but rewrites HotbarComponent
