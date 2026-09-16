@@ -43,6 +43,38 @@ struct CharacterScreenMessage
         // mod into one of these slots (no Mod item content or effects are
         // defined), so every entry reads "(empty)" until that lands.
         std::vector<std::string> mod_slot_labels;
+
+        // Whether the player's currently-equipped mag's own
+        // MagComponent::feed_response recognizes this item's prefab --
+        // lets HudLayer's "select a food to feed the mag" flow (entered from
+        // the Feed context-menu action) tell which Inventory rows are valid
+        // to select. False when no mag is equipped, or this item isn't
+        // equippable-mag food.
+        bool is_mag_food = false;
+    };
+
+    // One PSO-style stat's mag progress -- level plus progress toward the
+    // next level (out of progress_to_next, mirroring MagFeeding.h's
+    // kMagPointsPerLevel so HudLayer never needs that constant itself).
+    struct MagStatBar
+    {
+        int level = 0;
+        int progress = 0;
+        int progress_to_next = 1;
+    };
+
+    // The equipped mag's stats/level/iq/sync for the Character screen's mag
+    // panel (see docs and MagComponent.h) -- nullopt when no mag is
+    // equipped, in which case HudLayer hides the panel.
+    struct MagSummary
+    {
+        int level = 0;
+        MagStatBar pow;
+        MagStatBar def;
+        MagStatBar dex;
+        MagStatBar mind;
+        int iq = 0;
+        float sync = 0.0f;
     };
 
     struct StatsSummary
@@ -75,11 +107,15 @@ struct CharacterScreenMessage
     // Index-aligned with the player's InventoryComponent::items.
     std::vector<ItemEntry> inventory;
 
-    // Indexed by EquipmentSlot (Weapon, Head, Torso, Hands, Legs); nullopt
-    // means that slot is empty.
-    std::array<std::optional<ItemEntry>, 5> equipment;
+    // Indexed by EquipmentSlot (Weapon, Head, Torso, Hands, Legs, Mag);
+    // nullopt means that slot is empty.
+    std::array<std::optional<ItemEntry>, 6> equipment;
 
     StatsSummary stats;
+
+    // The equipped mag's own panel data -- nullopt when EquipmentSlot::Mag
+    // is empty.
+    std::optional<MagSummary> mag;
 
     // CurrencyComponent::meseta -- rendered as a non-selectable row pinned to
     // the bottom of the Inventory panel (see HudLayer::OnCharacterScreenState),

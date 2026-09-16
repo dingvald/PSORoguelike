@@ -49,6 +49,44 @@ public:
     }
 };
 
+struct OtherComponent
+{
+    int other = 0;
+
+    static void Register(entt::meta_ctx& ctx)
+    {
+        using namespace entt::literals;
+        entt::meta_factory<OtherComponent>(ctx)
+            .data<&OtherComponent::other>("other"_hs)
+            .func<&psr::CloneComponent<OtherComponent>>("clone"_hs);
+    }
+};
+
+constexpr std::uint32_t kFirstPrefabId = 10;
+constexpr std::uint32_t kSecondPrefabId = 11;
+
+// Registers two independent TestComponent-bearing prefabs at once (unlike
+// TestEntityLoader/ReloadingEntityLoader above, which are never live
+// simultaneously) -- CopyFromPrefab/GetPrefabComponent's own tests need two
+// coexisting templates to copy *between*.
+class TwoPrefabsEntityLoader : public psr::IEntityLoader
+{
+public:
+    bool Load(std::filesystem::path /*path*/) override { return true; }
+
+    void Populate(entt::registry& prefab_registry,
+                  std::unordered_map<std::uint32_t, entt::entity>& out_prefab_ids) override
+    {
+        entt::entity first = prefab_registry.create();
+        prefab_registry.emplace<TestComponent>(first, 42);
+        out_prefab_ids.emplace(kFirstPrefabId, first);
+
+        entt::entity second = prefab_registry.create();
+        prefab_registry.emplace<TestComponent>(second, 77);
+        out_prefab_ids.emplace(kSecondPrefabId, second);
+    }
+};
+
 constexpr std::uint32_t kReloadedPrefabId = 3;
 
 // Second call's content differs from the first (kTestPrefabId/kTagPrefabId
@@ -196,4 +234,43 @@ TEST_CASE("Registry RegisterPrefabs called again fully replaces the previous pre
     entt::entity entity = registry.CreateEntity(kReloadedPrefabId);
     REQUIRE(registry.IsValid(entity));
     REQUIRE(registry.GetComponent<TestComponent>(entity).value == 99);
+}
+
+TEST_CASE("Registry GetPrefabComponent reads a prefab template's component value without touching any live entity",
+          "[Registry][Prefab]")
+{
+    psr::Registry registry;
+    TestComponent::Register(registry.GetMetaContext());
+
+    TwoPrefabsEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    REQUIRE(registry.GetPrefabComponent<TestComponent>(kFirstPrefabId).value == 42);
+    REQUIRE(registry.GetPrefabComponent<TestComponent>(kSecondPrefabId).value == 77);
+}
+
+TEST_CASE("Registry CopyFromPrefab re-clones a single component from a prefab onto a live entity, leaving every "
+          "other component on it untouched",
+          "[Registry][Prefab]")
+{
+    psr::Registry registry;
+    TestComponent::Register(registry.GetMetaContext());
+    OtherComponent::Register(registry.GetMetaContext());
+
+    TwoPrefabsEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+
+    entt::entity entity = registry.CreateEntity();
+    registry.Emplace<TestComponent>(entity, 1);
+    registry.Emplace<OtherComponent>(entity, 5);
+
+    registry.CopyFromPrefab<TestComponent>(entity, kSecondPrefabId);
+
+    REQUIRE(registry.GetComponent<TestComponent>(entity).value == 77);
+    REQUIRE(registry.GetComponent<OtherComponent>(entity).other == 5);
+
+    // Re-copying from a different prefab id re-syncs again, same call
+    // shape MagFeeding.cpp's EvolveMag relies on.
+    registry.CopyFromPrefab<TestComponent>(entity, kFirstPrefabId);
+    REQUIRE(registry.GetComponent<TestComponent>(entity).value == 42);
 }

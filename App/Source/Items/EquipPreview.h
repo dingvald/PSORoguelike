@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/StatsComponent.h"
+#include "Items/Equip.h"
 
 #include <entt/entt.hpp>
 
@@ -24,5 +25,14 @@ class AffixLibrary;
 // no EquipmentComponent to swap against.
 std::optional<StatsComponent> ComputeEquipStatDelta(Registry& registry, entt::entity actor, entt::entity item,
                                                     const AffixLibrary& affixes);
+
+// The StatsComponent delta from hypothetically clearing `slot` (removing
+// whatever is currently equipped there) -- the Equipment panel's hover
+// counterpart to ComputeEquipStatDelta's Inventory-panel "preview equipping
+// this" delta above, sharing the same temporarily-swap-then-restore
+// mechanism but toward entt::null instead of an item. Returns nullopt if
+// `actor` has no EquipmentComponent.
+std::optional<StatsComponent> ComputeUnequipStatDelta(Registry& registry, entt::entity actor, EquipmentSlot slot,
+                                                       const AffixLibrary& affixes);
 
 } // namespace psr
