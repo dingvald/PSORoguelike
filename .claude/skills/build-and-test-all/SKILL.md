@@ -1,6 +1,7 @@
 ---
 name: build-and-test-all
 description: Build the full Windows solution, then run both the Core-Test and App-Test suites. Use for "build and test everything", a pre-PR sanity check, or when the user asks to build and run all tests in one go.
+model: haiku
 ---
 
 Two-stage sanity check: full solution build, then the full test suite. Stop after stage 1 if it fails — don't run tests against a solution that didn't build.

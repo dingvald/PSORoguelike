@@ -1,6 +1,7 @@
 ---
 name: test-core
 description: Build and run the Core-Test Catch2 suite (engine-level tests). Use when the user asks to run Core tests, engine tests, or "test Core".
+model: haiku
 ---
 
 Build and run the `Core-Test` suite via the existing helper script — do not hand-roll an MSBuild/exe invocation, `Scripts/Run-Tests.ps1` already handles MSBuild discovery, building the right `.vcxproj`, and locating the output exe.
