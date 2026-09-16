@@ -1,6 +1,7 @@
 ---
 name: build-windows
 description: Compile and build the full PSORoguelike Windows solution (Core, App, Editor, Core-Test, App-Test) via MSBuild. Use when the user asks to build, compile, or check that the project builds on Windows.
+model: haiku
 ---
 
 Build `PSORoguelike.slnx` via MSBuild. This compiles every project in the workspace: Core, App, Editor, and both test projects.
