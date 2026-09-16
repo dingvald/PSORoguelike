@@ -1,11 +1,13 @@
 #include "Systems/EnemyAiSystem.h"
 
+#include "Actions/LungeAttackAction.h"
 #include "Actions/MoveAction.h"
 #include "Actions/TechniqueAction.h"
 #include "Combat/Hostility.h"
 #include "Combat/TargetResolution.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/PounceComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RangedTechComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -20,6 +22,7 @@
 #include <array>
 #include <cstdlib>
 #include <optional>
+#include <random>
 
 namespace psr {
 
@@ -65,10 +68,10 @@ namespace {
 } // namespace
 
 EnemyAiSystem::EnemyAiSystem(Grid& grid, Registry& registry, const AffixLibrary& affixes,
-                             const TechniqueLibrary& techniques, std::mt19937& rng,
-                             std::function<void(entt::entity)> on_spawned)
-    : m_grid(&grid), m_registry(&registry), m_affixes(&affixes), m_techniques(&techniques), m_rng(&rng),
-      m_on_spawned(std::move(on_spawned))
+                             const TechniqueLibrary& techniques, VisualEffectSystem& visual_effects,
+                             std::mt19937& rng, std::function<void(entt::entity)> on_spawned)
+    : m_grid(&grid), m_registry(&registry), m_affixes(&affixes), m_techniques(&techniques),
+      m_visual_effects(&visual_effects), m_rng(&rng), m_on_spawned(std::move(on_spawned))
 {
 }
 
@@ -95,6 +98,9 @@ IAction* EnemyAiSystem::Decide(Entity actor)
         break;
     case AiBehavior::RangedTechAtDistance:
         action = DecideRangedTechAtDistance(actor, *ai);
+        break;
+    case AiBehavior::KeepDistanceAndPounce:
+        action = DecideKeepDistanceAndPounce(actor, *ai);
         break;
     }
     return action ? action : &m_wait_action;
@@ -138,6 +144,32 @@ IAction* EnemyAiSystem::StepAwayFrom(Entity actor, Vec2 self_tile, Vec2 delta)
     if (second_axis != Vec2{0, 0} && IsWalkableStep(*m_grid, *m_registry, actor, self_tile + second_axis))
     {
         m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, second_axis, *m_rng);
+        return m_pending_decision.get();
+    }
+
+    return nullptr;
+}
+
+IAction* EnemyAiSystem::StepLaterally(Entity actor, Vec2 self_tile, Vec2 target_tile)
+{
+    const Vec2 delta = target_tile - self_tile;
+    const Vec2 unit{(delta.x > 0) - (delta.x < 0), (delta.y > 0) - (delta.y < 0)};
+    const Vec2 perpendicular_a{-unit.y, unit.x};
+    const Vec2 perpendicular_b{unit.y, -unit.x};
+
+    std::uniform_int_distribution<int> side_roll(0, 1);
+    const Vec2 first_side = side_roll(*m_rng) == 0 ? perpendicular_a : perpendicular_b;
+    const Vec2 second_side = first_side == perpendicular_a ? perpendicular_b : perpendicular_a;
+
+    if (IsWalkableStep(*m_grid, *m_registry, actor, self_tile + first_side))
+    {
+        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, first_side, *m_rng);
+        return m_pending_decision.get();
+    }
+
+    if (IsWalkableStep(*m_grid, *m_registry, actor, self_tile + second_side))
+    {
+        m_pending_decision = std::make_unique<MoveAction>(*m_grid, *m_affixes, second_side, *m_rng);
         return m_pending_decision.get();
     }
 
@@ -294,6 +326,48 @@ IAction* EnemyAiSystem::DecideRangedTechAtDistance(Entity actor, const AiCompone
     }
 
     return StepTowardGoal(actor, self_position->tile, *target_tile);
+}
+
+IAction* EnemyAiSystem::DecideKeepDistanceAndPounce(Entity actor, const AiComponent& ai)
+{
+    const PounceComponent* pounce = actor.TryGet<PounceComponent>();
+    if (!pounce)
+        return DecideChaseAndAttack(actor, ai);
+
+    const Position* self_position = actor.TryGet<Position>();
+    if (!self_position)
+        return nullptr;
+
+    const std::optional<Vec2> target_tile =
+        FindNearestHostileTile(*m_grid, *m_registry, actor, self_position->tile, ai.detection_range);
+    if (!target_tile)
+        return nullptr;
+
+    const Vec2 delta = *target_tile - self_position->tile;
+    const int distance = ChebyshevDistance(self_position->tile, *target_tile);
+    const bool aligned = delta.x == 0 || delta.y == 0 || std::abs(delta.x) == std::abs(delta.y);
+
+    if (distance == LungeAttackAction::kLungeRange && aligned)
+    {
+        std::uniform_int_distribution<int> chance_roll(1, 100);
+        if (chance_roll(*m_rng) <= pounce->pounce_chance_percent)
+        {
+            const Vec2 direction{(delta.x > 0) - (delta.x < 0), (delta.y > 0) - (delta.y < 0)};
+            m_pending_decision = std::make_unique<LungeAttackAction>(*m_grid, *m_affixes, *m_visual_effects, *m_rng,
+                                                                      direction, pounce->ghost_effect_prefab_id,
+                                                                      pounce->ghost_effect_duration);
+            return m_pending_decision.get();
+        }
+        return StepLaterally(actor, self_position->tile, *target_tile);
+    }
+
+    if (distance <= pounce->preferred_distance - 1)
+        return StepAwayFrom(actor, self_position->tile, self_position->tile - *target_tile);
+
+    if (distance > pounce->preferred_distance)
+        return StepTowardGoal(actor, self_position->tile, *target_tile);
+
+    return StepLaterally(actor, self_position->tile, *target_tile);
 }
 
 } // namespace psr

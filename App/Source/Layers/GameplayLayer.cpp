@@ -629,7 +629,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
 
     EnterRoom(instantiation.entrance_tile, m_room_map->GetRoom(instantiation.entrance_tile));
 
-    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
+    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, *m_visual_effects, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
     m_tab_target_system.emplace(m_registry, *m_grid, *m_room_map, *m_room_visibility);
     m_turn_coordinator->SetNpcDecision(
