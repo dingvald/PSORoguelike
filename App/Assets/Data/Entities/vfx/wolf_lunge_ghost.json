@@ -1,0 +1,21 @@
+{
+    "schema_version": 1,
+    "components": {
+        "renderable": {
+            "texture_id": "creature_sprites",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 3,
+                "y": 3
+            },
+            "color_1": "#6a6a6a99",
+            "color_2": "#c9c9c999",
+            "render_layer": 9,
+            "frames": 1,
+            "frame_time": 0.0
+        }
+    }
+}

@@ -21,6 +21,7 @@
 #include "Components/OnHitEffectComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/PounceComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RangedTechComponent.h"
 #include "Components/RenderableComponent.h"
@@ -72,6 +73,7 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     OnHitEffectComponent::Register(reg);
     PackFollowerComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
+    PounceComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);

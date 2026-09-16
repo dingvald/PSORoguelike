@@ -11,6 +11,7 @@
 #include "Components/FactionComponent.h"
 #include "Components/OnHitEffectComponent.h"
 #include "Components/PackFollowerComponent.h"
+#include "Components/PounceComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RangedTechComponent.h"
 #include "Components/RenderableComponent.h"
@@ -235,6 +236,7 @@ private:
     PackFollowerComponent m_pack_follower;
     std::string m_pack_follower_race_name;
     RangedTechComponent m_ranged_tech;
+    PounceComponent m_pounce;
 
     // Affix library (App/Assets/Data/Affixes), loaded once in OnAttach --
     // backs the weapon card's prefix/suffix BuildIdEnumField pickers.

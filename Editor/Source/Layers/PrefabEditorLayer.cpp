@@ -705,6 +705,26 @@ namespace {
         return object;
     }
 
+    PounceComponent ReadPounceBody(const rapidjson::Value& body)
+    {
+        PounceComponent pounce;
+        pounce.preferred_distance = ReadInt(body, "preferred_distance", pounce.preferred_distance);
+        pounce.pounce_chance_percent = ReadInt(body, "pounce_chance_percent", pounce.pounce_chance_percent);
+        pounce.ghost_effect_prefab_id = ReadNameId(body, "ghost_effect_prefab_id", pounce.ghost_effect_prefab_id);
+        pounce.ghost_effect_duration = ReadFloat(body, "ghost_effect_duration", pounce.ghost_effect_duration);
+        return pounce;
+    }
+
+    rapidjson::Value WritePounceBody(const PounceComponent& pounce, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("preferred_distance", pounce.preferred_distance, allocator);
+        object.AddMember("pounce_chance_percent", pounce.pounce_chance_percent, allocator);
+        object.AddMember("ghost_effect_prefab_id", WriteNameId(pounce.ghost_effect_prefab_id, allocator), allocator);
+        object.AddMember("ghost_effect_duration", pounce.ghost_effect_duration, allocator);
+        return object;
+    }
+
     ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
     {
         ConsumableComponent consumable;
@@ -739,7 +759,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 19> kComponentKinds = {
+    constexpr std::array<ComponentKind, 20> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -820,7 +840,12 @@ namespace {
          {"pack_follower", "Pack Follower", "#c15de8", "<div id=\"field-pack-leader-race\" class=\"field-row\"></div>"},
          {"ranged_tech", "Ranged Tech", "#5de8a3",
           "<div id=\"field-ranged-tech-id\" class=\"field-row\"></div>"
-          "<div id=\"field-ranged-tech-range\" class=\"field-row\"></div>"}}};
+          "<div id=\"field-ranged-tech-range\" class=\"field-row\"></div>"},
+         {"pounce", "Pounce", "#e8a35d",
+          "<div id=\"field-pounce-preferred-distance\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-chance-percent\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-ghost-prefab\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-ghost-duration\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -1230,7 +1255,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         if (key == "renderable" || key == "stats" || key == "actor" || key == "faction" || key == "race" ||
             key == "health" || key == "weapon" || key == "armor" || key == "mod" || key == "item" || key == "rarity" ||
             key == "consumable" || key == "drop_table" || key == "on_hit_effect" || key == "experience_value" ||
-            key == "ai" || key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech")
+            key == "ai" || key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech" || key == "pounce")
             m_component_order.emplace_back(key);
     }
 
@@ -1273,6 +1298,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_pack_follower_race_name = LabelFor(m_pack_follower.pack_leader_race_id);
     m_ranged_tech =
         components.HasMember("ranged_tech") ? ReadRangedTechBody(components["ranged_tech"]) : RangedTechComponent{};
+    m_pounce = components.HasMember("pounce") ? ReadPounceBody(components["pounce"]) : PounceComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1946,6 +1972,36 @@ void PrefabEditorLayer::RefreshEditForm()
                                              MarkDirty();
                                          }));
 
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-preferred-distance"))
+        keep(fieldwidgets::BuildIntField(*row, "preferred_distance", m_pounce.preferred_distance,
+                                         [this](int v)
+                                         {
+                                             m_pounce.preferred_distance = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-chance-percent"))
+        keep(fieldwidgets::BuildIntField(*row, "pounce_chance_percent", m_pounce.pounce_chance_percent,
+                                         [this](int v)
+                                         {
+                                             m_pounce.pounce_chance_percent = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-ghost-prefab"))
+        keep(fieldwidgets::BuildIdEnumField(*row, "ghost_effect_prefab_id", PrefabIdOptions(),
+                                            m_pounce.ghost_effect_prefab_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_pounce.ghost_effect_prefab_id = id;
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-ghost-duration"))
+        keep(fieldwidgets::BuildFloatField(*row, "ghost_effect_duration", m_pounce.ghost_effect_duration,
+                                           [this](float v)
+                                           {
+                                               m_pounce.ghost_effect_duration = v;
+                                               MarkDirty();
+                                           }));
+
     if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
         auto listener = std::make_unique<RmlClickListener>(
@@ -2204,7 +2260,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // updates.
     for (const char* key : {"renderable", "stats", "actor", "faction", "race", "health", "weapon", "armor", "mod",
                             "item", "rarity", "consumable", "drop_table", "on_hit_effect", "experience_value", "ai",
-                            "spawner_ai", "pack_follower", "ranged_tech"})
+                            "spawner_ai", "pack_follower", "ranged_tech", "pounce"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -2249,6 +2305,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WritePackFollowerBody(m_pack_follower, allocator);
         else if (key == "ranged_tech")
             body = WriteRangedTechBody(m_ranged_tech, allocator);
+        else if (key == "pounce")
+            body = WritePounceBody(m_pounce, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);
