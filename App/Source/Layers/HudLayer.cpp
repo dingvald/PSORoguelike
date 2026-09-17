@@ -476,6 +476,7 @@ void HudLayer::OnHotbarState(const HotbarStateMessage& message)
         element->SetClass("slot-technique", view.type == HotbarSlotType::Technique);
         element->SetClass("slot-photon-art", view.type == HotbarSlotType::PhotonArt);
         element->SetClass("slot-item", view.type == HotbarSlotType::Item);
+        element->SetClass("slot-normal-attack", view.type == HotbarSlotType::NormalAttack);
 
         if (Rml::Element* name = element->QuerySelector(".slot-name"))
             name->SetInnerRML(EscapeRml(view.name));

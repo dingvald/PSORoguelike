@@ -26,6 +26,6 @@
     "projectile_speed": 0,
     "projectile_prefab_id": 0,
     "projectile_pierces": false,
-    "hit_effect_prefab_id": "vfx.generic_hit",
+    "hit_effect_prefab_id": "vfx.zonde_on_hit",
     "hit_effect_duration": 0.30000001192092896
 }

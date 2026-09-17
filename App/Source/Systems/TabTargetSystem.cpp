@@ -1,6 +1,7 @@
 #include "Systems/TabTargetSystem.h"
 
 #include "Combat/Hostility.h"
+#include "Components/AiComponent.h"
 #include "Components/TabTargetComponent.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/Position.h"
@@ -21,11 +22,22 @@ namespace {
     // player's own tile. Mirrors EnemyAiSystem's FindNearestHostileTile
     // shape, but collects every candidate rather than tracking only the
     // single best.
+    //
+    // Faction::Enemy alone isn't a fine enough signal here: destructible
+    // props like boxes are also authored hostile (faction: "enemy", so
+    // MoveAction's bump-attack fallback and EnemyAiSystem both treat them as
+    // attackable) but aren't "enemies" for tab-target purposes -- AiComponent
+    // is what actually distinguishes a creature from a prop, since every
+    // authored enemy prefab carries one and no prop does. Candidates are
+    // split into two buckets on that signal; the AiComponent bucket wins
+    // whenever it's non-empty, so props only become tab-targetable once every
+    // real enemy in view is gone.
     std::vector<entt::entity> SortedHostilesByDistance(Registry& registry, Entity player, const RoomMap& room_map,
                                                         const RoomVisibilityTracker& visibility)
     {
         const Vec2 origin = player.Get<Position>().tile;
-        std::vector<std::pair<int, entt::entity>> candidates;
+        std::vector<std::pair<int, entt::entity>> enemy_candidates;
+        std::vector<std::pair<int, entt::entity>> other_candidates;
         registry.Each<HealthComponent>(
             [&](entt::entity candidate, HealthComponent&)
             {
@@ -37,8 +49,12 @@ namespace {
                     return;
                 if (visibility.GetVisibility(room_map.GetRoom(position->tile)) != RoomVisibility::Visible)
                     return;
-                candidates.emplace_back(ManhattanDistance(origin, position->tile), candidate);
+                auto& bucket = target.Has<AiComponent>() ? enemy_candidates : other_candidates;
+                bucket.emplace_back(ManhattanDistance(origin, position->tile), candidate);
             });
+
+        std::vector<std::pair<int, entt::entity>>& candidates =
+            enemy_candidates.empty() ? other_candidates : enemy_candidates;
         std::stable_sort(candidates.begin(), candidates.end(),
                          [](const auto& a, const auto& b) { return a.first < b.first; });
 

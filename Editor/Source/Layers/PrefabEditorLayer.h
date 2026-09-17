@@ -23,6 +23,7 @@
 #include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/RarityComponent.h"
 #include "Engine/Layer.h"
+#include "Engine/Render/AnimationClock.h"
 #include "Engine/Render/TextureAtlas.h"
 #include "Engine/Render/TileGpuPipeline.h"
 #include "Items/AffixLibrary.h"
@@ -92,6 +93,7 @@ public:
 
     void OnAttach() override;
     void OnDetach() override;
+    void OnUpdate(float delta_time) override;
     void OnRender(SDL_Renderer* renderer) override;
     void OnEvent(Event& event) override;
 
@@ -256,6 +258,13 @@ private:
     bool m_renderer_initialized = false;
     std::optional<TextureAtlas> m_tile_atlas;
     std::optional<TileGpuPipeline> m_gpu_pipeline;
+
+    // Drives the renderable card's animated preview (RenderPreview cycles
+    // m_renderable's frame strip through this every render call when
+    // frames > 1), advanced once per frame from OnUpdate -- same
+    // AnimationClock DungeonEditorLayer/PieceEditorLayer already use for
+    // their own preview content.
+    AnimationClock m_animation_clock;
 
     // World units for m_preview_canvas are literal pixels -- the content
     // bounds are the renderable's own native texture size.

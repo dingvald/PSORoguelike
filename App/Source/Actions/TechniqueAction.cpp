@@ -205,7 +205,10 @@ ActionResult TechniqueAction::Perform(Entity actor)
                 component.hit_effect_duration = technique->hit_effect_duration;
                 registry.Emplace<ProjectileComponent>(projectile, std::move(component));
 
-                registry.Emplace<ActorComponent>(projectile);
+                // ap = action_threshold: enters the TurnQueue already at full
+                // energy, so it acts on its own first hop before the queue
+                // advances to anyone else instead of waiting a full cycle.
+                registry.Emplace<ActorComponent>(projectile, ActorComponent{TurnQueue::kDefaultActionThreshold});
             }
         }
         return ActionResult(EffectiveActCost(actor, kTechniqueCost));

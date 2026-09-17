@@ -1,6 +1,8 @@
 #include "Systems/TabTargetSystem.h"
 
+#include "Combat/Faction.h"
 #include "Components/AiComponent.h"
+#include "Components/FactionComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/TabTargetComponent.h"
 #include "Engine/Dungeon/RoomMap.h"
@@ -122,4 +124,52 @@ TEST_CASE("TabTargetSystem clears the target once the last hostile is destroyed"
     tab_target_system.Update(player_entity);
 
     CHECK((registry.GetComponent<psr::TabTargetComponent>(player).target == entt::null));
+}
+
+TEST_CASE("TabTargetSystem prefers a real (AiComponent) enemy over a hostile prop like a box, until no real enemy "
+          "remains",
+          "[TabTargetSystem]")
+{
+    psr::Registry registry;
+    MarkerEntityLoader loader;
+    registry.RegisterPrefabs(loader);
+    psr::Grid grid(10, 1);
+    psr::RoomMap room_map = MakeSingleRoomMap(10, 1);
+    psr::RoomVisibilityTracker visibility(1);
+    visibility.Update(0);
+
+    psr::TabTargetSystem tab_target_system(registry, grid, room_map, visibility);
+
+    const entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::PlayerControlledComponent>(player);
+    registry.Emplace<psr::Position>(player, psr::Position{psr::Vec2{0, 0}});
+    grid.AddEntity(psr::Vec2{0, 0}, player);
+    psr::Entity player_entity(registry, player);
+
+    // A box: hostile faction (so bump-attacks work) but no AiComponent, and
+    // closer to the player than the real enemy -- if faction alone drove
+    // selection this would win on distance.
+    const entt::entity box = registry.CreateEntity();
+    registry.Emplace<psr::FactionComponent>(box, psr::FactionComponent{psr::Faction::Enemy});
+    registry.Emplace<psr::HealthComponent>(box, psr::HealthComponent{15, 15});
+    registry.Emplace<psr::Position>(box, psr::Position{psr::Vec2{1, 0}});
+    grid.AddEntity(psr::Vec2{1, 0}, box);
+
+    const entt::entity enemy = registry.CreateEntity();
+    registry.Emplace<psr::AiComponent>(enemy);
+    registry.Emplace<psr::HealthComponent>(enemy, psr::HealthComponent{10, 10});
+    registry.Emplace<psr::Position>(enemy, psr::Position{psr::Vec2{4, 0}});
+    grid.AddEntity(psr::Vec2{4, 0}, enemy);
+
+    tab_target_system.CycleTarget(player_entity);
+    CHECK(registry.GetComponent<psr::TabTargetComponent>(player).target == enemy);
+
+    tab_target_system.CycleTarget(player_entity); // wraps: still only `enemy` is eligible
+    CHECK(registry.GetComponent<psr::TabTargetComponent>(player).target == enemy);
+
+    grid.RemoveEntity(psr::Vec2{4, 0}, enemy);
+    registry.DestroyEntity(enemy);
+
+    tab_target_system.Update(player_entity); // real enemy gone -- falls back to the box
+    CHECK(registry.GetComponent<psr::TabTargetComponent>(player).target == box);
 }

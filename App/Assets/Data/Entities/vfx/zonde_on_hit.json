@@ -2,7 +2,7 @@
     "schema_version": 1,
     "components": {
         "renderable": {
-            "texture_id": "targeting_cursor",
+            "texture_id": "zonde_effect",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -11,11 +11,11 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#ff0000ff",
-            "color_2": "#ff0000ff",
-            "render_layer": 10,
-            "frames": 2,
-            "frame_time": 1.0,
+            "color_1": "#f1f72dff",
+            "color_2": "#f1f72dff",
+            "render_layer": 0,
+            "frames": 3,
+            "frame_time": 0.10000000149011612,
             "is_synced": true
         }
     }

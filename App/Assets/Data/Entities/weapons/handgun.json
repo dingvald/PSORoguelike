@@ -14,7 +14,7 @@
             "element": "none",
             "status_effect_id": 0,
             "status_chance_percent": 0,
-            "targeting_mode": "directional",
+            "targeting_mode": "target_square",
             "fires_projectile": true,
             "projectile_pierces": false,
             "projectile_speed": 8,

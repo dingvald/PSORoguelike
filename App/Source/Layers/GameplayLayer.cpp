@@ -9,6 +9,7 @@
 #include "ApplicationFilepaths.h"
 #include "Areas/AreaLibraryFile.h"
 #include "Combat/DisplayName.h"
+#include "Combat/EffectiveStats.h"
 #include "Combat/PhotonArt.h"
 #include "Combat/PhotonArtLibraryFile.h"
 #include "Combat/StatusEffectLibraryFile.h"
@@ -125,6 +126,12 @@ namespace {
     constexpr int kTileWidth = 16;
     constexpr int kTileHeight = 24;
     constexpr float kCameraZoomStep = 0.5f;
+
+    // TP regained per real room entry = effective MST / this divisor (integer
+    // division, no floor of 1 -- unlike the PSO-sourced formulas in
+    // CombatMath.h, this mechanic has no PSO precedent, so the constant is a
+    // starting balance guess for the user to retune, not a derived value).
+    constexpr int kRoomEntryTpRegenMstDivisor = 10;
 
     // The player's prefab -- appearance (and, later, base stats) lives in
     // App/Assets/Data/Entities/player.json like every other authored entity,
@@ -654,8 +661,25 @@ void GameplayLayer::EnterRoom(Vec2 player_tile, std::optional<std::uint32_t> roo
             return;
         m_spawn_wave_system->TriggerRoomEntered(*room);
         m_room_clear_door_system->LockRoomOnEntry(*room);
+        RegainTpOnRoomEntry();
     }
     m_room_visibility->Update(room);
+}
+
+void GameplayLayer::RegainTpOnRoomEntry()
+{
+    if (!m_registry.IsValid(m_player))
+        return;
+    TPComponent* tp = m_registry.TryGetComponent<TPComponent>(m_player);
+    if (!tp)
+        return;
+
+    const int mst = ComputeEffectiveStats(Entity(m_registry, m_player), m_affixes).mst;
+    const int regen = mst / kRoomEntryTpRegenMstDivisor;
+    tp->current_tp = std::min(tp->max_tp, tp->current_tp + regen);
+
+    if (m_combat_log_bridge)
+        m_combat_log_bridge->PublishPlayerStatus();
 }
 
 void GameplayLayer::RepublishHudStateAfterTransition()
@@ -1252,6 +1276,9 @@ void GameplayLayer::PublishHotbarState()
             view.name = "(item)";
             if (const std::optional<std::string> label = NameIdRegistry::Find(slot.id))
                 view.name = *label;
+            break;
+        case HotbarSlotType::NormalAttack:
+            view.name = "Normal";
             break;
         case HotbarSlotType::Empty:
         default:

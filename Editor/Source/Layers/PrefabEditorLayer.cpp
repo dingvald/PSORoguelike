@@ -878,6 +878,11 @@ void PrefabEditorLayer::OnAttach()
     ShowScreen(Mode::List);
 }
 
+void PrefabEditorLayer::OnUpdate(float delta_time)
+{
+    m_animation_clock.Update(delta_time);
+}
+
 void PrefabEditorLayer::OnDetach()
 {
     m_photon_art_row_listeners.clear();
@@ -2300,9 +2305,17 @@ void PrefabEditorLayer::RenderPreview(SDL_Renderer& renderer, int output_w, int 
     if (atlas_size.x <= 0 || atlas_size.y <= 0)
         return;
 
-    const std::optional<SDL_FRect> src =
-        m_tile_atlas->GetSourceRect(m_renderable.texture_id, m_renderable.texture_size.x, m_renderable.texture_size.y,
-                                    m_renderable.uv.x, m_renderable.uv.y);
+    // Mirrors RegistryRenderableLookup::GetRenderableTile's frame-strip
+    // offset -- the preview always loops the strip via the frame_time-keyed
+    // (synced) bucket regardless of is_synced, since there are no sibling
+    // entities here to stay in lockstep with; the point is just to show the
+    // strip animating.
+    int uv_x = m_renderable.uv.x;
+    if (m_renderable.frames > 1)
+        uv_x += m_animation_clock.GetFrameIndex(m_renderable.frame_time, m_renderable.frames);
+
+    const std::optional<SDL_FRect> src = m_tile_atlas->GetSourceRect(
+        m_renderable.texture_id, m_renderable.texture_size.x, m_renderable.texture_size.y, uv_x, m_renderable.uv.y);
     if (!src)
         return;
 

@@ -94,6 +94,10 @@ standard roguelike pattern, and matches PSO (class is also a creation-time choic
   gameplay payoff distinct enough to justify it, since both are already gated the same way (a
   weapon-granted ability, a per-use cost, one turn-consuming cast). Class identity comes from
   *which* abilities a weapon grants and how they're themed, not from a second currency.
+- **Room-entry TP regen (new, no PSO precedent):** entering a new room restores TP scaled by the
+  player's effective MST, clamped to max TP — a passive trickle so MST-leaning builds aren't fully
+  gated on item pickups between fights. Exact scaling is a starting balance guess, tunable in
+  `GameplayLayer.cpp`'s `kRoomEntryTpRegenMstDivisor`.
 
 **Current implementation:** nothing yet.
 

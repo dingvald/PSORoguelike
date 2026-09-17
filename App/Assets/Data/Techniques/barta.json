@@ -16,7 +16,7 @@
     ],
     "projectile_speed": 4,
     "projectile_prefab_id": "vfx.barta_projectile",
-    "projectile_pierces": false,
+    "projectile_pierces": true,
     "hit_effect_prefab_id": "vfx.generic_hit",
     "hit_effect_duration": 0.3
 }

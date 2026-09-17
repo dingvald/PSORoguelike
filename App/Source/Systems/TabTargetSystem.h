@@ -29,11 +29,14 @@ public:
     // carry HealthComponent, so they're naturally excluded as well) whose
     // room is RoomVisibility::Visible
     // (matches FogOfWarRenderableLookup's own actor-hiding rule, so you can
-    // never lock onto something the fog isn't drawing). Finds the current
-    // target's index in that fresh list, if still present, and advances to
-    // the next, wrapping after the last; otherwise (no target yet, or it
-    // dropped out of the list) selects the nearest. Clears instead if the
-    // list is empty. Repositions the marker to the new target's tile.
+    // never lock onto something the fog isn't drawing). Hostile props like
+    // boxes (faction: "enemy" so bump-attacks work, but no AiComponent) are
+    // only eligible once no real (AiComponent-carrying) enemy is in view --
+    // see SortedHostilesByDistance's own comment in the .cpp. Finds the
+    // current target's index in that fresh list, if still present, and
+    // advances to the next, wrapping after the last; otherwise (no target
+    // yet, or it dropped out of the list) selects the nearest. Clears instead
+    // if the list is empty. Repositions the marker to the new target's tile.
     void CycleTarget(Entity player);
 
     // Escape: clears TabTargetComponent::target and removes the marker.

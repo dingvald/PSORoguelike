@@ -152,6 +152,10 @@ body {
     border: 2px #4caf50;
 }
 
+.hotbar-slot.slot-normal-attack {
+    border: 2px #d43f3f;
+}
+
 .slot-key {
     display: block;
     margin-top: 0.2em;

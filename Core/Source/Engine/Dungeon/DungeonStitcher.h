@@ -90,13 +90,19 @@ struct DungeonLayout
 //
 // Generates a dungeon layout: grows a connected tree of pieces from a single
 // Entrance to a single Exit (Phase 1 -- connectivity is guaranteed by
-// construction, not a separate check), caps any dead-end Corridor socket
-// with a terminal Room or Vault so a hallway isn't a dead end in name only
-// (Phase 1.5, best-effort) -- preferring a piece tagged "dead_end"
-// (DungeonPiece::tags) and falling back to any Room/Vault if none of the
-// tagged ones fit, with the capped piece's own remaining sockets collapsed
-// straight to fallback-stamped dead ends rather than fed back into Phase
-// 2/3 -- adds loopback connections for multiple paths (Phase 2), resolves
+// construction, not a separate check), then never leaves a Corridor dead-
+// ending in a bare wall (Phase 1.5): a dead-end Corridor socket is first
+// offered a terminal Room or Vault to cap it (Phase 1.5a, best-effort --
+// preferring a piece tagged "dead_end" (DungeonPiece::tags) and falling back
+// to any Room/Vault if none of the tagged ones fit), and if nothing fits, the
+// Corridor itself is removed outright rather than left as a stub (Phase
+// 1.5b) -- the removal cascades up through any ancestor Corridor that
+// capping/growth left with no other live children either, stopping at the
+// first Entrance or piece with at least one other live connection, whose own
+// now-exposed socket dead-ends there instead. Either way the capped piece's
+// (or retraction stopping point's) own remaining sockets collapse straight
+// to fallback-stamped dead ends rather than being fed back into Phase 2/3 --
+// adds loopback connections for multiple paths (Phase 2), resolves
 // remaining unused sockets as dead ends (Phase 3), and places dungeon.lock_count
 // Switch locks gating Room/Vault/BossArena entrances on bridge connections of
 // the entrance-to-exit path, restricted to pieces whose own

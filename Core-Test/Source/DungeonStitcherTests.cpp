@@ -723,3 +723,171 @@ TEST_CASE("GenerateDungeon rotates a can_rotate piece when its authored sockets 
     REQUIRE(placed_bridge->transform != PieceTransform{});
     REQUIRE(placed_bridge->transform.mirrored == false);
 }
+
+TEST_CASE("GenerateDungeon retracts a fully dead Corridor chain back to the nearest Room instead of leaving a "
+          "dangling stub",
+          "[DungeonStitcher]")
+{
+    // Entrance has two independent sockets on distinct tag namespaces: East
+    // ("corridor") grows the ordinary Entrance->Corridor*->Exit main path,
+    // while North ("branch") can only ever be filled by Room -- and Room's
+    // own North socket ("narrow") can only ever be filled by DeadStub, a
+    // single-socket Corridor with nothing else in the pool able to match it.
+    // DeadStub therefore always has zero possible children whenever it's
+    // placed at all -- Phase 1.5b must retract it every time, exposing
+    // Room's North socket as a fresh fallback-stamped dead end instead of
+    // leaving DeadStub sitting there as a corridor that dead-ends in a wall.
+    DungeonPiece entrance;
+    entrance.id = 100;
+    entrance.id_string = "test.100";
+    entrance.area_tag = "Forest";
+    entrance.category = PieceCategory::Entrance;
+    {
+        PieceCell cell;
+        cell.offset = Vec2{0, 0};
+        cell.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+        entrance.cells.push_back(cell);
+    }
+    {
+        PieceSocket socket;
+        socket.cell_offset = Vec2{0, 0};
+        socket.edge = EdgeDirection::East;
+        socket.tags = {"corridor"};
+        socket.connects_to_tags = {"corridor"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        entrance.sockets.push_back(socket);
+    }
+    {
+        PieceSocket socket;
+        socket.cell_offset = Vec2{0, 0};
+        socket.edge = EdgeDirection::North;
+        socket.tags = {"branch"};
+        socket.connects_to_tags = {"branch"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        entrance.sockets.push_back(socket);
+    }
+
+    DungeonPiece exit = MakePiece(200, PieceCategory::Exit, {{Vec2{0, 0}, EdgeDirection::West}});
+
+    DungeonPiece corridor =
+        MakePiece(300, PieceCategory::Corridor, {{Vec2{0, 0}, EdgeDirection::West}, {Vec2{1, 0}, EdgeDirection::East}});
+    corridor.can_rotate = true;
+
+    DungeonPiece room;
+    room.id = 500;
+    room.id_string = "test.500";
+    room.area_tag = "Forest";
+    room.category = PieceCategory::Room;
+    {
+        PieceCell cell;
+        cell.offset = Vec2{0, 0};
+        cell.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+        room.cells.push_back(cell);
+    }
+    {
+        PieceSocket socket;
+        socket.cell_offset = Vec2{0, 0};
+        socket.edge = EdgeDirection::South;
+        socket.tags = {"branch"};
+        socket.connects_to_tags = {"branch"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        room.sockets.push_back(socket);
+    }
+    {
+        PieceSocket socket;
+        socket.cell_offset = Vec2{0, 0};
+        socket.edge = EdgeDirection::North;
+        socket.tags = {"narrow"};
+        socket.connects_to_tags = {"narrow"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        room.sockets.push_back(socket);
+    }
+
+    DungeonPiece dead_stub;
+    dead_stub.id = 900;
+    dead_stub.id_string = "test.900";
+    dead_stub.area_tag = "Forest";
+    dead_stub.category = PieceCategory::Corridor;
+    {
+        PieceCell cell;
+        cell.offset = Vec2{0, 0};
+        cell.prefabs.push_back(PieceCellPrefab{kFloorPrefab});
+        dead_stub.cells.push_back(cell);
+    }
+    {
+        PieceSocket socket;
+        socket.cell_offset = Vec2{0, 0};
+        socket.edge = EdgeDirection::South;
+        socket.tags = {"narrow"};
+        socket.connects_to_tags = {"narrow"};
+        socket.fallback_prefab_id = kFloorPrefab;
+        dead_stub.sockets.push_back(socket);
+    }
+
+    PieceLibrary library{std::vector<DungeonPiece>{entrance, exit, corridor, room, dead_stub}};
+
+    Dungeon dungeon = MakeTestDungeon(10, 12, 0, 0);
+    dungeon.pieces.push_back(DungeonPieceRef{500, 1.0f, 1});
+    dungeon.pieces.push_back(DungeonPieceRef{900, 1.0f, 1});
+
+    bool found_retracted_chain = false;
+    for (std::uint64_t seed = 0; seed < 300; ++seed)
+    {
+        DungeonLayout layout;
+        try
+        {
+            layout = GenerateDungeon(dungeon, library, seed);
+        }
+        catch (const DungeonError&)
+        {
+            continue;
+        }
+
+        // DeadStub is a single-socket Corridor -- whenever it's placed at
+        // all it has zero possible children, so Phase 1.5b must always
+        // retract it; it should never survive into the final layout.
+        for (const PlacedPiece& piece : layout.pieces)
+            REQUIRE(piece.piece_id != 900);
+
+        // No surviving Corridor may be a leaf (fewer than two live
+        // connections) -- that would be exactly the dead-end corridor this
+        // feature eliminates.
+        std::vector<int> connection_count(layout.pieces.size(), 0);
+        for (const SocketConnection& connection : layout.connections)
+        {
+            ++connection_count[connection.piece_a];
+            ++connection_count[connection.piece_b];
+        }
+        for (std::size_t i = 0; i < layout.pieces.size(); ++i)
+        {
+            const DungeonPiece* piece = library.Find(layout.pieces[i].piece_id);
+            REQUIRE(piece != nullptr);
+            if (piece->category == PieceCategory::Corridor)
+            {
+                INFO("seed=" << seed << " piece_index=" << i << " piece_id=" << piece->id);
+                REQUIRE(connection_count[i] >= 2);
+            }
+        }
+
+        std::vector<bool> reachable = BuildReachability(layout);
+        for (bool visited : reachable)
+            REQUIRE(visited);
+
+        // Confirms the Room/DeadStub branch actually fired at least once
+        // across these seeds: Room placed with only its South
+        // (Entrance-facing) connection live, and a fallback-stamped dead end
+        // sitting on its North socket where DeadStub used to be.
+        for (std::size_t i = 0; i < layout.pieces.size(); ++i)
+        {
+            if (layout.pieces[i].piece_id != 500 || connection_count[i] != 1)
+                continue;
+            for (const DeadEndSocket& dead_end : layout.dead_ends)
+                if (dead_end.piece_index == i && dead_end.edge == EdgeDirection::North)
+                {
+                    CHECK(dead_end.fallback_prefab_id == kFloorPrefab);
+                    found_retracted_chain = true;
+                }
+        }
+    }
+    REQUIRE(found_retracted_chain);
+}

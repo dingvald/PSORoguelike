@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <queue>
@@ -173,6 +174,38 @@ namespace {
         if (!tagged.empty())
             return tagged;
         return BuildCapCandidates(dungeon, library, occurrence_count, open, false);
+    }
+
+    // The EdgeDirection a piece must present at `from` for its socket to
+    // border an adjacent cell at `to` -- used to recover which of a
+    // surviving piece's own sockets a retracted dead-end Corridor chain (see
+    // Phase 1.5b below) used to connect through, since SocketConnection
+    // itself only stores the two world cells, not the direction between
+    // them.
+    EdgeDirection EdgeDirectionBetween(Vec2 from, Vec2 to)
+    {
+        const Vec2 diff = to - from;
+        for (EdgeDirection candidate :
+             {EdgeDirection::North, EdgeDirection::East, EdgeDirection::South, EdgeDirection::West})
+            if (EdgeDirectionOffset(candidate) == diff)
+                return candidate;
+        return EdgeDirection::North;
+    }
+
+    // Looks up a placed piece's own fallback_prefab_id for whichever of its
+    // authored sockets sits at world_cell/edge, mirroring
+    // DungeonInstantiator.cpp's FindDeadEnd but against the piece definition
+    // itself rather than an already-recorded DeadEndSocket.
+    std::uint32_t FindSocketFallback(const DungeonPiece* piece, Vec2 world_offset, PieceTransform transform,
+                                     Vec2 world_cell, EdgeDirection edge)
+    {
+        if (!piece)
+            return 0;
+        for (const PieceSocket& socket : piece->sockets)
+            if (world_offset + ApplyPieceTransform(socket.cell_offset, transform) == world_cell &&
+                ApplyPieceTransform(socket.edge, transform) == edge)
+                return socket.fallback_prefab_id;
+        return 0;
     }
 
     // Reachability from `start`, treating any connection whose index is true
@@ -373,14 +406,30 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
     unconnected.insert(unconnected.end(), frontier.begin(), frontier.end());
     frontier.clear();
 
-    // Phase 1.5: cap dead-end Corridors with Rooms/Vaults, so a hallway that
+    // parent_edge_of/child_count describe the growth tree as it stood the
+    // moment Phase 1 stopped: parent_edge_of[p] is the index into
+    // layout.connections of the one tree edge that placed p (every piece but
+    // the Entrance has exactly one), child_count[p] how many further pieces
+    // grew from p's own other sockets. Phase 1.5b (below) mutates both as it
+    // retracts dead branches; a capping placement in 1.5a also bumps
+    // child_count for the Corridor it caps, since that Corridor now leads
+    // somewhere and must never be retracted.
+    std::unordered_map<std::size_t, std::size_t> parent_edge_of;
+    std::unordered_map<std::size_t, int> child_count;
+    for (std::size_t e = 0; e < layout.connections.size(); ++e)
+    {
+        ++child_count[layout.connections[e].piece_a];
+        parent_edge_of[layout.connections[e].piece_b] = e;
+    }
+
+    // Phase 1.5a: cap dead-end Corridors with Rooms/Vaults, so a hallway that
     // would otherwise terminate in a bare fallback stub (see DeadEndSocket)
-    // leads somewhere. Best-effort per socket -- an unmatched dead end just
-    // falls through to Phase 3 unchanged. A capped piece is not grown
-    // further and takes no part in Phase 2 loopback matching -- its own
-    // unused sockets collapse straight to fallback-stamped dead ends here,
-    // rather than risking a loopback stitching two capped rooms together
-    // behind the player's back.
+    // leads somewhere. Best-effort per socket -- an unmatched dead end is
+    // handled by 1.5b below instead of falling straight through to Phase 3.
+    // A capped piece is not grown further and takes no part in Phase 2
+    // loopback matching -- its own unused sockets collapse straight to
+    // fallback-stamped dead ends here, rather than risking a loopback
+    // stitching two capped rooms together behind the player's back.
     std::vector<bool> consumed(unconnected.size(), false);
     for (std::size_t i = 0; i < unconnected.size(); ++i)
     {
@@ -395,6 +444,7 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
         if (!result)
             continue;
         consumed[i] = true;
+        ++child_count[open.piece_index]; // now leads to the capping piece -- never a retraction target
 
         const auto [new_index, matched_socket_index] = *result;
         const DungeonPiece* new_piece = library.Find(layout.pieces[new_index].piece_id);
@@ -409,6 +459,104 @@ DungeonLayout GenerateDungeon(const Dungeon& dungeon, const PieceLibrary& librar
                 DeadEndSocket{new_index, new_offset + ApplyPieceTransform(socket.cell_offset, new_transform),
                               ApplyPieceTransform(socket.edge, new_transform), socket.fallback_prefab_id});
         }
+    }
+
+    // Phase 1.5b: a Corridor that still has zero live children after 1.5a
+    // leads nowhere at all -- rather than leave it dead-ending in a bare
+    // fallback stub, remove it outright, cascading the same check up through
+    // its parent (removing it just zeroed the parent's own child count too,
+    // so the parent may now qualify as well), and so on, until the chain
+    // reaches either the Entrance or a piece with at least one other live
+    // child. That stopping piece's own now-exposed socket is what actually
+    // dead-ends -- fallback-stamped exactly like an ordinary Phase 3 dead
+    // end, and likewise never fed back into Phase 2 loopback matching.
+    std::unordered_set<std::size_t> removed;
+    std::vector<bool> edge_removed(layout.connections.size(), false);
+
+    std::vector<std::size_t> retraction_worklist;
+    for (std::size_t p = 1; p < layout.pieces.size(); ++p) // 0 is the Entrance, never removable
+    {
+        const DungeonPiece* piece = library.Find(layout.pieces[p].piece_id);
+        if (piece && piece->category == PieceCategory::Corridor && child_count[p] == 0)
+            retraction_worklist.push_back(p);
+    }
+    while (!retraction_worklist.empty())
+    {
+        const std::size_t current = retraction_worklist.back();
+        retraction_worklist.pop_back();
+        if (removed.contains(current))
+            continue;
+        removed.insert(current);
+        --occurrence_count[layout.pieces[current].piece_id];
+
+        const std::size_t edge_index = parent_edge_of.at(current);
+        edge_removed[edge_index] = true;
+        const std::size_t parent = layout.connections[edge_index].piece_a;
+        --child_count[parent];
+
+        const DungeonPiece* parent_piece = library.Find(layout.pieces[parent].piece_id);
+        if (parent != 0 && parent_piece && parent_piece->category == PieceCategory::Corridor &&
+            child_count[parent] == 0)
+            retraction_worklist.push_back(parent);
+    }
+
+    // Every cut edge whose surviving (parent) side wasn't itself removed is a
+    // freshly exposed dead end on that survivor.
+    for (std::size_t e = 0; e < edge_removed.size(); ++e)
+    {
+        if (!edge_removed[e] || removed.contains(layout.connections[e].piece_a))
+            continue;
+        const SocketConnection& cut_edge = layout.connections[e];
+        const std::size_t stop_index = cut_edge.piece_a;
+        const EdgeDirection freed_edge = EdgeDirectionBetween(cut_edge.cell_a, cut_edge.cell_b);
+        const std::uint32_t fallback_prefab_id =
+            FindSocketFallback(library.Find(layout.pieces[stop_index].piece_id), layout.pieces[stop_index].world_offset,
+                               layout.pieces[stop_index].transform, cut_edge.cell_a, freed_edge);
+        layout.dead_ends.push_back(DeadEndSocket{stop_index, cut_edge.cell_a, freed_edge, fallback_prefab_id});
+    }
+
+    for (std::size_t i = 0; i < unconnected.size(); ++i)
+        if (removed.contains(unconnected[i].piece_index))
+            consumed[i] = true;
+
+    // Compact away every retracted piece/edge before Phase 2/3/4 run, so
+    // every later index refers only to a piece that actually still exists.
+    if (!removed.empty())
+    {
+        std::vector<std::size_t> index_remap(layout.pieces.size(), std::numeric_limits<std::size_t>::max());
+        std::vector<PlacedPiece> new_pieces;
+        for (std::size_t old_index = 0; old_index < layout.pieces.size(); ++old_index)
+        {
+            if (removed.contains(old_index))
+                continue;
+            index_remap[old_index] = new_pieces.size();
+            new_pieces.push_back(layout.pieces[old_index]);
+        }
+        layout.pieces = std::move(new_pieces);
+
+        std::vector<SocketConnection> new_connections;
+        std::vector<bool> new_is_tree_edge;
+        for (std::size_t e = 0; e < layout.connections.size(); ++e)
+        {
+            if (edge_removed[e])
+                continue;
+            SocketConnection connection = layout.connections[e];
+            connection.piece_a = index_remap[connection.piece_a];
+            connection.piece_b = index_remap[connection.piece_b];
+            new_connections.push_back(connection);
+            new_is_tree_edge.push_back(is_tree_edge[e]);
+        }
+        layout.connections = std::move(new_connections);
+        is_tree_edge = std::move(new_is_tree_edge);
+
+        for (DeadEndSocket& dead_end : layout.dead_ends)
+            dead_end.piece_index = index_remap[dead_end.piece_index];
+
+        for (OpenSocket& open : unconnected)
+            if (index_remap[open.piece_index] != std::numeric_limits<std::size_t>::max())
+                open.piece_index = index_remap[open.piece_index];
+
+        exit_index = index_remap[exit_index];
     }
 
     // Phase 2: loopbacks.

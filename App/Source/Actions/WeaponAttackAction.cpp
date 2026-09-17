@@ -97,17 +97,14 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
     Registry& registry = actor.GetRegistry();
     const Vec2 origin = actor.Get<Position>().tile;
 
+    const Vec2 selected_tile =
+        actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
+
     Vec2 direction;
     if (m_direction.has_value())
-    {
         direction = *m_direction;
-    }
     else
-    {
-        const Vec2 selected_tile =
-            actor.Has<SelectedTargetComponent>() ? actor.Get<SelectedTargetComponent>().tile : origin;
         direction = SnapToDirection(selected_tile - origin);
-    }
 
     // EquipmentComponent's own handler resolves the equipped weapon (if any)
     // and fills range_shape/range/hits_per_turn/race_bonuses/attacker_stats/
@@ -131,8 +128,8 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
         bool spawned = false;
         if (registry.HasPrefab(before_attack.projectile_prefab_id))
         {
-            const std::vector<Vec2> path = BuildProjectilePath(*m_grid, registry, origin, direction,
-                                                                before_attack.range, before_attack.projectile_pierces);
+            const std::vector<Vec2> path = BuildProjectilePathToward(*m_grid, registry, origin, selected_tile,
+                                                                      before_attack.range, before_attack.projectile_pierces);
             if (!path.empty())
             {
                 // Spawned at origin, not path.front(): ProjectileAdvanceAction's
@@ -161,7 +158,10 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
                 component.hit_stun_energy = before_attack.hit_stun_energy;
                 registry.Emplace<ProjectileComponent>(projectile, std::move(component));
 
-                registry.Emplace<ActorComponent>(projectile);
+                // ap = action_threshold: enters the TurnQueue already at full
+                // energy, so it acts on its own first hop before the queue
+                // advances to anyone else instead of waiting a full cycle.
+                registry.Emplace<ActorComponent>(projectile, ActorComponent{TurnQueue::kDefaultActionThreshold});
                 spawned = true;
             }
         }

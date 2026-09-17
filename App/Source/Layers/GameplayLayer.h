@@ -250,6 +250,14 @@ private:
     // Visible via room_adjacency in the meantime, so nothing looks hidden.
     void EnterRoom(Vec2 player_tile, std::optional<std::uint32_t> room);
 
+    // Restores TP scaled by the player's effective MST (equipment/affixes
+    // included, via ComputeEffectiveStats) on every real room change -- see
+    // EnterRoom's caller of this. Not a PSO mechanic; a new per-room
+    // "meditation" pickup-me-up so Force-leaning builds aren't fully TP-gated
+    // between item pickups. Clamped to max_tp, no-ops if the player has no
+    // TPComponent.
+    void RegainTpOnRoomEntry();
+
     // Dispatched from OnEvent's dungeon-scene Space handling when
     // FindTeleporterAt resolves a hit on the player's tile (see
     // Missions/TeleporterInteraction.h) -- ReturnToHub bails out of the
