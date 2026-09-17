@@ -1,6 +1,7 @@
 ---
 name: test-all
 description: Build and run both the Core-Test and App-Test Catch2 suites. Use when the user asks to run all tests, run the test suite, or just "run the tests" without specifying Core or App.
+model: haiku
 ---
 
 Build and run both suites via the existing helper script — do not hand-roll an MSBuild/exe invocation, `Scripts/Run-Tests.ps1` already handles MSBuild discovery, building each `.vcxproj`, and locating the output exes.

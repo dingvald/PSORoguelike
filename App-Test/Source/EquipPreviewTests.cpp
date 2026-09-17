@@ -1,6 +1,7 @@
 #include "Items/EquipPreview.h"
 
 #include "Components/EquipmentComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/StatsComponent.h"
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/ArmorComponent.h"
@@ -90,4 +91,35 @@ TEST_CASE("ComputeEquipStatDelta returns nullopt when the actor has no Equipment
     registry.Emplace<psr::WeaponComponent>(weapon);
 
     CHECK_FALSE(psr::ComputeEquipStatDelta(registry, player, weapon, g_no_affixes).has_value());
+}
+
+TEST_CASE("ComputeUnequipStatDelta reports the stat swing from removing the equipped mag", "[EquipPreview][Mag]")
+{
+    psr::Registry registry;
+    entt::entity player = registry.CreateEntity();
+    registry.Emplace<psr::StatsComponent>(player);
+
+    entt::entity mag = registry.CreateEntity();
+    psr::MagComponent mag_component;
+    mag_component.pow_level = 4; // ATP += 4 * 2 = 8, per EffectiveStats.cpp's kMagPowToAtp
+    registry.Emplace<psr::MagComponent>(mag, mag_component);
+
+    psr::EquipmentComponent equipment;
+    equipment.mag = mag;
+    registry.Emplace<psr::EquipmentComponent>(player, equipment);
+
+    const std::optional<psr::StatsComponent> delta =
+        psr::ComputeUnequipStatDelta(registry, player, psr::EquipmentSlot::Mag, g_no_affixes);
+
+    REQUIRE(delta.has_value());
+    CHECK(delta->atp == -8);
+    CHECK(registry.GetComponent<psr::EquipmentComponent>(player).mag == mag); // untouched afterward
+}
+
+TEST_CASE("ComputeUnequipStatDelta returns nullopt when the actor has no EquipmentComponent", "[EquipPreview]")
+{
+    psr::Registry registry;
+    entt::entity player = registry.CreateEntity();
+
+    CHECK_FALSE(psr::ComputeUnequipStatDelta(registry, player, psr::EquipmentSlot::Mag, g_no_affixes).has_value());
 }

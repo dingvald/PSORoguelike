@@ -5,6 +5,7 @@
 #include "Messages/CharacterScreenStatPreviewMessage.h"
 #include "Messages/CombatLogEntryMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
+#include "Messages/EquipmentSlotHoverChangedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
 #include "Messages/HotbarSlotActivatedMessage.h"
@@ -15,6 +16,7 @@
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/InventoryItemHoverChangedMessage.h"
 #include "Messages/LootDropMessage.h"
+#include "Messages/MagFeedRequestedMessage.h"
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectClosedMessage.h"
 #include "Messages/MissionSelectedMessage.h"
@@ -56,6 +58,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <utility>
 
 namespace psr {
 
@@ -88,6 +91,7 @@ namespace {
     // reasoning as kContextMenuWidth/kContextMenuMaxHeight above.
     constexpr const char* kDefaultCharacterScreenHint = "Numpad to navigate, Space to select, C / Esc to close";
     constexpr const char* kAwaitingHotbarSlotHint = "Press 0-9 to assign to a hotbar slot (Esc to cancel)";
+    constexpr const char* kAwaitingMagFoodHint = "Select a food item to feed the mag (Esc to cancel)";
 
     // Must match #action-palette-hint's initial text in hud.rml -- same
     // "must match markup" reasoning as kDefaultCharacterScreenHint.
@@ -634,6 +638,7 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     m_character_screen_cache = message;
     CloseContextMenu();
     CancelAwaitingHotbarSlot();
+    CancelAwaitingMagFood();
 
     if (Rml::Element* overlay = m_document->GetElementById("character-screen"))
         overlay->SetProperty("display", "flex");
@@ -643,18 +648,21 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     // The DOM elements a mouse might currently be over are about to be torn
     // down and rebuilt below -- RmlUi will refire "mouseover" on whatever new
     // element ends up under the cursor on its next update, so there's nothing
-    // to preserve here. m_requested_preview_index/m_stat_preview are reset
-    // too so RenderFocusHighlights' end-of-function UpdateStatPreview call
-    // always re-requests fresh deltas rather than trusting a preview computed
+    // to preserve here. m_requested_preview_inventory_index/
+    // m_requested_preview_equipment_slot/m_stat_preview are reset too so
+    // RenderFocusHighlights' end-of-function UpdateStatPreview call always
+    // re-requests fresh deltas rather than trusting a preview computed
     // against pre-refresh stats (e.g. an equip that changed base stats but
     // left the still-hovered/focused row's index unchanged).
     m_hovered_inventory_index.reset();
-    m_requested_preview_index.reset();
+    m_hovered_equipment_index.reset();
+    m_requested_preview_inventory_index.reset();
+    m_requested_preview_equipment_slot.reset();
     m_stat_preview.reset();
 
     RenderStatsPanel();
 
-    static constexpr std::array<const char*, 5> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs"};
+    static constexpr std::array<const char*, 6> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs", "Mag"};
 
     if (Rml::Element* equipment_list = m_document->GetElementById("character-screen-equipment"))
     {
@@ -682,6 +690,23 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
                 [this, index]() { OpenContextMenu(CharacterScreenPanel::Equipment, index); });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
+
+            auto hover_listener = std::make_unique<RmlHoverListener>(
+                [this, index]()
+                {
+                    m_hovered_equipment_index = index;
+                    UpdateStatPreview();
+                },
+                [this, index]()
+                {
+                    if (m_hovered_equipment_index == index)
+                    {
+                        m_hovered_equipment_index.reset();
+                        UpdateStatPreview();
+                    }
+                });
+            hover_listener->Attach(*rows[i]);
+            m_character_screen_hover_listeners.push_back(std::move(hover_listener));
         }
     }
 
@@ -702,7 +727,21 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         {
             const int index = static_cast<int>(i);
             auto listener = std::make_unique<RmlClickListener>(
-                [this, index]() { OpenContextMenu(CharacterScreenPanel::Inventory, index); });
+                [this, index]()
+                {
+                    // While picking a food to feed the mag, a click behaves
+                    // like Space on a keyboard-focused row (see OnEvent's
+                    // m_awaiting_mag_food_selection branch) instead of
+                    // opening that row's own context menu.
+                    if (m_awaiting_mag_food_selection)
+                    {
+                        m_focused_panel = CharacterScreenPanel::Inventory;
+                        m_focused_row = index;
+                        ActivateFocusedRow();
+                        return;
+                    }
+                    OpenContextMenu(CharacterScreenPanel::Inventory, index);
+                });
             listener->Attach(*rows[i]);
             m_character_screen_listeners.push_back(std::move(listener));
 
@@ -748,10 +787,13 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
     m_character_screen_listeners.clear();
     m_character_screen_hover_listeners.clear();
     m_hovered_inventory_index.reset();
-    m_requested_preview_index.reset();
+    m_hovered_equipment_index.reset();
+    m_requested_preview_inventory_index.reset();
+    m_requested_preview_equipment_slot.reset();
     m_stat_preview.reset();
     CloseContextMenu();
     CancelAwaitingHotbarSlot();
+    CancelAwaitingMagFood();
     m_character_screen_cache.reset();
     m_focused_panel = CharacterScreenPanel::Stats;
     m_focused_row = 0;
@@ -1518,6 +1560,19 @@ void HudLayer::MoveRowFocus(int direction)
 
 void HudLayer::ActivateFocusedRow()
 {
+    if (m_awaiting_mag_food_selection)
+    {
+        if (m_focused_panel == CharacterScreenPanel::Inventory && m_character_screen_cache && m_focused_row >= 0 &&
+            m_focused_row < static_cast<int>(m_character_screen_cache->inventory.size()) &&
+            m_character_screen_cache->inventory[static_cast<std::size_t>(m_focused_row)].is_mag_food)
+        {
+            const int index = m_focused_row;
+            CancelAwaitingMagFood();
+            Publish(MagFeedRequestedMessage{index});
+        }
+        return;
+    }
+
     if (m_focused_panel == CharacterScreenPanel::Stats)
         return;
 
@@ -1532,6 +1587,7 @@ void HudLayer::OpenContextMenu(CharacterScreenPanel panel, int index)
         return;
 
     CancelAwaitingHotbarSlot();
+    CancelAwaitingMagFood();
 
     m_focused_panel = panel;
     m_focused_row = index;
@@ -1586,6 +1642,11 @@ void HudLayer::ChooseHighlightedMenuOption()
         BeginAwaitingHotbarSlot(index);
         return;
     }
+    if (action == ContextMenuOption::Action::Feed)
+    {
+        BeginAwaitingMagFood();
+        return;
+    }
 
     CloseContextMenu();
 
@@ -1607,6 +1668,7 @@ void HudLayer::ChooseHighlightedMenuOption()
         Publish(InventoryItemActivatedMessage{index, InventoryItemAction::Drop});
         break;
     case ContextMenuOption::Action::AssignToHotbar:
+    case ContextMenuOption::Action::Feed:
         break; // handled above, before the menu closes
     }
 }
@@ -1641,6 +1703,40 @@ void HudLayer::CancelAwaitingHotbarSlot()
         SetCharacterScreenHint(kDefaultCharacterScreenHint, /*awaiting=*/false);
     if (m_action_palette_cache)
         SetActionPaletteHint(kDefaultActionPaletteHint, /*awaiting=*/false);
+}
+
+void HudLayer::BeginAwaitingMagFood()
+{
+    CloseContextMenu();
+    m_awaiting_mag_food_selection = true;
+    m_focused_panel = CharacterScreenPanel::Inventory;
+    m_focused_row = 0;
+
+    if (m_character_screen_cache)
+    {
+        const std::vector<CharacterScreenMessage::ItemEntry>& inventory = m_character_screen_cache->inventory;
+        for (std::size_t i = 0; i < inventory.size(); ++i)
+        {
+            if (inventory[i].is_mag_food)
+            {
+                m_focused_row = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    SetCharacterScreenHint(kAwaitingMagFoodHint, /*awaiting=*/true);
+    RenderFocusHighlights();
+}
+
+void HudLayer::CancelAwaitingMagFood()
+{
+    if (!m_awaiting_mag_food_selection)
+        return;
+
+    m_awaiting_mag_food_selection = false;
+    if (m_character_screen_cache)
+        SetCharacterScreenHint(kDefaultCharacterScreenHint, /*awaiting=*/false);
 }
 
 void HudLayer::SetCharacterScreenHint(const char* text, bool awaiting)
@@ -1692,28 +1788,45 @@ void HudLayer::JumpToMatchingInventoryItem(EquipmentSlot slot)
 
 void HudLayer::UpdateStatPreview()
 {
-    std::optional<int> target;
+    std::optional<int> inventory_target;
+    std::optional<EquipmentSlot> equipment_target;
+
     if (m_hovered_inventory_index)
-        target = m_hovered_inventory_index;
+        inventory_target = m_hovered_inventory_index;
+    else if (m_hovered_equipment_index)
+        equipment_target = static_cast<EquipmentSlot>(*m_hovered_equipment_index);
     else if (m_focused_panel == CharacterScreenPanel::Inventory)
-        target = m_focused_row;
+        inventory_target = m_focused_row;
+    else if (m_focused_panel == CharacterScreenPanel::Equipment)
+        equipment_target = static_cast<EquipmentSlot>(m_focused_row);
 
-    if (target && (!m_character_screen_cache || *target < 0 ||
-                   *target >= static_cast<int>(m_character_screen_cache->inventory.size()) ||
-                   !m_character_screen_cache->inventory[static_cast<std::size_t>(*target)].equip_slot.has_value()))
-        target.reset();
+    if (inventory_target &&
+        (!m_character_screen_cache || *inventory_target < 0 ||
+         *inventory_target >= static_cast<int>(m_character_screen_cache->inventory.size()) ||
+         !m_character_screen_cache->inventory[static_cast<std::size_t>(*inventory_target)].equip_slot.has_value()))
+        inventory_target.reset();
 
-    if (target == m_requested_preview_index)
-        return;
-    m_requested_preview_index = target;
-
-    if (target)
+    if (equipment_target)
     {
-        // Response arrives via OnStatPreview, once GameplayLayer's own
-        // message queue processes this request -- see
-        // InventoryItemHoverChangedMessage's doc comment.
-        Publish(InventoryItemHoverChangedMessage{*target});
+        const std::size_t index = static_cast<std::size_t>(*equipment_target);
+        if (!m_character_screen_cache || index >= m_character_screen_cache->equipment.size() ||
+            !m_character_screen_cache->equipment[index].has_value())
+            equipment_target.reset();
     }
+
+    if (inventory_target == m_requested_preview_inventory_index &&
+        equipment_target == m_requested_preview_equipment_slot)
+        return;
+    m_requested_preview_inventory_index = inventory_target;
+    m_requested_preview_equipment_slot = equipment_target;
+
+    // Response arrives via OnStatPreview, once GameplayLayer's own message
+    // queue processes this request -- see InventoryItemHoverChangedMessage/
+    // EquipmentSlotHoverChangedMessage's own doc comments.
+    if (inventory_target)
+        Publish(InventoryItemHoverChangedMessage{*inventory_target});
+    else if (equipment_target)
+        Publish(EquipmentSlotHoverChangedMessage{equipment_target});
     else
     {
         m_stat_preview.reset();
@@ -1740,7 +1853,11 @@ std::vector<HudLayer::ContextMenuOption> HudLayer::BuildMenuOptions(CharacterScr
 
         options.push_back({ContextMenuOption::Action::Equip, "Equip"});
         if (m_character_screen_cache->equipment[static_cast<std::size_t>(index)].has_value())
+        {
             options.push_back({ContextMenuOption::Action::Remove, "Remove"});
+            if (static_cast<EquipmentSlot>(index) == EquipmentSlot::Mag)
+                options.push_back({ContextMenuOption::Action::Feed, "Feed"});
+        }
     }
     else if (panel == CharacterScreenPanel::Inventory)
     {
@@ -1838,7 +1955,126 @@ void HudLayer::RenderFocusHighlights()
     RenderRowFocus("character-screen-equipment", ".equip-row", CharacterScreenPanel::Equipment);
     RenderRowFocus("character-screen-inventory", ".inventory-row", CharacterScreenPanel::Inventory);
 
+    RenderMagPanel();
+    RenderItemDetailPanel();
     UpdateStatPreview();
+}
+
+void HudLayer::RenderItemDetailPanel()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* panel = m_document->GetElementById("character-screen-item-detail");
+    if (!panel)
+        return;
+
+    std::optional<int> inventory_target;
+    std::optional<EquipmentSlot> equipment_target;
+
+    if (m_hovered_inventory_index)
+        inventory_target = m_hovered_inventory_index;
+    else if (m_hovered_equipment_index)
+        equipment_target = static_cast<EquipmentSlot>(*m_hovered_equipment_index);
+    else if (m_focused_panel == CharacterScreenPanel::Inventory)
+        inventory_target = m_focused_row;
+    else if (m_focused_panel == CharacterScreenPanel::Equipment)
+        equipment_target = static_cast<EquipmentSlot>(m_focused_row);
+
+    const CharacterScreenMessage::ItemEntry* entry = nullptr;
+    if (m_character_screen_cache)
+    {
+        if (inventory_target && *inventory_target >= 0 &&
+            *inventory_target < static_cast<int>(m_character_screen_cache->inventory.size()))
+            entry = &m_character_screen_cache->inventory[static_cast<std::size_t>(*inventory_target)];
+        else if (equipment_target)
+        {
+            const std::size_t index = static_cast<std::size_t>(*equipment_target);
+            if (index < m_character_screen_cache->equipment.size() &&
+                m_character_screen_cache->equipment[index].has_value())
+                entry = &*m_character_screen_cache->equipment[index];
+        }
+    }
+
+    if (!entry)
+    {
+        panel->SetProperty("display", "none");
+        return;
+    }
+
+    std::string markup = "<div class=\"item-detail-title\">" + EscapeRml(entry->display_name) + "</div>";
+    markup += "<div class=\"item-detail-columns\">";
+    markup += "<div class=\"item-detail-image\"><span class=\"item-detail-image-placeholder\">?</span></div>";
+    markup += "<div class=\"item-detail-info\">";
+
+    if (entry->rarity_stars > 0)
+        markup += "<div class=\"item-detail-stars\">Stars: " + std::to_string(entry->rarity_stars) + "</div>";
+
+    if (!entry->description.empty())
+        markup += "<div class=\"item-detail-description\">" + EscapeRml(entry->description) + "</div>";
+
+    if (entry->stats)
+    {
+        const std::array<std::pair<const char*, int>, 6> stat_rows = {
+            {{"ATP", entry->stats->atp}, {"ATA", entry->stats->ata}, {"MST", entry->stats->mst},
+             {"DFP", entry->stats->dfp}, {"EVP", entry->stats->evp}, {"LCK", entry->stats->lck}}};
+        for (const auto& [label, value] : stat_rows)
+            if (value != 0)
+                markup += std::string("<div class=\"item-detail-stat-row\">") + label + ": " + std::to_string(value) +
+                          "</div>";
+    }
+
+    for (const auto& [race_name, bonus_percent] : entry->species_bonuses)
+        markup += "<div class=\"item-detail-stat-row\">vs " + EscapeRml(race_name) + ": +" +
+                  std::to_string(bonus_percent) + "%</div>";
+
+    markup += "</div></div>";
+
+    panel->SetInnerRML(markup);
+    panel->SetProperty("display", "flex");
+}
+
+void HudLayer::RenderMagPanel()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* panel = m_document->GetElementById("character-screen-mag-panel");
+    if (!panel)
+        return;
+
+    const bool mag_slot_selected =
+        m_hovered_equipment_index == static_cast<int>(EquipmentSlot::Mag) ||
+        (!m_hovered_equipment_index.has_value() && m_focused_panel == CharacterScreenPanel::Equipment &&
+         m_focused_row == static_cast<int>(EquipmentSlot::Mag));
+
+    if (!m_character_screen_cache || !m_character_screen_cache->mag || !mag_slot_selected)
+    {
+        panel->SetProperty("display", "none");
+        return;
+    }
+
+    const CharacterScreenMessage::MagSummary& mag = *m_character_screen_cache->mag;
+    const std::array<std::pair<const char*, CharacterScreenMessage::MagStatBar>, 4> bars = {
+        {{"POW", mag.pow}, {"DEF", mag.def}, {"DEX", mag.dex}, {"MIND", mag.mind}}};
+
+    std::string markup = "<div class=\"mag-panel-title\">Mag - Lv " + std::to_string(mag.level) + "</div>";
+    for (const auto& [label, bar] : bars)
+    {
+        markup += std::string("<div class=\"mag-stat-row\"><span class=\"mag-stat-label\">") + label +
+                  "</span><span class=\"mag-stat-level\">" + std::to_string(bar.level) +
+                  "</span><div class=\"mag-stat-bar-track\"><div class=\"mag-stat-bar-fill\"></div></div></div>";
+    }
+    markup += "<div class=\"mag-info-row\">IQ: " + std::to_string(mag.iq) +
+              "   Sync: " + std::to_string(static_cast<int>(mag.sync)) + "%</div>";
+
+    panel->SetInnerRML(markup);
+    panel->SetProperty("display", "flex");
+
+    Rml::ElementList fills;
+    panel->QuerySelectorAll(fills, ".mag-stat-bar-fill");
+    for (std::size_t i = 0; i < fills.size() && i < bars.size(); ++i)
+        fills[i]->SetProperty("width", PercentWidth(bars[i].second.progress, bars[i].second.progress_to_next));
 }
 
 void HudLayer::RenderRowFocus(const char* container_id, const char* row_class, CharacterScreenPanel panel)
@@ -1909,6 +2145,29 @@ void HudLayer::OnEvent(Event& event)
                     return true;
                 }
                 return true; // swallow all other keys while awaiting
+            }
+
+            if (m_awaiting_mag_food_selection)
+            {
+                switch (key)
+                {
+                case SDLK_ESCAPE:
+                    CancelAwaitingMagFood();
+                    RenderFocusHighlights();
+                    return true;
+                case SDLK_KP_8:
+                    MoveRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedRow();
+                    return true;
+                default:
+                    return true; // swallow panel-switching and everything else while picking food
+                }
             }
 
             if (m_action_palette_cache)

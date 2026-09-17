@@ -1,12 +1,31 @@
 #include "Render/RegistryRenderableLookup.h"
 
+#include "Components/MagComponent.h"
 #include "Components/RenderableComponent.h"
 #include "Components/TweenComponent.h"
 #include "Engine/Math/Easing.h"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 
 namespace psr {
+
+namespace {
+    // The mag's idle float: +-2px at 1x zoom, one full up-down-up cycle
+    // every kMagBobPeriodSeconds. Expressed in tile-fraction units (like
+    // every other GetRenderOffset contribution), so it scales with zoom for
+    // free once TileRenderer multiplies by the current zoomed tile size --
+    // see TileVertexMath.h's TileToPixel. kTileHeight duplicates
+    // GameplayLayer.cpp's own file-local constant of the same value (the
+    // engine's fixed tile pixel height); keep the two in sync if either
+    // changes.
+    constexpr int kTileHeight = 24;
+    constexpr float kMagBobAmplitudePixels = 2.0f;
+    constexpr float kMagBobAmplitudeTiles = kMagBobAmplitudePixels / static_cast<float>(kTileHeight);
+    constexpr float kMagBobPeriodSeconds = 2.0f;
+    constexpr float kMagBobAngularFrequency = 2.0f * std::numbers::pi_v<float> / kMagBobPeriodSeconds;
+} // namespace
 
 RegistryRenderableLookup::RegistryRenderableLookup(Registry& registry, AnimationClock& animation_clock)
     : m_registry(&registry), m_animation_clock(&animation_clock)
@@ -43,13 +62,21 @@ std::optional<RenderableTile> RegistryRenderableLookup::GetRenderableTile(entt::
 
 Vec2f RegistryRenderableLookup::GetRenderOffset(entt::entity entity) const
 {
-    const TweenComponent* tween_component = m_registry->TryGetComponent<TweenComponent>(entity);
-    if (!tween_component || tween_component->queue.empty())
-        return {};
+    Vec2f offset;
 
-    const Tween& active = tween_component->queue.front();
-    const float progress = active.duration > 0.0f ? std::clamp(active.elapsed / active.duration, 0.0f, 1.0f) : 1.0f;
-    return active.start_offset + (active.end_offset - active.start_offset) * EaseOutQuad(progress);
+    if (const TweenComponent* tween_component = m_registry->TryGetComponent<TweenComponent>(entity);
+        tween_component && !tween_component->queue.empty())
+    {
+        const Tween& active = tween_component->queue.front();
+        const float progress =
+            active.duration > 0.0f ? std::clamp(active.elapsed / active.duration, 0.0f, 1.0f) : 1.0f;
+        offset = active.start_offset + (active.end_offset - active.start_offset) * EaseOutQuad(progress);
+    }
+
+    if (const MagComponent* mag = m_registry->TryGetComponent<MagComponent>(entity))
+        offset.y += std::sin(mag->bob_elapsed * kMagBobAngularFrequency) * kMagBobAmplitudeTiles;
+
+    return offset;
 }
 
 } // namespace psr

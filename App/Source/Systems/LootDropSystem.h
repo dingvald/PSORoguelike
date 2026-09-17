@@ -20,7 +20,10 @@ struct AfterDamageEvent;
 // result as a ground entity at the defeated entity's own tile -- an item
 // prefab for Kind::Item, or the fixed "meseta" prefab (its
 // CurrencyPickupComponent::amount overwritten with the roll) for
-// Kind::Meseta. Either way it's just an ItemComponent-tagged ground entity
+// Kind::Meseta -- a spawned item entity also gets RollEquipmentVariation
+// applied (armor stats/mod slots, weapon grind/element/race bonus), see
+// Items/EquipmentDropRoller.h. Either way it's just an ItemComponent-tagged
+// ground entity
 // that PickupAction resolves like any other pickup -- Meseta is credited to
 // CurrencyComponent at pickup time, not here. No-ops silently if the
 // defeated entity carries no DropTableComponent (most enemies drop

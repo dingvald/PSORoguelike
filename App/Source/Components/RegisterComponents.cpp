@@ -16,9 +16,12 @@
 #include "Components/InnateWeaponComponent.h"
 #include "Components/InteractableComponent.h"
 #include "Components/KnockbackMultiplierComponent.h"
+#include "Components/LastDirectionComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/OnHitEffectComponent.h"
 #include "Components/PackFollowerComponent.h"
 #include "Components/PlayerControlledComponent.h"
+#include "Components/PounceComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/RangedTechComponent.h"
 #include "Components/RenderableComponent.h"
@@ -65,10 +68,12 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     InteractableComponent::Register(reg);
     ItemComponent::Register(reg);
     KnockbackMultiplierComponent::Register(reg);
+    MagComponent::Register(reg);
     ModComponent::Register(reg);
     OnHitEffectComponent::Register(reg);
     PackFollowerComponent::Register(reg);
     PlayerControlledComponent::Register(reg);
+    PounceComponent::Register(reg);
     PrefabIdComponent::Register(reg);
     Position::Register(reg);
     RaceComponent::Register(reg);
@@ -83,21 +88,23 @@ EntitySchemaModel RegisterComponents(Registry& registry)
     ValueComponent::Register(reg);
     WeaponComponent::Register(reg);
 
-    // EquipmentComponent/StatusEffectComponent are deliberately not
-    // meta/schema-registered above (entt::entity has no FieldKind;
-    // StatusEffectComponent is runtime-only accumulated state, never
-    // hand-authored in a prefab -- see its own doc comment), but they and
-    // TPComponent still need their own event handlers wired -- see each
-    // component's own AttachHandlers/DetachHandlers doc comment.
-    // Registry::BindComponentEvents just connects entt's
-    // on_construct/on_destroy<T> signals, independent of meta registration,
-    // so this is safe to call regardless. InnateWeaponComponent is meta-
-    // registered above (it's authorable) but still needs this call for its
-    // own DeathEvent-handler wiring, same mechanism, unrelated reason.
+    // EquipmentComponent/StatusEffectComponent/LastDirectionComponent are
+    // deliberately not meta/schema-registered above (entt::entity has no
+    // FieldKind; StatusEffectComponent/LastDirectionComponent are
+    // runtime-only, never hand-authored in a prefab -- see each's own doc
+    // comment), but they and TPComponent still need their own event
+    // handlers wired -- see each component's own AttachHandlers/
+    // DetachHandlers doc comment. Registry::BindComponentEvents just
+    // connects entt's on_construct/on_destroy<T> signals, independent of
+    // meta registration, so this is safe to call regardless.
+    // InnateWeaponComponent is meta-registered above (it's authorable) but
+    // still needs this call for its own DeathEvent-handler wiring, same
+    // mechanism, unrelated reason.
     registry.BindComponentEvents<EquipmentComponent>();
     registry.BindComponentEvents<TPComponent>();
     registry.BindComponentEvents<StatusEffectComponent>();
     registry.BindComponentEvents<InnateWeaponComponent>();
+    registry.BindComponentEvents<LastDirectionComponent>();
 
     // HealthSystem/DeathSystem react to HealthComponent's own lifecycle
     // rather than being HealthComponent's own AttachHandlers -- see

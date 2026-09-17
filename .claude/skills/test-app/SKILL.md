@@ -1,6 +1,7 @@
 ---
 name: test-app
 description: Build and run the App-Test Catch2 suite (game/App-layer tests). Use when the user asks to run App tests, game tests, or "test App".
+model: haiku
 ---
 
 Build and run the `App-Test` suite via the existing helper script — do not hand-roll an MSBuild/exe invocation, `Scripts/Run-Tests.ps1` already handles MSBuild discovery, building the right `.vcxproj`, and locating the output exe.

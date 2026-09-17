@@ -213,6 +213,14 @@ namespace {
         return it->value.GetBool();
     }
 
+    std::string ReadString(const rapidjson::Value& object, const char* key, const std::string& fallback)
+    {
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsString())
+            return fallback;
+        return it->value.GetString();
+    }
+
     RenderableComponent ReadRenderableBody(const rapidjson::Value& body)
     {
         RenderableComponent renderable;
@@ -521,6 +529,7 @@ namespace {
         weapon.range = ReadInt(body, "range", weapon.range);
         weapon.hits_per_turn = ReadInt(body, "hits_per_turn", weapon.hits_per_turn);
         weapon.grind_level = ReadInt(body, "grind_level", weapon.grind_level);
+        weapon.max_grind_level = ReadInt(body, "max_grind_level", weapon.max_grind_level);
         weapon.prefix_affix_id = ReadNameId(body, "prefix_affix_id", 0);
         weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
@@ -544,6 +553,7 @@ namespace {
         object.AddMember("range", weapon.range, allocator);
         object.AddMember("hits_per_turn", weapon.hits_per_turn, allocator);
         object.AddMember("grind_level", weapon.grind_level, allocator);
+        object.AddMember("max_grind_level", weapon.max_grind_level, allocator);
         object.AddMember("prefix_affix_id", WriteNameId(weapon.prefix_affix_id, allocator), allocator);
         object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
@@ -586,6 +596,7 @@ namespace {
     {
         ItemComponent item;
         item.max_stack = ReadInt(body, "max_stack", item.max_stack);
+        item.description = ReadString(body, "description", item.description);
         return item;
     }
 
@@ -593,6 +604,7 @@ namespace {
     {
         rapidjson::Value object(rapidjson::kObjectType);
         object.AddMember("max_stack", item.max_stack, allocator);
+        object.AddMember("description", StringValue(item.description, allocator), allocator);
         return object;
     }
 
@@ -693,6 +705,26 @@ namespace {
         return object;
     }
 
+    PounceComponent ReadPounceBody(const rapidjson::Value& body)
+    {
+        PounceComponent pounce;
+        pounce.preferred_distance = ReadInt(body, "preferred_distance", pounce.preferred_distance);
+        pounce.pounce_chance_percent = ReadInt(body, "pounce_chance_percent", pounce.pounce_chance_percent);
+        pounce.ghost_effect_prefab_id = ReadNameId(body, "ghost_effect_prefab_id", pounce.ghost_effect_prefab_id);
+        pounce.ghost_effect_duration = ReadFloat(body, "ghost_effect_duration", pounce.ghost_effect_duration);
+        return pounce;
+    }
+
+    rapidjson::Value WritePounceBody(const PounceComponent& pounce, rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("preferred_distance", pounce.preferred_distance, allocator);
+        object.AddMember("pounce_chance_percent", pounce.pounce_chance_percent, allocator);
+        object.AddMember("ghost_effect_prefab_id", WriteNameId(pounce.ghost_effect_prefab_id, allocator), allocator);
+        object.AddMember("ghost_effect_duration", pounce.ghost_effect_duration, allocator);
+        return object;
+    }
+
     ConsumableComponent ReadConsumableBody(const rapidjson::Value& body)
     {
         ConsumableComponent consumable;
@@ -727,7 +759,7 @@ namespace {
         const char* body_html;
     };
 
-    constexpr std::array<ComponentKind, 19> kComponentKinds = {
+    constexpr std::array<ComponentKind, 20> kComponentKinds = {
         {{"renderable", "Renderable", "#5cc8ff",
           "<div id=\"field-texture-id\" class=\"field-row\"></div>"
           "<div id=\"field-texture-size\" class=\"field-row\"></div>"
@@ -758,6 +790,7 @@ namespace {
           "<div id=\"field-range\" class=\"field-row\"></div>"
           "<div id=\"field-hits-per-turn\" class=\"field-row\"></div>"
           "<div id=\"field-grind-level\" class=\"field-row\"></div>"
+          "<div id=\"field-max-grind-level\" class=\"field-row\"></div>"
           "<div id=\"field-prefix-affix\" class=\"field-row\"></div>"
           "<div id=\"field-suffix-affix\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-element\" class=\"field-row\"></div>"
@@ -777,7 +810,9 @@ namespace {
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
           "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
-         {"item", "Item", "#e8c15d", "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"},
+         {"item", "Item", "#e8c15d",
+          "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"
+          "<div id=\"field-item-description\" class=\"field-row\"></div>"},
          {"rarity", "Rarity", "#e8d35d", "<div id=\"field-stars\" class=\"field-row\"></div>"},
          {"consumable", "Consumable", "#5de8d3",
           "<div id=\"field-consumable-effect\" class=\"field-row\"></div>"
@@ -805,7 +840,12 @@ namespace {
          {"pack_follower", "Pack Follower", "#c15de8", "<div id=\"field-pack-leader-race\" class=\"field-row\"></div>"},
          {"ranged_tech", "Ranged Tech", "#5de8a3",
           "<div id=\"field-ranged-tech-id\" class=\"field-row\"></div>"
-          "<div id=\"field-ranged-tech-range\" class=\"field-row\"></div>"}}};
+          "<div id=\"field-ranged-tech-range\" class=\"field-row\"></div>"},
+         {"pounce", "Pounce", "#e8a35d",
+          "<div id=\"field-pounce-preferred-distance\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-chance-percent\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-ghost-prefab\" class=\"field-row\"></div>"
+          "<div id=\"field-pounce-ghost-duration\" class=\"field-row\"></div>"}}};
 
     const ComponentKind* FindComponentKind(std::string_view key)
     {
@@ -1220,7 +1260,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
         if (key == "renderable" || key == "stats" || key == "actor" || key == "faction" || key == "race" ||
             key == "health" || key == "weapon" || key == "armor" || key == "mod" || key == "item" || key == "rarity" ||
             key == "consumable" || key == "drop_table" || key == "on_hit_effect" || key == "experience_value" ||
-            key == "ai" || key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech")
+            key == "ai" || key == "spawner_ai" || key == "pack_follower" || key == "ranged_tech" || key == "pounce")
             m_component_order.emplace_back(key);
     }
 
@@ -1263,6 +1303,7 @@ void PrefabEditorLayer::LoadDraftFromDocument(rapidjson::Document document)
     m_pack_follower_race_name = LabelFor(m_pack_follower.pack_leader_race_id);
     m_ranged_tech =
         components.HasMember("ranged_tech") ? ReadRangedTechBody(components["ranged_tech"]) : RangedTechComponent{};
+    m_pounce = components.HasMember("pounce") ? ReadPounceBody(components["pounce"]) : PounceComponent{};
 
     m_pending_delete_id.clear();
     m_error.clear();
@@ -1630,6 +1671,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_weapon.grind_level = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-max-grind-level"))
+        keep(fieldwidgets::BuildIntField(*row, "max_grind_level", m_weapon.max_grind_level,
+                                         [this](int v)
+                                         {
+                                             m_weapon.max_grind_level = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-prefix-affix"))
     {
         std::vector<std::pair<std::uint32_t, std::string>> prefix_options = {{0, "-- Select Affix --"}};
@@ -1755,6 +1803,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_item.max_stack = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-item-description"))
+        keep(fieldwidgets::BuildStringField(*row, "description", m_item.description,
+                                            [this](std::string v)
+                                            {
+                                                m_item.description = std::move(v);
+                                                MarkDirty();
+                                            }));
     if (Rml::Element* row = m_editor->GetElementById("field-stars"))
         keep(fieldwidgets::BuildIntField(*row, "stars", m_rarity.stars,
                                          [this](int v)
@@ -1921,6 +1976,36 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_ranged_tech.range = v;
                                              MarkDirty();
                                          }));
+
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-preferred-distance"))
+        keep(fieldwidgets::BuildIntField(*row, "preferred_distance", m_pounce.preferred_distance,
+                                         [this](int v)
+                                         {
+                                             m_pounce.preferred_distance = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-chance-percent"))
+        keep(fieldwidgets::BuildIntField(*row, "pounce_chance_percent", m_pounce.pounce_chance_percent,
+                                         [this](int v)
+                                         {
+                                             m_pounce.pounce_chance_percent = v;
+                                             MarkDirty();
+                                         }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-ghost-prefab"))
+        keep(fieldwidgets::BuildIdEnumField(*row, "ghost_effect_prefab_id", PrefabIdOptions(),
+                                            m_pounce.ghost_effect_prefab_id,
+                                            [this](std::uint32_t id)
+                                            {
+                                                m_pounce.ghost_effect_prefab_id = id;
+                                                MarkDirty();
+                                            }));
+    if (Rml::Element* row = m_editor->GetElementById("field-pounce-ghost-duration"))
+        keep(fieldwidgets::BuildFloatField(*row, "ghost_effect_duration", m_pounce.ghost_effect_duration,
+                                           [this](float v)
+                                           {
+                                               m_pounce.ghost_effect_duration = v;
+                                               MarkDirty();
+                                           }));
 
     if (Rml::Element* add_drop_entry = m_editor->GetElementById("add-drop-entry"))
     {
@@ -2180,7 +2265,7 @@ void PrefabEditorLayer::ApplyDraftToDocument()
     // updates.
     for (const char* key : {"renderable", "stats", "actor", "faction", "race", "health", "weapon", "armor", "mod",
                             "item", "rarity", "consumable", "drop_table", "on_hit_effect", "experience_value", "ai",
-                            "spawner_ai", "pack_follower", "ranged_tech"})
+                            "spawner_ai", "pack_follower", "ranged_tech", "pounce"})
         if (auto it = components.FindMember(key); it != components.MemberEnd())
             components.RemoveMember(it);
 
@@ -2225,6 +2310,8 @@ void PrefabEditorLayer::ApplyDraftToDocument()
             body = WritePackFollowerBody(m_pack_follower, allocator);
         else if (key == "ranged_tech")
             body = WriteRangedTechBody(m_ranged_tech, allocator);
+        else if (key == "pounce")
+            body = WritePounceBody(m_pounce, allocator);
         else
             continue;
         components.AddMember(rapidjson::Value(key.c_str(), allocator), std::move(body), allocator);

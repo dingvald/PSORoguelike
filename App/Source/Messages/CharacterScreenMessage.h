@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Components/StatsComponent.h"
 #include "Items/Equip.h"
 
 #include <array>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace psr {
@@ -43,6 +45,54 @@ struct CharacterScreenMessage
         // mod into one of these slots (no Mod item content or effects are
         // defined), so every entry reads "(empty)" until that lands.
         std::vector<std::string> mod_slot_labels;
+
+        // Whether the player's currently-equipped mag's own
+        // MagComponent::feed_response recognizes this item's prefab --
+        // lets HudLayer's "select a food to feed the mag" flow (entered from
+        // the Feed context-menu action) tell which Inventory rows are valid
+        // to select. False when no mag is equipped, or this item isn't
+        // equippable-mag food.
+        bool is_mag_food = false;
+
+        // RarityComponent::stars, ItemComponent::description (an elemental
+        // weapon has ItemDisplayName.h's ElementDescription appended), and
+        // this item's own (post-drop-roll) StatsComponent -- all for the
+        // Character screen's item-detail panel (see HudLayer::
+        // RenderItemDetailPanel). stats is nullopt for an item with no
+        // StatsComponent at all (most consumables).
+        int rarity_stars = 0;
+        std::string description;
+        std::optional<StatsComponent> stats;
+
+        // A weapon's rolled WeaponComponent::race_bonuses, resolved to a
+        // display race name (e.g. "Native") + bonus_percent -- fully
+        // resolved so HudLayer never needs a race_id -> label lookup of its
+        // own. Empty for a non-weapon item or a weapon with no race bonus.
+        std::vector<std::pair<std::string, int>> species_bonuses;
+    };
+
+    // One PSO-style stat's mag progress -- level plus progress toward the
+    // next level (out of progress_to_next, mirroring MagFeeding.h's
+    // kMagPointsPerLevel so HudLayer never needs that constant itself).
+    struct MagStatBar
+    {
+        int level = 0;
+        int progress = 0;
+        int progress_to_next = 1;
+    };
+
+    // The equipped mag's stats/level/iq/sync for the Character screen's mag
+    // panel (see docs and MagComponent.h) -- nullopt when no mag is
+    // equipped, in which case HudLayer hides the panel.
+    struct MagSummary
+    {
+        int level = 0;
+        MagStatBar pow;
+        MagStatBar def;
+        MagStatBar dex;
+        MagStatBar mind;
+        int iq = 0;
+        float sync = 0.0f;
     };
 
     struct StatsSummary
@@ -75,11 +125,15 @@ struct CharacterScreenMessage
     // Index-aligned with the player's InventoryComponent::items.
     std::vector<ItemEntry> inventory;
 
-    // Indexed by EquipmentSlot (Weapon, Head, Torso, Hands, Legs); nullopt
-    // means that slot is empty.
-    std::array<std::optional<ItemEntry>, 5> equipment;
+    // Indexed by EquipmentSlot (Weapon, Head, Torso, Hands, Legs, Mag);
+    // nullopt means that slot is empty.
+    std::array<std::optional<ItemEntry>, 6> equipment;
 
     StatsSummary stats;
+
+    // The equipped mag's own panel data -- nullopt when EquipmentSlot::Mag
+    // is empty.
+    std::optional<MagSummary> mag;
 
     // CurrencyComponent::meseta -- rendered as a non-selectable row pinned to
     // the bottom of the Inventory panel (see HudLayer::OnCharacterScreenState),

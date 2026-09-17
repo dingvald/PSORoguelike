@@ -145,7 +145,8 @@ private:
             Remove,
             Use,
             Drop,
-            AssignToHotbar
+            AssignToHotbar,
+            Feed
         };
 
         Action action;
@@ -293,14 +294,47 @@ private:
     void ChooseHighlightedMenuOption();
     void JumpToMatchingInventoryItem(EquipmentSlot slot);
 
-    // Stat-change hover preview: recomputes which inventory row (if any) is
-    // the current "preview target" -- m_hovered_inventory_index if the mouse
-    // is over an equippable row, else the keyboard-focused Inventory row if
-    // that's equippable, else none -- and, only when that target actually
-    // changed since the last call, publishes InventoryItemHoverChangedMessage
-    // (GameplayLayer's OnStatPreview response updates m_stat_preview and
-    // re-renders). Called from every place m_hovered_inventory_index or
-    // keyboard focus can change: the hover listeners below, and
+    // "Feed" sub-state, entered from ChooseHighlightedMenuOption's Feed case
+    // instead of publishing immediately (same "close the menu, enter a
+    // distinguishable modal sub-state" shape as BeginAwaitingHotbarSlot, but
+    // unlike it, normal Inventory row navigation stays live -- see OnEvent's
+    // m_awaiting_mag_food_selection branch). Jumps focus to the first
+    // is_mag_food Inventory row, if any. ActivateFocusedRow, while this is
+    // set, publishes MagFeedRequestedMessage for an is_mag_food row instead
+    // of opening that row's own context menu.
+    void BeginAwaitingMagFood();
+    void CancelAwaitingMagFood();
+
+    // Renders #character-screen-mag-panel from m_character_screen_cache->mag
+    // -- hidden (via display:none) when no mag is equipped or the Equipment
+    // panel's current hover/focus target isn't the Mag slot. One
+    // .mag-stat-bar-fill width (an RCSS transition target) per stat, so a
+    // changed progress value after a feed animates rather than snapping.
+    void RenderMagPanel();
+
+    // Renders #character-screen-item-detail from whichever Inventory/
+    // Equipment row is currently hovered (taking priority) or keyboard-
+    // focused -- same target-resolution shape as UpdateStatPreview, except
+    // not restricted to equippable rows (a consumable/mod should still show
+    // its detail). Hidden (via display:none) when nothing resolves. Reads
+    // straight from m_character_screen_cache (every field the panel needs
+    // -- name, stars, description, stats, species bonuses -- is already
+    // resolved there), so unlike UpdateStatPreview this never needs a
+    // round-trip message.
+    void RenderItemDetailPanel();
+
+    // Stat-change hover preview: recomputes which Inventory or Equipment row
+    // (if any) is the current "preview target" -- an active mouse hover in
+    // either panel takes priority over the keyboard-focused row, which is
+    // used when nothing is hovered. An Inventory target previews the delta
+    // from equipping that row (ComputeEquipStatDelta, via
+    // InventoryItemHoverChangedMessage); an Equipment target previews the
+    // delta from removing whatever occupies that slot
+    // (ComputeUnequipStatDelta, via EquipmentSlotHoverChangedMessage). Only
+    // publishes when the resolved target actually changed since the last
+    // call (GameplayLayer's OnStatPreview response updates m_stat_preview and
+    // re-renders). Called from every place a hover or keyboard focus can
+    // change: the hover listeners below, and
     // RenderFocusHighlights/OnCharacterScreenState/OnCharacterScreenClosed.
     void UpdateStatPreview();
 
@@ -339,20 +373,28 @@ private:
     // picked up/equipped/unequipped.
     std::vector<std::unique_ptr<RmlClickListener>> m_character_screen_listeners;
 
-    // One RmlHoverListener per .inventory-row, rebuilt alongside
-    // m_character_screen_listeners -- separate container/class since a row
-    // needs both a click listener (context menu) and a hover listener (stat
-    // preview) simultaneously.
+    // One RmlHoverListener per .inventory-row and .equip-row, rebuilt
+    // alongside m_character_screen_listeners -- separate container/class
+    // since a row needs both a click listener (context menu) and a hover
+    // listener (stat preview) simultaneously.
     std::vector<std::unique_ptr<RmlHoverListener>> m_character_screen_hover_listeners;
 
     // Set by the hover listeners above; nullopt when the mouse isn't over any
-    // inventory row. See UpdateStatPreview's doc comment.
+    // inventory/equipment row, respectively. See UpdateStatPreview's doc
+    // comment.
     std::optional<int> m_hovered_inventory_index;
+    std::optional<int> m_hovered_equipment_index;
 
-    // The inventory_index last sent via InventoryItemHoverChangedMessage (or
-    // nullopt for "no preview"), so UpdateStatPreview only re-publishes when
-    // the target actually changes.
-    std::optional<int> m_requested_preview_index;
+    // The target last sent via InventoryItemHoverChangedMessage/
+    // EquipmentSlotHoverChangedMessage (or nullopt for "no preview"), so
+    // UpdateStatPreview only re-publishes when the target actually changes.
+    std::optional<int> m_requested_preview_inventory_index;
+    std::optional<EquipmentSlot> m_requested_preview_equipment_slot;
+
+    // Set by BeginAwaitingMagFood, cleared by CancelAwaitingMagFood (also
+    // called, harmlessly, from every screen open/close path -- same
+    // "unconditional guarded reset" idiom as CancelAwaitingHotbarSlot).
+    bool m_awaiting_mag_food_selection = false;
 
     // Latest CharacterScreenStatPreviewMessage; nullopt (rendered as no
     // preview) until the first response arrives after a preview target is

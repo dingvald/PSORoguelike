@@ -26,7 +26,9 @@
 #include "Components/InteractableComponent.h"
 #include "Components/InventoryComponent.h"
 #include "Components/KnownTechniquesComponent.h"
+#include "Components/LastDirectionComponent.h"
 #include "Components/LevelComponent.h"
+#include "Components/MagComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
@@ -67,6 +69,8 @@
 #include "Items/Equip.h"
 #include "Items/EquipPreview.h"
 #include "Items/Hotbar.h"
+#include "Items/Mag/MagCompanion.h"
+#include "Items/Mag/MagFeeding.h"
 #include "Items/Shop.h"
 #include "Shop/ShopSnapshot.h"
 #include "Items/Storage.h"
@@ -82,8 +86,10 @@
 #include "Messages/HubInteractionPromptMessage.h"
 #include "Messages/HudReadyMessage.h"
 #include "Messages/CharacterScreenStatPreviewMessage.h"
+#include "Messages/EquipmentSlotHoverChangedMessage.h"
 #include "Messages/InventoryItemActivatedMessage.h"
 #include "Messages/InventoryItemHoverChangedMessage.h"
+#include "Messages/MagFeedRequestedMessage.h"
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectedMessage.h"
@@ -179,6 +185,8 @@ void GameplayLayer::OnAttach()
     Subscribe<InventoryItemActivatedMessage>(&GameplayLayer::OnInventoryItemActivated, this);
     Subscribe<InventoryItemHoverChangedMessage>(&GameplayLayer::OnInventoryItemHoverChanged, this);
     Subscribe<EquipmentSlotActivatedMessage>(&GameplayLayer::OnEquipmentSlotActivated, this);
+    Subscribe<EquipmentSlotHoverChangedMessage>(&GameplayLayer::OnEquipmentSlotHoverChanged, this);
+    Subscribe<MagFeedRequestedMessage>(&GameplayLayer::OnMagFeedRequested, this);
     Subscribe<HotbarSlotAssignedMessage>(&GameplayLayer::OnHotbarSlotAssigned, this);
     Subscribe<ActionPaletteSlotAssignedMessage>(&GameplayLayer::OnActionPaletteSlotAssigned, this);
     Subscribe<MissionSelectedMessage>(&GameplayLayer::OnMissionSelected, this);
@@ -249,6 +257,7 @@ void GameplayLayer::SpawnNewCharacter()
     // code that emplaces Position), so TransitionToWorld's tile assignment
     // below needs the component to already exist.
     m_registry.Emplace<Position>(m_player);
+    m_registry.Emplace<LastDirectionComponent>(m_player);
     m_registry.Emplace<HealthComponent>(
         m_player, HealthComponent{m_class_definition.base_hp, m_class_definition.base_hp});
     m_registry.Emplace<TPComponent>(m_player,
@@ -410,7 +419,7 @@ void GameplayLayer::DestroyWorldEntities()
 
     if (const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player))
         for (entt::entity slot : {equipment->weapon, equipment->head, equipment->torso, equipment->hands,
-                                 equipment->legs})
+                                 equipment->legs, equipment->mag})
             if (slot != entt::null)
                 keep.insert(slot);
 
@@ -527,7 +536,12 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
     if (!m_lifetime_system)
     {
         m_lifetime_system.emplace(m_registry);
-        m_turn_coordinator->SetOnTurnPassed([this] { m_lifetime_system->Tick(); });
+        m_turn_coordinator->SetOnTurnPassed(
+            [this]
+            {
+                m_lifetime_system->Tick();
+                TickMagFeedCooldowns(m_registry);
+            });
     }
 
     if (!m_combat_log_bridge)
@@ -622,7 +636,7 @@ void GameplayLayer::TransitionToWorld(SceneKind target, std::optional<std::strin
 
     EnterRoom(instantiation.entrance_tile, m_room_map->GetRoom(instantiation.entrance_tile));
 
-    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, m_rng, on_enemy_spawned);
+    m_enemy_ai_system.emplace(*m_grid, m_registry, m_affixes, m_techniques, *m_visual_effects, m_rng, on_enemy_spawned);
     m_projectile_advance_action.emplace(*m_grid, m_affixes, m_rng);
     m_tab_target_system.emplace(m_registry, *m_grid, *m_room_map, *m_room_visibility);
     m_turn_coordinator->SetNpcDecision(
@@ -789,6 +803,7 @@ void GameplayLayer::OnUpdate(float delta_time)
         const Vec2 player_tile = m_registry.GetComponent<Position>(m_player).tile;
         m_camera.SetTarget(player_tile);
         EnterRoom(player_tile, m_room_map->GetRoom(player_tile));
+        UpdateMagCompanion(m_registry, m_player, delta_time);
     }
     m_camera.Update(delta_time);
 
@@ -1018,6 +1033,73 @@ void GameplayLayer::OnEquipmentSlotActivated(const EquipmentSlotActivatedMessage
 
     if (UnequipSlot(Entity(m_registry, m_player), message.slot))
         PublishCharacterScreenState();
+}
+
+void GameplayLayer::OnEquipmentSlotHoverChanged(const EquipmentSlotHoverChangedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    CharacterScreenStatPreviewMessage response;
+
+    if (message.slot)
+    {
+        if (const std::optional<StatsComponent> delta =
+                ComputeUnequipStatDelta(m_registry, m_player, *message.slot, m_affixes))
+        {
+            response.active = true;
+            response.atp_delta = delta->atp;
+            response.ata_delta = delta->ata;
+            response.mst_delta = delta->mst;
+            response.dfp_delta = delta->dfp;
+            response.evp_delta = delta->evp;
+            response.lck_delta = delta->lck;
+        }
+    }
+
+    Publish(response);
+}
+
+void GameplayLayer::OnMagFeedRequested(const MagFeedRequestedMessage& message)
+{
+    if (m_state_machine.Top() != &m_character_screen_state || !m_registry.IsValid(m_player))
+        return;
+
+    const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
+    if (!equipment || equipment->mag == entt::null)
+        return;
+
+    MagComponent* mag = m_registry.TryGetComponent<MagComponent>(equipment->mag);
+    if (!mag || mag->feed_cooldown_remaining > 0)
+        return;
+
+    InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player);
+    if (!inventory || message.food_inventory_index < 0 ||
+        message.food_inventory_index >= static_cast<int>(inventory->items.size()))
+        return;
+
+    const entt::entity food = inventory->items[static_cast<std::size_t>(message.food_inventory_index)];
+    const PrefabIdComponent* food_prefab_id = m_registry.TryGetComponent<PrefabIdComponent>(food);
+    if (!food_prefab_id || !ApplyMagFood(m_registry, equipment->mag, food_prefab_id->value))
+        return;
+
+    // Same "decrement a stack, or erase+destroy a single unit" consumption
+    // as UseItemAction::Perform -- feeding is free/instant (no turn cost, see
+    // CharacterScreenState's own doc comment), so this mutates directly
+    // rather than going through an IAction.
+    ItemComponent* food_item_component = m_registry.TryGetComponent<ItemComponent>(food);
+    if (food_item_component && food_item_component->quantity > 1)
+    {
+        --food_item_component->quantity;
+    }
+    else
+    {
+        inventory->items.erase(inventory->items.begin() + message.food_inventory_index);
+        m_registry.DestroyEntity(food);
+    }
+
+    mag->feed_cooldown_remaining = mag->feed_cooldown_turns;
+    PublishCharacterScreenState();
 }
 
 void GameplayLayer::OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message)

@@ -17,6 +17,7 @@ namespace psr {
 
 class IAction;
 class TechniqueLibrary;
+class VisualEffectSystem;
 
 // The AI seam TurnCoordinator::SetNpcDecision expects: Decide(actor) picks
 // what a non-player actor with an AiComponent does this turn.
@@ -66,6 +67,18 @@ class TechniqueLibrary;
 //   target-confirm flow does, then returning a TechniqueAction); otherwise
 //   closes distance like ChaseAndAttack. Mirrors PSO's Hildebear stopping to
 //   cast Foie at range instead of always closing to melee.
+// - KeepDistanceAndPounce (needs a sibling PounceComponent): a kiting
+//   predator rather than a straight chaser. Retreats (StepAwayFrom) once the
+//   target closes to PounceComponent::preferred_distance - 1 tiles or
+//   nearer (Chebyshev), approaches (StepTowardGoal) once the target opens
+//   past preferred_distance, and at exactly preferred_distance -- with the
+//   target 8-directionally aligned (cardinal or diagonal) -- rolls
+//   PounceComponent::pounce_chance_percent each turn to either lunge (see
+//   LungeAttackAction; preferred_distance must equal
+//   LungeAttackAction::kLungeRange for the pounce to ever trigger) or strafe
+//   laterally (StepLaterally) instead. Falls back to DecideChaseAndAttack if
+//   the sibling component is missing, same convention
+//   DecideRangedTechAtDistance uses.
 //
 // Holds a single m_pending_decision, reassigned each Decide() call, to
 // satisfy the "IAction* stays valid for at least the Step() call it's
@@ -76,7 +89,8 @@ class EnemyAiSystem
 {
 public:
     EnemyAiSystem(Grid& grid, Registry& registry, const AffixLibrary& affixes, const TechniqueLibrary& techniques,
-                  std::mt19937& rng, std::function<void(entt::entity)> on_spawned = {});
+                  VisualEffectSystem& visual_effects, std::mt19937& rng,
+                  std::function<void(entt::entity)> on_spawned = {});
 
     IAction* Decide(Entity actor);
 
@@ -89,26 +103,39 @@ private:
     IAction* DecideStationarySpawner(Entity actor);
     IAction* DecidePackFollower(Entity actor, const AiComponent& ai);
     IAction* DecideRangedTechAtDistance(Entity actor, const AiComponent& ai);
+    IAction* DecideKeepDistanceAndPounce(Entity actor, const AiComponent& ai);
 
     // Shared by ChaseAndAttack/PackFollower/FleeWhenHit's approach phase and
-    // RangedTechAtDistance's close-the-distance fallback: routes actor from
-    // self_tile to goal_tile via FindPath (see Pathfinder.h) against
-    // TargetResolution.h's IsWalkableStep, and issues a MoveAction for the
-    // path's first step. nullptr if goal_tile is unreachable.
+    // RangedTechAtDistance's/KeepDistanceAndPounce's close-the-distance
+    // fallback: routes actor from self_tile to goal_tile via FindPath (see
+    // Pathfinder.h) against TargetResolution.h's IsWalkableStep, and issues a
+    // MoveAction for the path's first step. nullptr if goal_tile is
+    // unreachable.
     IAction* StepTowardGoal(Entity actor, Vec2 self_tile, Vec2 goal_tile);
 
-    // FleeWhenHit's fleeing phase only, since a destination-seeking
-    // pathfinder has no way to "maximize distance from X": one step
-    // (diagonal included) from self_tile toward self_tile+delta, degrading
-    // to a single cardinal axis (dominant delta first) if the diagonal is
-    // blocked. Callers pass delta already pointing away from whatever should
-    // be fled (e.g. self_tile - target_tile), not toward it.
+    // FleeWhenHit's fleeing phase and KeepDistanceAndPounce's retreat phase,
+    // since a destination-seeking pathfinder has no way to "maximize distance
+    // from X": one step (diagonal included) from self_tile toward
+    // self_tile+delta, degrading to a single cardinal axis (dominant delta
+    // first) if the diagonal is blocked. Callers pass delta already pointing
+    // away from whatever should be fled (e.g. self_tile - target_tile), not
+    // toward it.
     IAction* StepAwayFrom(Entity actor, Vec2 self_tile, Vec2 delta);
+
+    // KeepDistanceAndPounce's steady-state phase: one step perpendicular to
+    // the direction toward target_tile (rotating the sign-based unit vector
+    // 90 degrees either way), so distance to target_tile is preserved rather
+    // than closed or opened. Which of the two perpendiculars is tried first
+    // is randomized via m_rng (an unpredictable circling direction, not a
+    // fixed one); degrades to the other side if the first is blocked, else
+    // nullptr.
+    IAction* StepLaterally(Entity actor, Vec2 self_tile, Vec2 target_tile);
 
     Grid* m_grid;
     Registry* m_registry;
     const AffixLibrary* m_affixes;
     const TechniqueLibrary* m_techniques;
+    VisualEffectSystem* m_visual_effects;
     std::mt19937* m_rng;
     std::function<void(entt::entity)> m_on_spawned;
     WaitAction m_wait_action;
