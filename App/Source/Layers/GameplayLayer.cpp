@@ -29,6 +29,7 @@
 #include "Components/LastDirectionComponent.h"
 #include "Components/LevelComponent.h"
 #include "Components/MagComponent.h"
+#include "Components/NameComponent.h"
 #include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
@@ -59,6 +60,7 @@
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/PrefabIdComponent.h"
+#include "Engine/Events/ApplicationEvent.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
@@ -114,6 +116,7 @@
 #include "Messages/WorldTileHoverMessage.h"
 #include "Missions/AreaProgression.h"
 #include "Missions/TeleporterInteraction.h"
+#include "Persistence/CharacterSaveFile.h"
 #include "Progression/ClassDefinitionFile.h"
 #include "Shop/ShopStockFile.h"
 #include "States/GameState.h"
@@ -175,15 +178,29 @@ namespace {
 
 } // namespace
 
-GameplayLayer::GameplayLayer(ClassId chosen_class, SectionId chosen_section_id)
-    : Layer("GameplayLayer"), m_chosen_class(chosen_class), m_chosen_section_id(chosen_section_id)
+GameplayLayer::GameplayLayer(ClassId chosen_class, SectionId chosen_section_id, std::string chosen_name,
+                             int save_slot)
+    : Layer("GameplayLayer"), m_chosen_class(chosen_class), m_chosen_section_id(chosen_section_id),
+      m_chosen_name(std::move(chosen_name)), m_save_slot(save_slot)
 {
 }
+
+GameplayLayer::GameplayLayer(int save_slot)
+    : Layer("GameplayLayer"), m_chosen_class(ClassId::Hunter), m_chosen_section_id(SectionId::Viridia),
+      m_save_slot(save_slot), m_pending_load(LoadCharacterSaveData(save_slot))
+{
+    if (m_pending_load)
+    {
+        m_chosen_class = ReadSavedClassId(*m_pending_load);
+        m_chosen_section_id = ReadSavedSectionId(*m_pending_load);
+    }
+}
+
 GameplayLayer::~GameplayLayer() = default;
 
 void GameplayLayer::OnAttach()
 {
-    SpawnNewCharacter();
+    SpawnPlayer();
 
     Subscribe<HotbarSlotActivatedMessage>(&GameplayLayer::OnHotbarSlotActivated, this);
     Subscribe<HudReadyMessage>(&GameplayLayer::OnHudReady, this);
@@ -212,7 +229,7 @@ void GameplayLayer::OnAttach()
     m_state_machine.Push(m_exploring_state, context);
 }
 
-void GameplayLayer::SpawnNewCharacter()
+void GameplayLayer::SpawnPlayer()
 {
     // Content-load/generation failures below are build-input bugs (a missing
     // or malformed file, a dungeon definition with no valid layout), not a
@@ -220,7 +237,7 @@ void GameplayLayer::SpawnNewCharacter()
     // exceptions rather than being caught and swallowed into a black screen.
     // main.cpp's top-level catch turns an uncaught one into a logged, clean
     // exit instead of an OS crash dialog.
-    const EntitySchemaModel schema = RegisterComponents(m_registry);
+    m_entity_schema = RegisterComponents(m_registry);
 
     // Loaded before SetStatusEffectLibrary below needs it -- unlike
     // m_affixes (still empty pending M8.2's drop-table work), status
@@ -240,7 +257,7 @@ void GameplayLayer::SpawnNewCharacter()
     // check).
     m_registry.SetStatusEffectLibrary(m_status_effects);
 
-    JsonEntityLoader loader{m_registry.GetMetaContext(), &schema};
+    JsonEntityLoader loader{m_registry.GetMetaContext(), &m_entity_schema};
     loader.Load(ApplicationFilepaths::EntitiesPath);
     m_registry.RegisterPrefabs(loader);
 
@@ -278,6 +295,47 @@ void GameplayLayer::SpawnNewCharacter()
     m_registry.Emplace<InventoryComponent>(m_player);
     m_registry.Emplace<StorageComponent>(m_player);
 
+    // Hands off to TransitionToWorld for everything scene-shaped (Grid,
+    // TurnCoordinator, per-world systems) -- see its own doc comment. The
+    // player already exists (created just above) so it can be placed at the
+    // hub's entrance tile and subscribed to the per-world systems
+    // TransitionToWorld builds lazily on this first call.
+    TransitionToWorld(SceneKind::Hub, std::nullopt);
+
+    if (m_pending_load)
+        RestoreCharacterFromSave(*m_pending_load);
+    else
+        SpawnStartingKit();
+
+    // Both emplaced only now, after TransitionToWorld has lazily constructed
+    // m_turn_coordinator above: TurnCoordinator's constructor is where it
+    // subscribes OnConstruct<PlayerControlledComponent>/OnConstruct<ActorComponent>
+    // to track m_live_player_count/TurnQueue membership, so emplacing either
+    // one before that construction would silently miss the signal -- leaving
+    // m_live_player_count stuck at 0 and Step() reporting PlayerDefeated
+    // immediately, forever (m_turn_coordinator is never rebuilt after this
+    // first call).
+    m_registry.Emplace<PlayerControlledComponent>(m_player);
+    m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
+
+    // Opts the player out of the two DeathEvent handlers every other
+    // HealthComponent-bearing entity gets (DeathSystem, which would destroy
+    // it, and InnateWeaponComponent, which would destroy its equipped
+    // weapon), replacing them with OnPlayerDeath -- see that method's own doc
+    // comment. Must come after every component above that either handler
+    // reads/reacts to (InnateWeaponComponent, EquipmentComponent).
+    Entity player_entity(m_registry, m_player);
+    EventHandlerComponent& player_events = player_entity.GetOrEmplace<EventHandlerComponent>();
+    player_events.Unsubscribe<DeathEvent, DeathSystem>();
+    player_events.Unsubscribe<DeathEvent, InnateWeaponComponent>();
+    player_events.Subscribe<DeathEvent, GameplayLayer>([this](Entity self, DeathEvent&)
+                                                        { OnPlayerDeath(self.Handle()); });
+}
+
+void GameplayLayer::SpawnStartingKit()
+{
+    m_registry.Emplace<NameComponent>(m_player, NameComponent{m_chosen_name});
+
     // The class's starting weapon overrides whatever player.json's own
     // innate_weapon (if any) authored -- player.json no longer authors one,
     // since it would otherwise be dead, misleading data now that the starting
@@ -299,13 +357,6 @@ void GameplayLayer::SpawnNewCharacter()
                 KnownTechniqueEntry{entt::hashed_string::value(technique_id_string.c_str()), 1});
         m_registry.Emplace<KnownTechniquesComponent>(m_player, known);
     }
-
-    // Hands off to TransitionToWorld for everything scene-shaped (Grid,
-    // TurnCoordinator, per-world systems) -- see its own doc comment. The
-    // player already exists (created just above) so it can be placed at the
-    // hub's entrance tile and subscribed to the per-world systems
-    // TransitionToWorld builds lazily on this first call.
-    TransitionToWorld(SceneKind::Hub, std::nullopt);
 
     // Same auto-equip-on-spawn mechanism enemies use (see on_enemy_spawned
     // in TransitionToWorld) -- there's no interactive equip/inventory system
@@ -390,30 +441,70 @@ void GameplayLayer::SpawnNewCharacter()
         hotbar.slots[8 + i] = HotbarSlot{
             HotbarSlotType::Item, entt::hashed_string::value(m_class_definition.starting_inventory[i].item_prefab_id.c_str())};
     m_registry.Emplace<HotbarComponent>(m_player, hotbar);
+}
 
-    // Both emplaced only now, after TransitionToWorld has lazily constructed
-    // m_turn_coordinator above: TurnCoordinator's constructor is where it
-    // subscribes OnConstruct<PlayerControlledComponent>/OnConstruct<ActorComponent>
-    // to track m_live_player_count/TurnQueue membership, so emplacing either
-    // one before that construction would silently miss the signal -- leaving
-    // m_live_player_count stuck at 0 and Step() reporting PlayerDefeated
-    // immediately, forever (m_turn_coordinator is never rebuilt after this
-    // first call).
-    m_registry.Emplace<PlayerControlledComponent>(m_player);
-    m_registry.Emplace<ActorComponent>(m_player); // enqueues the player into the turn queue
+void GameplayLayer::RestoreCharacterFromSave(const LoadedCharacterData& data)
+{
+    // Restores whichever authorable components the player entity carries
+    // (Class/SectionId/Currency/Health/TP/Stats, ...) in one call -- see
+    // Persistence/CharacterSaveFile.h's own doc comment for why this covers
+    // most of the player's saved state generically.
+    m_registry.ApplyEntityComponentsJson(m_player, data.player_components);
 
-    // Opts the player out of the two DeathEvent handlers every other
-    // HealthComponent-bearing entity gets (DeathSystem, which would destroy
-    // it, and InnateWeaponComponent, which would destroy its equipped
-    // weapon), replacing them with OnPlayerDeath -- see that method's own doc
-    // comment. Must come after every component above that either handler
-    // reads/reacts to (InnateWeaponComponent, EquipmentComponent).
-    Entity player_entity(m_registry, m_player);
-    EventHandlerComponent& player_events = player_entity.GetOrEmplace<EventHandlerComponent>();
-    player_events.Unsubscribe<DeathEvent, DeathSystem>();
-    player_events.Unsubscribe<DeathEvent, InnateWeaponComponent>();
-    player_events.Subscribe<DeathEvent, GameplayLayer>([this](Entity self, DeathEvent&)
-                                                        { OnPlayerDeath(self.Handle()); });
+    // NameComponent is never baseline-emplaced (only SpawnPlayer's baseline
+    // components are unconditional -- see its own doc comment), so this is a
+    // first-time Emplace; Level/InventoryComponent below are baseline-
+    // emplaced with defaults already, so those two are plain assignments onto
+    // the existing component instead (a second Emplace<T> on top of an
+    // already-present T is an entt precondition violation).
+    m_registry.Emplace<NameComponent>(m_player, NameComponent{data.name});
+    m_registry.GetComponent<LevelComponent>(m_player) = LevelComponent{data.level, data.xp, data.total_xp};
+
+    if (!data.known_techniques.empty())
+    {
+        KnownTechniquesComponent known;
+        for (const SavedKnownTechnique& entry : data.known_techniques)
+            known.known.push_back(
+                KnownTechniqueEntry{entt::hashed_string::value(entry.technique_id_string.c_str()), entry.tier});
+        m_registry.Emplace<KnownTechniquesComponent>(m_player, known);
+    }
+
+    InventoryComponent restored_inventory;
+    restored_inventory.items.reserve(data.inventory.size());
+    for (const SavedItem& saved : data.inventory)
+        restored_inventory.items.push_back(InstantiateSavedItem(m_registry, saved));
+    m_registry.GetComponent<InventoryComponent>(m_player) = std::move(restored_inventory);
+
+    EquipmentComponent restored_equipment;
+    if (data.equipment.weapon)
+        restored_equipment.weapon = InstantiateSavedItem(m_registry, *data.equipment.weapon);
+    if (data.equipment.head)
+        restored_equipment.head = InstantiateSavedItem(m_registry, *data.equipment.head);
+    if (data.equipment.torso)
+        restored_equipment.torso = InstantiateSavedItem(m_registry, *data.equipment.torso);
+    if (data.equipment.hands)
+        restored_equipment.hands = InstantiateSavedItem(m_registry, *data.equipment.hands);
+    if (data.equipment.legs)
+        restored_equipment.legs = InstantiateSavedItem(m_registry, *data.equipment.legs);
+    if (data.equipment.mag)
+        restored_equipment.mag = InstantiateSavedItem(m_registry, *data.equipment.mag);
+    m_registry.Emplace<EquipmentComponent>(m_player, restored_equipment);
+
+    // EquipItem's own Mag case additionally calls OnMagEquipped to place the
+    // companion in the world -- restored_equipment was assigned directly
+    // above (there's no inventory index to route through EquipItem), so that
+    // placement has to happen explicitly here instead.
+    if (restored_equipment.mag != entt::null)
+        OnMagEquipped(m_registry, m_player, restored_equipment.mag);
+
+    m_run_progress.completed_dungeon_ids = data.completed_dungeon_ids;
+}
+
+void GameplayLayer::SaveCurrentCharacter()
+{
+    if (m_player == entt::null || !m_registry.IsValid(m_player))
+        return;
+    SaveCharacter(m_save_slot, m_registry, m_player, m_entity_schema, m_run_progress);
 }
 
 void GameplayLayer::DestroyWorldEntities()
@@ -1183,13 +1274,11 @@ void GameplayLayer::OnPauseMenuAction(const PauseMenuActionMessage& message)
         m_state_machine.Pop(context);
         break;
     case PauseMenuAction::QuitToTitle:
-        m_confirm_state.Configure("Quit to Title? Progress will be lost -- there is no save yet.",
-                                  ConfirmAction::QuitToTitle);
+        m_confirm_state.Configure("Quit to Title? Your character will be saved.", ConfirmAction::QuitToTitle);
         m_state_machine.Push(m_confirm_state, context);
         break;
     case PauseMenuAction::QuitToDesktop:
-        m_confirm_state.Configure("Quit to desktop? Progress will be lost -- there is no save yet.",
-                                  ConfirmAction::QuitToDesktop);
+        m_confirm_state.Configure("Quit to desktop? Your character will be saved.", ConfirmAction::QuitToDesktop);
         m_state_machine.Push(m_confirm_state, context);
         break;
     }
@@ -1206,6 +1295,8 @@ void GameplayLayer::OnConfirmChoice(const ConfirmChoiceMessage& message)
 
     if (!message.confirmed)
         return;
+
+    SaveCurrentCharacter();
 
     switch (action)
     {
@@ -1471,6 +1562,20 @@ void GameplayLayer::PublishHotbarState()
 
 void GameplayLayer::OnEvent(Event& event)
 {
+    // Handled ahead of the early-out below (and never marked handled itself)
+    // so closing the window persists the character the same way a menu-driven
+    // Quit to Title/Quit to Desktop does (see OnConfirmChoice) -- directly
+    // fixes the ROADMAP-documented "a closed window loses the character"
+    // blocker. Application::OnWindowClose still runs afterward to actually
+    // request the quit.
+    EventDispatcher window_close_dispatcher(event);
+    window_close_dispatcher.Dispatch<WindowCloseEvent>(
+        [this](WindowCloseEvent&)
+        {
+            SaveCurrentCharacter();
+            return false;
+        });
+
     if (!m_turn_coordinator || !m_grid)
         return;
 

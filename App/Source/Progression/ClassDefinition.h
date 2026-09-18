@@ -10,7 +10,7 @@ namespace psr {
 
 // One entry of a class's starting inventory -- an item prefab plus how many
 // of it to spawn into that one slot's ItemComponent::quantity (see
-// GameplayLayer::SpawnNewCharacter). Not a pickup: created directly into
+// GameplayLayer::SpawnPlayer). Not a pickup: created directly into
 // InventoryComponent, so Stacking.h's merge path never runs on it.
 struct StartingInventoryEntry
 {
@@ -20,7 +20,7 @@ struct StartingInventoryEntry
 
 // One class's fixed starting kit plus its own level-up curve -- replaces the
 // old single class-agnostic growth_curve.json now that ClassId exists (see
-// GameplayLayer::SpawnNewCharacter). Loaded once, for whichever class the
+// GameplayLayer::SpawnPlayer). Loaded once, for whichever class the
 // player chose at character creation, via ClassDefinitionFile.h.
 struct ClassDefinition
 {

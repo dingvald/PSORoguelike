@@ -1,5 +1,6 @@
 #include "Engine/ECS/Registry.h"
 
+#include "Engine/ECS/ComponentJson.h"
 #include "Engine/ECS/PrefabIdComponent.h"
 #include "Engine/World/Grid.h"
 
@@ -174,6 +175,56 @@ std::vector<ComponentValue> Registry::DescribeEntity(entt::entity entity, const 
         result.push_back(DescribeComponentValue(component_schema, type, value));
     }
     return result;
+}
+
+rapidjson::Value Registry::SerializeEntityComponents(entt::entity entity, const EntitySchemaModel& schema,
+                                                      rapidjson::Document::AllocatorType& allocator) const
+{
+    rapidjson::Value components(rapidjson::kObjectType);
+    for (const ComponentSchema& component_schema : schema.components)
+    {
+        if (!component_schema.authorable)
+            continue;
+
+        entt::meta_type type = entt::resolve(m_meta_ctx, entt::hashed_string::value(component_schema.id.c_str()));
+        if (!type)
+            continue;
+
+        entt::meta_any instance{entt::meta_ctx_arg, m_meta_ctx};
+        entt::meta_any pointer_any =
+            type.invoke("describe_fields"_hs, instance, entt::forward_as_meta(m_meta_ctx, *m_runtime_registry), entity);
+        if (!pointer_any)
+            continue;
+
+        const void* raw = pointer_any.cast<const void*>();
+        if (!raw)
+            continue;
+
+        entt::meta_any value = type.from_void(raw);
+        if (!value)
+            continue;
+
+        rapidjson::Value body = component_schema.is_tag
+                                    ? rapidjson::Value(rapidjson::kObjectType)
+                                    : FieldsToJson(component_schema.fields, type, value, allocator);
+        components.AddMember(rapidjson::Value(component_schema.id.c_str(), allocator), std::move(body), allocator);
+    }
+    return components;
+}
+
+void Registry::ApplyEntityComponentsJson(entt::entity entity, const rapidjson::Value& components_json)
+{
+    if (!components_json.IsObject())
+        throw EntityLoaderError("Registry::ApplyEntityComponentsJson: 'components' must be an object");
+
+    for (auto component = components_json.MemberBegin(); component != components_json.MemberEnd(); ++component)
+    {
+        entt::meta_type type = entt::resolve(m_meta_ctx, entt::hashed_string::value(component->name.GetString()));
+        if (!type)
+            throw EntityLoaderError(std::string("Registry::ApplyEntityComponentsJson: unknown component '") +
+                                    component->name.GetString() + "'");
+        EmplaceComponentFromJson(type, *m_runtime_registry, entity, component->value, m_meta_ctx);
+    }
 }
 
 } // namespace psr

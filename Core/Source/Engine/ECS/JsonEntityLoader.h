@@ -1,28 +1,16 @@
 #pragma once
 
+#include "Engine/ECS/ComponentJson.h"
 #include "Engine/ECS/ComponentSchema.h"
 #include "Engine/ECS/IEntityLoader.h"
 #include "Engine/Persistence/JsonDirectoryLoader.h"
 
 #include <rapidjson/document.h>
 
-#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace psr {
-
-// Thrown for a structurally valid JSON document whose *content* can't be turned
-// into prefabs -- an unknown component or field name, a duplicate prefab id, a
-// value whose JSON shape doesn't match the target field type, etc. A malformed
-// or unreadable file (or a schema_version mismatch) surfaces as JsonFileError
-// from ReadJsonFile instead. One error type per subsystem, mirroring
-// JsonFileError.
-class EntityLoaderError : public std::runtime_error
-{
-public:
-    explicit EntityLoaderError(const std::string& message) : std::runtime_error(message) {}
-};
 
 // Data-driven IEntityLoader: reads prefab definitions from a directory of JSON
 // files (one entity per file, scanned recursively via LoadJsonDirectory) and

@@ -28,6 +28,7 @@
 #include "Items/AffixLibrary.h"
 #include "Items/SectionId.h"
 #include "Missions/RunProgress.h"
+#include "Persistence/CharacterSaveFile.h"
 #include "Progression/CharacterClass.h"
 #include "Progression/ClassDefinition.h"
 #include "Render/FogOfWarRenderableLookup.h"
@@ -105,9 +106,10 @@ struct ConfirmChoiceMessage;
 // the seam between them -- it preserves the player and everything reachable
 // from its Inventory/Equipment/Storage (see DestroyWorldEntities) and wipes
 // everything else, so buying gear at the hub shop or looting a mission
-// survives the swap back. SpawnNewCharacter is the one-time setup that
-// creates the player and its permanent components, then hands off to
-// TransitionToWorld(Hub) for everything scene-shaped.
+// survives the swap back. SpawnPlayer is the one-time setup that creates the
+// player and its permanent components (fresh or restored from a save slot,
+// see RestoreCharacterFromSave), then hands off to TransitionToWorld(Hub) for
+// everything scene-shaped.
 //
 // Input/turn flow is hosted on a GameStateMachine (ExploringState/
 // TargetSelectionState -- see States/), ported from UnnamedRoguelike so
@@ -126,19 +128,29 @@ struct ConfirmChoiceMessage;
 // directly rather than opening a modal screen -- see
 // Missions/TeleporterInteraction.h's FindTeleporterAt. Escape opens
 // PauseState when ExploringState is on top with no tab-target to clear
-// instead (M14.2) -- Quit to Title/Quit to Desktop route through
-// ConfirmState first (OnPauseMenuAction/OnConfirmChoice) since neither can
-// save progress yet (M11.2); a confirmed Quit to Title publishes
+// instead (M14.2) -- Quit to Title/Quit to Desktop route through ConfirmState
+// first (OnPauseMenuAction/OnConfirmChoice), both saving the character (see
+// SaveCurrentCharacter) before acting; a confirmed Quit to Title publishes
 // ReturnedToTitleMessage (so the HudLayer overlay this layer pushed removes
 // itself) before calling TransitionTo<MainMenuLayer>().
 class GameplayLayer : public Layer
 {
 public:
-    // chosen_class/chosen_section_id are the player's character-creation
-    // picks (see CharacterCreationLayer), fixed for the whole run -- read by
-    // SpawnNewCharacter to load the matching ClassDefinition and set
-    // SectionIdComponent.
-    GameplayLayer(ClassId chosen_class, SectionId chosen_section_id);
+    // New character: chosen_class/chosen_section_id/chosen_name are the
+    // player's character-creation picks (see CharacterCreationLayer), fixed
+    // for the whole run -- read by SpawnPlayer to load the matching
+    // ClassDefinition, set SectionIdComponent, and emplace NameComponent.
+    // save_slot is where SaveCurrentCharacter later writes (see
+    // ApplicationFilepaths::SaveSlotPath) -- picked by MainMenuLayer's
+    // FindFirstEmptySaveSlot before CharacterCreationLayer even starts.
+    GameplayLayer(ClassId chosen_class, SectionId chosen_section_id, std::string chosen_name, int save_slot);
+
+    // Continue: loads save_slot's whole save file (see
+    // Persistence/CharacterSaveFile.h) up front and restores it onto the
+    // freshly spawned player in SpawnPlayer instead of running the
+    // class-starting-kit path -- see RestoreCharacterFromSave.
+    explicit GameplayLayer(int save_slot);
+
     ~GameplayLayer() override;
 
     GameplayLayer(const GameplayLayer&) = delete;
@@ -167,19 +179,46 @@ private:
     void EnsureRenderResources(SDL_Renderer& renderer);
 
     // One-time setup, called once from OnAttach(): a fresh Registry/schema/
-    // content libraries, the player entity and its permanent components
-    // (Health/TP/TabTarget/Level/Class/SectionId/Currency/Inventory/Storage --
-    // Class/SectionId/starting HP-TP/starting weapon/starting known
-    // Techniques all come from m_chosen_class's ClassDefinition, see
-    // CharacterCreationLayer). Hands off to
-    // TransitionToWorld(Hub) for everything scene-shaped (Grid/dungeon/
-    // per-world systems), then -- now that the player is placed and
-    // TurnCoordinator exists -- does the innate-weapon auto-equip and
-    // default-hotbar-loadout blocks, finishing with ActorComponent to
-    // enqueue the player into the turn queue.
-    void SpawnNewCharacter();
+    // content libraries, the player entity and its permanent baseline
+    // components (Health/TP/TabTarget/Level/Class/SectionId/Currency/
+    // Inventory/Storage -- Class/SectionId/starting HP-TP come from
+    // m_chosen_class's ClassDefinition, see CharacterCreationLayer). Hands
+    // off to TransitionToWorld(Hub) for everything scene-shaped (Grid/
+    // dungeon/per-world systems), then -- now that the player is placed and
+    // TurnCoordinator exists -- branches to RestoreCharacterFromSave (m_pending_load
+    // set, i.e. the Continue flow) or SpawnStartingKit (a brand new
+    // character), finishing with ActorComponent to enqueue the player into
+    // the turn queue.
+    void SpawnPlayer();
 
-    // The player's own DeathEvent handler, subscribed in SpawnNewCharacter in
+    // New-character-only tail of SpawnPlayer: emplaces NameComponent from
+    // m_chosen_name, then the innate-weapon auto-equip, class-authored
+    // starting inventory/armor/mag, starting known Techniques, and
+    // default-hotbar-loadout blocks -- all driven by m_class_definition,
+    // exactly as a fresh player.json instance is meant to start out.
+    void SpawnStartingKit();
+
+    // Continue-only tail of SpawnPlayer: applies data.player_components onto
+    // the player via Registry::ApplyEntityComponentsJson (restores whichever
+    // authorable components the player carries -- Class/SectionId/Currency/
+    // Health/TP/Stats -- in one call), then hand-restores everything
+    // deliberately outside that generic snapshot: NameComponent,
+    // LevelComponent, KnownTechniquesComponent, and the Inventory/Equipment
+    // item entities themselves (see Persistence/CharacterSaveFile.h's own
+    // doc comments for why each of those is separate). Equipping a restored
+    // mag calls MagCompanion's OnMagEquipped directly (mirroring EquipItem's
+    // own Mag case) so the companion appears in the world, not just in data.
+    void RestoreCharacterFromSave(const LoadedCharacterData& data);
+
+    // Writes m_save_slot's whole save file from the player's current live
+    // state -- see Persistence/CharacterSaveFile.h's SaveCharacter. Called
+    // from OnConfirmChoice's Quit to Title/Quit to Desktop and from OnEvent's
+    // WindowCloseEvent handling, so both a menu-driven quit and closing the
+    // window persist the character (the M11.2 blocker docs/ROADMAP.md's own
+    // "a closed window loses the character" line calls out).
+    void SaveCurrentCharacter();
+
+    // The player's own DeathEvent handler, subscribed in SpawnPlayer in
     // place of DeathSystem's/InnateWeaponComponent's (both unsubscribed there
     // for this entity only) -- unlike every other HealthComponent-bearing
     // entity, the player must survive its own death with gear/Meseta/level
@@ -229,7 +268,7 @@ private:
     //    enemies are always brand-new entities, never the persisting
     //    player. See each member's own doc comment for specifics.
     // Relocates the player to the new entrance tile and fully restores
-    // HP/TP. Called from SpawnNewCharacter (Hub), Mission Select (Dungeon),
+    // HP/TP. Called from SpawnPlayer (Hub), Mission Select (Dungeon),
     // mission-exit/abandon/death (Hub).
     void TransitionToWorld(SceneKind target, std::optional<std::string> dungeon_id_string);
 
@@ -381,15 +420,17 @@ private:
     // Published by HudLayer when the player activates a row on the pause
     // menu (see PauseState's own doc comment) -- Resume pops m_pause_state
     // directly; Quit to Title/Quit to Desktop configure and push
-    // m_confirm_state instead of acting immediately, since both discard the
-    // current run with no save yet (M11.2).
+    // m_confirm_state instead of acting immediately, still asking for
+    // confirmation even though both now save via OnConfirmChoice (leaving a
+    // mission mid-dungeon still drops back to the hub with no way to resume
+    // exactly where you stood).
     void OnPauseMenuAction(const PauseMenuActionMessage& message);
 
     // Published by HudLayer when the player picks Yes/No on the confirm
     // overlay; pops m_confirm_state back to the pause menu either way, then
-    // -- only if confirmed -- performs whatever m_confirm_state.GetAction()
-    // named (RequestQuit for QuitToDesktop, TransitionTo<MainMenuLayer> for
-    // QuitToTitle).
+    // -- only if confirmed -- calls SaveCurrentCharacter() before performing
+    // whatever m_confirm_state.GetAction() named (RequestQuit for
+    // QuitToDesktop, TransitionTo<MainMenuLayer> for QuitToTitle).
     void OnConfirmChoice(const ConfirmChoiceMessage& message);
 
     // Converts every currently-active m_floating_text instance to a screen
@@ -448,10 +489,29 @@ private:
     void OnWorldMouseScroll(const WorldMouseScrollMessage& message);
 
     // The player's character-creation picks (see CharacterCreationLayer),
-    // fixed for the whole run -- set once via the constructor, read by
-    // SpawnNewCharacter.
+    // fixed for the whole run -- set once via the constructor (for the
+    // Continue constructor, recovered from the save file's own "components"
+    // -- see the constructor body), read by SpawnPlayer.
     ClassId m_chosen_class;
     SectionId m_chosen_section_id;
+    std::string m_chosen_name; // new-character path only; SpawnStartingKit consumes it
+
+    // Which slot SaveCurrentCharacter writes to -- set by the constructor
+    // either way (a fresh FindFirstEmptySaveSlot pick, or the slot Continue
+    // was invoked with).
+    int m_save_slot = -1;
+
+    // Set by the Continue constructor (a full LoadCharacterSaveData read, up
+    // front); nullopt for a brand new character. SpawnPlayer branches to
+    // RestoreCharacterFromSave when this holds a value instead of running
+    // SpawnStartingKit.
+    std::optional<LoadedCharacterData> m_pending_load;
+
+    // RegisterComponents' returned model, stashed here (rather than a local
+    // in SpawnPlayer) so SaveCurrentCharacter can still drive
+    // Registry::SerializeEntityComponents for the player and every
+    // inventory/equipment item long after spawn.
+    EntitySchemaModel m_entity_schema;
 
     Registry m_registry;
     AreaLibrary m_areas;
@@ -512,7 +572,7 @@ private:
     // Bridges AfterDamageEvent onto m_floating_text -- see DamageTextSystem.h.
     // Holds only a pointer into m_floating_text (declared just above), so
     // it's a plain long-lived member. Subscribe(player) is called exactly
-    // once, from SpawnNewCharacter -- unlike the per-world systems below, the
+    // once, from SpawnPlayer -- unlike the per-world systems below, the
     // player's own subscription must never be reissued on a later scene
     // swap (the player entity persists across TransitionToWorld, and
     // EventHandlerComponent has no Unsubscribe-by-instance, only
@@ -525,7 +585,7 @@ private:
 
     // Bridges AfterHealEvent onto m_floating_text -- see HealTextSystem.h.
     // Same "plain long-lived member, player Subscribe() issued exactly once
-    // from SpawnNewCharacter" shape as m_damage_text_system just above, for
+    // from SpawnPlayer" shape as m_damage_text_system just above, for
     // the identical reason.
     HealTextSystem m_heal_text_system{m_floating_text};
 
@@ -593,7 +653,7 @@ private:
     // Bridges the player's per-entity combat events onto the Layer
     // MessageBus for HudLayer to consume -- see CombatLogBridge.h. Holds
     // only pointers into m_registry/m_techniques/m_photon_arts (all
-    // long-lived, never reset after SpawnNewCharacter), so unlike
+    // long-lived, never reset after SpawnPlayer), so unlike
     // m_room_map/m_enemy_ai_system/m_spawn_wave_system below, this holds no
     // per-dungeon state that a scene swap would invalidate -- built lazily
     // on the very first TransitionToWorld call and never rebuilt after,

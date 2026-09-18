@@ -3,12 +3,16 @@
 #include "ApplicationFilepaths.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Layers/CharacterCreationLayer.h"
+#include "Layers/CharacterSlotSelectLayer.h"
+#include "Persistence/CharacterSaveFile.h"
 #include "UI/RmlClickListener.h"
 
 #include <RmlUi/Core.h>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keycode.h>
+
+#include <optional>
 
 namespace psr {
 
@@ -36,16 +40,34 @@ void MainMenuLayer::OnAttach()
         return;
     }
 
-    m_selected_index = RowNewCharacter;
+    // Recomputed every time this layer is (re-)attached -- coming back here
+    // from Quit to Title after playing (or just having created a character
+    // for the first time) can change whether Continue has anything to offer.
+    m_row_enabled[RowContinue] = false;
+    for (int slot = 0; slot < kMaxCharacterSaveSlots; ++slot)
+        if (SaveSlotOccupied(slot))
+        {
+            m_row_enabled[RowContinue] = true;
+            break;
+        }
+
+    m_selected_index = m_row_enabled[RowContinue] ? RowContinue : RowNewCharacter;
     RefreshSelectionHighlight();
 
     for (std::size_t i = 0; i < kRowIds.size(); ++i)
     {
-        if (!kRowEnabled[i])
-            continue;
         Rml::Element* row = m_document->GetElementById(kRowIds[i]);
         if (!row)
             continue;
+
+        // RowContinue's "disabled" class is hardcoded in main_menu.rml (the
+        // common case -- a fresh install has no save yet) but m_row_enabled
+        // is recomputed above every time this layer attaches, so the visual
+        // state has to be kept in sync here rather than trusted from markup.
+        row->SetClass("disabled", !m_row_enabled[i]);
+        if (!m_row_enabled[i])
+            continue;
+
         const int index = static_cast<int>(i);
         auto listener = std::make_unique<RmlClickListener>([this, index] { SelectIndex(index); });
         listener->Attach(*row);
@@ -129,7 +151,7 @@ void MainMenuLayer::MoveSelection(int delta)
     for (int step = 0; step < RowCount; ++step)
     {
         next = (next + delta + RowCount) % RowCount;
-        if (kRowEnabled[static_cast<std::size_t>(next)])
+        if (m_row_enabled[static_cast<std::size_t>(next)])
             break;
     }
     m_selected_index = next;
@@ -138,7 +160,7 @@ void MainMenuLayer::MoveSelection(int delta)
 
 void MainMenuLayer::SelectIndex(int index)
 {
-    if (index < 0 || index >= RowCount || !kRowEnabled[static_cast<std::size_t>(index)])
+    if (index < 0 || index >= RowCount || !m_row_enabled[static_cast<std::size_t>(index)])
         return;
     m_selected_index = index;
     RefreshSelectionHighlight();
@@ -149,8 +171,14 @@ void MainMenuLayer::ConfirmSelection()
 {
     switch (m_selected_index)
     {
+    case RowContinue:
+        TransitionTo<CharacterSlotSelectLayer>();
+        break;
     case RowNewCharacter:
-        TransitionTo<CharacterCreationLayer>();
+        if (std::optional<int> slot = FindFirstEmptySaveSlot())
+            TransitionTo<CharacterCreationLayer>(*slot);
+        else
+            ShowPlaceholder("All character slots are full");
         break;
     case RowOptions:
         ShowPlaceholder("Options");
@@ -161,7 +189,6 @@ void MainMenuLayer::ConfirmSelection()
     case RowQuit:
         RequestQuit();
         break;
-    case RowContinue:
     default:
         break;
     }

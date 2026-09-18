@@ -24,6 +24,14 @@ public:
     static const std::filesystem::path HubPath;
     static const std::filesystem::path ShopStockPath;
 
+    // Sibling to AssetsPath, not under it -- save games are player data, not
+    // shipped content, so they're deliberately outside the tree App-App.lua's
+    // postbuild step copies from Assets/ on every build.
+    static const std::filesystem::path SaveDataPath;
+
     // App/Assets/Data/Classes/<class-id>.json -- see ClassDefinitionFile.h.
     static std::filesystem::path ClassDefinitionPath(psr::ClassId class_id);
+
+    // SaveDataPath/slot_<slot>.json -- see App/Source/Persistence/CharacterSaveFile.h.
+    static std::filesystem::path SaveSlotPath(int slot);
 };

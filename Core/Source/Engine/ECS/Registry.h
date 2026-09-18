@@ -8,6 +8,8 @@
 
 #include <entt/entt.hpp>
 
+#include <rapidjson/document.h>
+
 #include <cstdint>
 #include <memory>
 #include <type_traits>
@@ -323,6 +325,29 @@ public:
     // an arbitrary entity's stats without knowing at compile time which
     // components exist.
     std::vector<ComponentValue> DescribeEntity(entt::entity entity, const EntitySchemaModel& schema) const;
+
+    // The JSON-shaped, round-trippable counterpart to DescribeEntity: same
+    // schema-driven "describe_fields"_hs traversal, but each present
+    // authorable component's current field values are written via
+    // ComponentJson.h's FieldsToJson into a {"component_id": {...}} JSON
+    // object -- the exact shape JsonEntityLoader's own entity-file
+    // "components" body uses, and what ApplyEntityComponentsJson below
+    // expects back. Non-authorable components (Position, PrefabIdComponent,
+    // ...) are skipped -- those are engine-derived, never part of a
+    // save/restore snapshot. Meant for full-fidelity persistence (e.g. a
+    // dropped weapon's rolled grind_level/element/race_bonuses, a mag's fed
+    // progress), unlike DescribeEntity's own display-formatted read.
+    rapidjson::Value SerializeEntityComponents(entt::entity entity, const EntitySchemaModel& schema,
+                                                rapidjson::Document::AllocatorType& allocator) const;
+
+    // Applies a {"component_id": {...}} JSON object (as SerializeEntityComponents
+    // produces, or a prefab file's own "components" body) onto entity, which
+    // must already exist -- each named component is resolved by its meta id
+    // and emplace_or_replace'd via ComponentJson.h's EmplaceComponentFromJson,
+    // the same write path JsonEntityLoader uses for a fresh prefab clone, just
+    // targeting a live runtime entity instead. Throws EntityLoaderError for an
+    // unknown component/field name, same contract as JsonEntityLoader.
+    void ApplyEntityComponentsJson(entt::entity entity, const rapidjson::Value& components_json);
 
 private:
     entt::meta_ctx m_meta_ctx;

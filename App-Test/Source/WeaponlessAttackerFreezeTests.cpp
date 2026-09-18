@@ -59,7 +59,7 @@ psr::Registry MakeRegistryWithRealContent(psr::EntitySchemaModel& out_schema)
     psr::Registry registry;
     out_schema = psr::RegisterComponents(registry);
 
-    // Mirrors GameplayLayer::SpawnNewCharacter's own setup order: affix/status
+    // Mirrors GameplayLayer::SpawnPlayer's own setup order: affix/status
     // libraries must be installed before any EquipmentComponent/StatsComponent
     // entity exists, since EquipmentComponent's BeforeAttackEvent handler
     // reads Registry::GetAffixLibrary() unconditionally.
