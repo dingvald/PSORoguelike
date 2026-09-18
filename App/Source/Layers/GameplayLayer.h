@@ -35,10 +35,12 @@
 #include "Shop/ShopStock.h"
 #include "States/AnimationState.h"
 #include "States/CharacterScreenState.h"
+#include "States/ConfirmState.h"
 #include "States/ExploringState.h"
 #include "States/GameOverState.h"
 #include "States/GameStateMachine.h"
 #include "States/MissionSelectState.h"
+#include "States/PauseState.h"
 #include "States/ShopState.h"
 #include "States/StorageState.h"
 #include "States/TargetSelectionState.h"
@@ -86,6 +88,8 @@ struct StorageWithdrawRequestedMessage;
 struct WorldMouseDownMessage;
 struct WorldMouseMoveMessage;
 struct WorldMouseScrollMessage;
+struct PauseMenuActionMessage;
+struct ConfirmChoiceMessage;
 
 // The live gameplay scene: generates a dungeon into a Grid, spawns the
 // player into it, and drives the turn loop -- TurnCoordinator's buffered
@@ -120,7 +124,13 @@ struct WorldMouseScrollMessage;
 // pieces carry their own TeleporterComponent-stamped entities instead
 // (M4.6): standing on one and pressing Space calls OnTeleporterActivated
 // directly rather than opening a modal screen -- see
-// Missions/TeleporterInteraction.h's FindTeleporterAt.
+// Missions/TeleporterInteraction.h's FindTeleporterAt. Escape opens
+// PauseState when ExploringState is on top with no tab-target to clear
+// instead (M14.2) -- Quit to Title/Quit to Desktop route through
+// ConfirmState first (OnPauseMenuAction/OnConfirmChoice) since neither can
+// save progress yet (M11.2); a confirmed Quit to Title publishes
+// ReturnedToTitleMessage (so the HudLayer overlay this layer pushed removes
+// itself) before calling TransitionTo<MainMenuLayer>().
 class GameplayLayer : public Layer
 {
 public:
@@ -367,6 +377,20 @@ private:
     // screen's contents on success.
     void OnStorageItemActivated(const StorageItemActivatedMessage& message);
     void OnStorageWithdrawRequested(const StorageWithdrawRequestedMessage& message);
+
+    // Published by HudLayer when the player activates a row on the pause
+    // menu (see PauseState's own doc comment) -- Resume pops m_pause_state
+    // directly; Quit to Title/Quit to Desktop configure and push
+    // m_confirm_state instead of acting immediately, since both discard the
+    // current run with no save yet (M11.2).
+    void OnPauseMenuAction(const PauseMenuActionMessage& message);
+
+    // Published by HudLayer when the player picks Yes/No on the confirm
+    // overlay; pops m_confirm_state back to the pause menu either way, then
+    // -- only if confirmed -- performs whatever m_confirm_state.GetAction()
+    // named (RequestQuit for QuitToDesktop, TransitionTo<MainMenuLayer> for
+    // QuitToTitle).
+    void OnConfirmChoice(const ConfirmChoiceMessage& message);
 
     // Converts every currently-active m_floating_text instance to a screen
     // pixel (via TileToPixel, using m_camera and the window size cached from
@@ -669,13 +693,15 @@ private:
     // must outlive m_exploring_state (which holds references to all three)
     // and all states must outlive m_state_machine's use of any of them.
     // m_character_screen_state/m_action_palette_state/
-    // m_mission_select_state/m_shop_state/m_storage_state aren't referenced
-    // by ExploringState's constructor (unlike the other three) -- each is
-    // pushed directly from GameplayLayer::OnEvent's own key/interaction
-    // handling instead of from inside ExploringState::Update -- but each
+    // m_mission_select_state/m_shop_state/m_storage_state/m_pause_state/
+    // m_confirm_state aren't referenced by ExploringState's constructor
+    // (unlike the other three) -- each is pushed directly from
+    // GameplayLayer::OnEvent's own key/interaction handling or a message
+    // handler instead of from inside ExploringState::Update -- but each
     // needs its own constructor arguments (m_affixes/m_techniques/
     // m_photon_arts/m_dungeons/m_run_progress/m_areas/m_shop_stock, all
-    // declared well above this block) constructed first.
+    // declared well above this block) constructed first. m_pause_state/
+    // m_confirm_state take none.
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
@@ -685,6 +711,8 @@ private:
     MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};
     StorageState m_storage_state{m_affixes};
+    PauseState m_pause_state;
+    ConfirmState m_confirm_state;
     ExploringState m_exploring_state{m_target_selection_state, m_game_over_state, m_animation_state};
     GameStateMachine m_state_machine;
 

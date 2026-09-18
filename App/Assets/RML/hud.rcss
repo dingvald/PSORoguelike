@@ -915,6 +915,104 @@ body {
     color: #999;
 }
 
+#pause-screen {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(10, 8, 12, 230);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#pause-menu-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#pause-screen-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #f6470a;
+    margin-bottom: 0.6em;
+}
+
+#pause-screen-list {
+    width: 100%;
+    max-width: 320px;
+    margin-bottom: 1em;
+}
+
+#pause-screen-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
+
+#pause-placeholder-panel {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+}
+
+#pause-placeholder-title {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #f6470a;
+    margin-bottom: 0.6em;
+}
+
+#pause-placeholder-text {
+    font-size: 1.1em;
+    color: #ddd;
+}
+
+#pause-placeholder-hint {
+    margin-top: 1em;
+    font-size: 0.9em;
+    color: #999;
+}
+
+#confirm-dialog {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2em;
+    background-color: rgba(20, 4, 4, 210);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#confirm-dialog-message {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #d43f3f;
+    margin-bottom: 1em;
+    max-width: 500px;
+    text-align: center;
+}
+
+#confirm-dialog-list {
+    width: 100%;
+    max-width: 200px;
+    margin-bottom: 1em;
+}
+
+#confirm-dialog-hint {
+    margin-top: 0.4em;
+    font-size: 0.9em;
+    color: #999;
+}
+
 #tile-tooltip {
     display: none;
     position: absolute;

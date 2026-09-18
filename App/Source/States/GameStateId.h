@@ -19,6 +19,8 @@ enum class GameStateId
     MissionSelect,
     Shop,
     Storage,
+    Pause,
+    Confirm,
 };
 
 } // namespace psr

@@ -4,7 +4,9 @@
 #include "Engine/Layer.h"
 #include "Messages/CharacterScreenMessage.h"
 #include "Messages/CharacterScreenStatPreviewMessage.h"
+#include "Messages/ConfirmMessage.h"
 #include "Messages/MissionSelectMessage.h"
+#include "Messages/PauseMenuMessage.h"
 #include "Messages/ShopMessage.h"
 #include "Messages/StorageMessage.h"
 #include "Messages/ActionPaletteMessage.h"
@@ -47,6 +49,9 @@ struct MissionSelectClosedMessage;
 struct ShopClosedMessage;
 struct StorageClosedMessage;
 struct WorldTileHoverMessage;
+struct PauseMenuClosedMessage;
+struct ConfirmClosedMessage;
+struct ReturnedToTitleMessage;
 
 // Player HUD overlay: HP/TP bars, the 10-slot Technique/Photon Art/Item
 // hotbar, a status-effect icon+duration row, and a scrolling event log.
@@ -198,6 +203,14 @@ private:
     void WireHotbarSlots();
     void WireEventLogScroll();
 
+    // Attaches one RmlClickListener per pause-menu/confirm-dialog row, same
+    // fixed-count recipe WireHotbarSlots uses -- the row set never changes
+    // (see PauseMenuMessage/ConfirmMessage's own doc comments), so unlike
+    // the Mission Select/Shop/Storage listeners these are wired once here
+    // rather than rebuilt on every open.
+    void WirePauseMenu();
+    void WireConfirmDialog();
+
     // Attaches mousedown/mousemove/mousescroll RmlEventListeners to hud.rml's
     // full-screen body, publishing WorldMouseDownMessage/WorldMouseMoveMessage/
     // WorldMouseScrollMessage for GameplayLayer to resolve against its own
@@ -255,6 +268,39 @@ private:
     void MoveMissionSelectRowFocus(int direction);
     void ActivateFocusedMissionSelectRow();
     void RenderMissionSelectFocusHighlight();
+
+    // Fixed five-row pause menu (Resume/Options/Help/Quit to Title/Quit to
+    // Desktop) -- same single-panel, no-context-menu shape as
+    // OnMissionSelectState, except the rows are baked into hud.rml rather
+    // than resolved from message.entries (see PauseMenuMessage's own doc
+    // comment), so this only needs to show/hide the overlay and reset focus.
+    // Resume/Quit rows publish PauseMenuActionMessage; Options/Help toggle
+    // #pause-placeholder-panel entirely locally (see ShowPausePlaceholder),
+    // same "Coming Soon" precedent MainMenuLayer's own Options/Credits rows
+    // set.
+    void OnPauseMenuState(const PauseMenuMessage& message);
+    void OnPauseMenuClosed(const PauseMenuClosedMessage& message);
+    void MovePauseRowFocus(int direction);
+    void ActivateFocusedPauseRow();
+    void RenderPauseFocusHighlight();
+    void ShowPausePlaceholder(const char* title);
+    void HidePausePlaceholder();
+
+    // Two-row (Yes/No) confirm overlay, pushed on top of the pause overlay
+    // while both remain visible (see ConfirmState's own doc comment for why
+    // this stacks rather than replaces the pause screen). Focus defaults to
+    // No on a fresh open -- see OnConfirmState -- so a stray Space/Enter
+    // can't accidentally confirm a destructive choice.
+    void OnConfirmState(const ConfirmMessage& message);
+    void OnConfirmClosed(const ConfirmClosedMessage& message);
+    void MoveConfirmRowFocus(int direction);
+    void ActivateFocusedConfirmRow();
+    void RenderConfirmFocusHighlight();
+
+    // Removes this overlay from the layer stack once GameplayLayer has
+    // confirmed Quit to Title -- see ReturnedToTitleMessage's own doc
+    // comment for why this can't just wait for OnDetach.
+    void OnReturnedToTitle(const ReturnedToTitleMessage& message);
 
     // Same two-panel, no-context-menu shape as OnActionPaletteState, for
     // the Shop screen (Stock / Your Items). Space on a focused Stock row
@@ -540,6 +586,21 @@ private:
     // as m_character_screen_cache.
     std::optional<MissionSelectMessage> m_mission_select_cache;
     int m_mission_select_focused_row = 0;
+
+    // Pause overlay: same "cache drives OnEvent interception, empty means
+    // closed" contract as m_mission_select_cache, plus a local-only
+    // placeholder sub-state for the inert Options/Help rows (never touches
+    // GameStateMachine, so it doesn't need its own message).
+    std::optional<PauseMenuMessage> m_pause_cache;
+    int m_pause_focused_row = 0;
+    bool m_pause_placeholder_open = false;
+    std::vector<std::unique_ptr<RmlClickListener>> m_pause_listeners; // wired once, see WirePauseMenu
+
+    // Confirm overlay, stacked on top of the pause overlay -- see
+    // ConfirmState's own doc comment. Same cache contract again.
+    std::optional<ConfirmMessage> m_confirm_cache;
+    int m_confirm_focused_row = 1; // defaults to No -- see OnConfirmState
+    std::vector<std::unique_ptr<RmlClickListener>> m_confirm_listeners; // wired once, see WireConfirmDialog
 
     // Same three members, for the Shop screen.
     std::vector<std::unique_ptr<RmlClickListener>> m_shop_listeners;
