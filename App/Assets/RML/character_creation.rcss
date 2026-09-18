@@ -1,19 +1,31 @@
 #class-panel,
-#section-panel {
+#section-panel,
+#name-panel {
     width: 480px;
 }
 
-#section-panel {
+#section-panel,
+#name-panel {
     display: none;
 }
 
-.row-title {
+/* .row-title/.row-desc (the row-list label shape used across the Class step
+   below and CharacterSlotSelectLayer's own rows) now live in main_menu.rcss,
+   which every one of these screens already links -- shared base, not
+   duplicated per screen. */
+
+#name-input {
     display: block;
-    font-weight: bold;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 1em;
+    padding: 0.5em 0.7em;
+    background-color: rgba(20, 16, 18, 220);
+    color: #eee;
+    border: 2px #555;
+    text-align: center;
 }
 
-.row-desc {
-    display: block;
-    font-size: 0.75em;
-    color: #aaa;
+#name-input:focus {
+    border: 2px #f6470a;
 }

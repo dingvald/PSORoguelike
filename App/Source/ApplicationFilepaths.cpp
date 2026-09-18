@@ -21,6 +21,7 @@ const std::filesystem::path ApplicationFilepaths::ClassesPath = ApplicationFilep
 const std::filesystem::path ApplicationFilepaths::HubPath = ApplicationFilepaths::DataPath / "hub.json";
 const std::filesystem::path ApplicationFilepaths::ShopStockPath =
     ApplicationFilepaths::DataPath / "shop_stock.json";
+const std::filesystem::path ApplicationFilepaths::SaveDataPath = "SaveData";
 
 std::filesystem::path ApplicationFilepaths::ClassDefinitionPath(psr::ClassId class_id)
 {
@@ -28,4 +29,9 @@ std::filesystem::path ApplicationFilepaths::ClassDefinitionPath(psr::ClassId cla
         if (value == class_id)
             return ApplicationFilepaths::ClassesPath / (std::string{text} + ".json");
     return ApplicationFilepaths::ClassesPath / "unknown.json"; // unreachable for a valid ClassId
+}
+
+std::filesystem::path ApplicationFilepaths::SaveSlotPath(int slot)
+{
+    return ApplicationFilepaths::SaveDataPath / ("slot_" + std::to_string(slot) + ".json");
 }

@@ -1,8 +1,11 @@
 #include "Engine/ECS/Registry.h"
 
+#include "Engine/ECS/ComponentJson.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <rapidjson/document.h>
 
 namespace {
 
@@ -209,4 +212,68 @@ TEST_CASE("Registry DescribeEntity reads a live entity's fields via the register
     CHECK(described[0].fields[0].text == "7");
     CHECK(described[0].fields[1].name == "y");
     CHECK(described[0].fields[1].text == "8");
+}
+
+TEST_CASE("Registry SerializeEntityComponents/ApplyEntityComponentsJson round-trip a live entity", "[Registry]")
+{
+    psr::Registry registry;
+    psr::ComponentSchemaRegistrar reg{registry.GetMetaContext()};
+    reg.Component<PositionComponent>("position")
+        .Data<&PositionComponent::x>("x")
+        .Data<&PositionComponent::y>("y");
+    reg.Component<TagComponent>("tag");
+    const psr::EntitySchemaModel model = reg.Model();
+
+    entt::entity source = registry.CreateEntity();
+    registry.Emplace<PositionComponent>(source, 7, 8);
+    registry.Emplace<TagComponent>(source);
+
+    rapidjson::Document document;
+    rapidjson::Value snapshot = registry.SerializeEntityComponents(source, model, document.GetAllocator());
+
+    REQUIRE(snapshot.IsObject());
+    REQUIRE(snapshot.HasMember("position"));
+    CHECK(snapshot["position"]["x"].GetInt() == 7);
+    CHECK(snapshot["position"]["y"].GetInt() == 8);
+    REQUIRE(snapshot.HasMember("tag"));
+    CHECK(snapshot["tag"].IsObject());
+
+    entt::entity target = registry.CreateEntity();
+    registry.Emplace<PositionComponent>(target, 0, 0); // pre-existing value must be overwritten, not merged
+    registry.ApplyEntityComponentsJson(target, snapshot);
+
+    REQUIRE(registry.HasComponent<PositionComponent>(target));
+    const PositionComponent& restored = registry.GetComponent<PositionComponent>(target);
+    CHECK(restored.x == 7);
+    CHECK(restored.y == 8);
+    CHECK(registry.HasComponent<TagComponent>(target));
+}
+
+TEST_CASE("Registry SerializeEntityComponents skips non-authorable components", "[Registry]")
+{
+    psr::Registry registry;
+    psr::ComponentSchemaRegistrar reg{registry.GetMetaContext()};
+    reg.Component<PositionComponent>("position", /*authorable=*/false)
+        .Data<&PositionComponent::x>("x")
+        .Data<&PositionComponent::y>("y");
+    const psr::EntitySchemaModel model = reg.Model();
+
+    entt::entity entity = registry.CreateEntity();
+    registry.Emplace<PositionComponent>(entity, 1, 2);
+
+    rapidjson::Document document;
+    rapidjson::Value snapshot = registry.SerializeEntityComponents(entity, model, document.GetAllocator());
+    CHECK(snapshot.ObjectEmpty());
+}
+
+TEST_CASE("Registry ApplyEntityComponentsJson throws on an unknown component name", "[Registry]")
+{
+    psr::Registry registry;
+    entt::entity entity = registry.CreateEntity();
+
+    rapidjson::Document document;
+    document.SetObject();
+    document.AddMember("does_not_exist", rapidjson::Value(rapidjson::kObjectType), document.GetAllocator());
+
+    REQUIRE_THROWS_AS(registry.ApplyEntityComponentsJson(entity, document), psr::EntityLoaderError);
 }

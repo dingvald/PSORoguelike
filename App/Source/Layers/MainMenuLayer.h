@@ -28,11 +28,16 @@ class RmlClickListener;
 // (M14.2, not yet built) is the first state that would actually need one,
 // since it requires suspending GameplayLayer rather than replacing it.
 //
-// Continue/Options/Credits have no backing system yet (save/load is M11.2,
-// the options screen is M15.4, real credits content is M14.6) -- Continue is
-// disabled outright (skipped by keyboard nav, no click listener attached);
-// Options/Credits are selectable but only ever show an inert "Coming Soon"
-// placeholder panel with a Back row.
+// Options/Credits have no backing system yet (the options screen is M15.4,
+// real credits content is M14.6) -- selectable, but only ever show an inert
+// "Coming Soon" placeholder panel with a Back row. Continue/New Character are
+// both save-slot-aware (see Persistence/CharacterSaveFile.h): Continue is
+// enabled only while at least one slot is occupied (OnAttach recomputes
+// m_row_enabled each time this layer is shown, since a slot may have been
+// filled or emptied since); New Character finds the first empty slot itself
+// (FindFirstEmptySaveSlot) rather than asking the player to pick one, and
+// falls back to an "All character slots are full" placeholder (no delete-save
+// UI exists yet -- M14.3's own future work) if every slot is occupied.
 class MainMenuLayer : public Layer
 {
 public:
@@ -70,7 +75,10 @@ private:
     };
     static constexpr std::array<const char*, RowCount> kRowIds = {
         "menu-continue", "menu-new-character", "menu-options", "menu-credits", "menu-quit"};
-    static constexpr std::array<bool, RowCount> kRowEnabled = {false, true, true, true, true};
+
+    // RowContinue's slot is recomputed in OnAttach (SaveSlotOccupied); every
+    // other row is unconditionally selectable.
+    std::array<bool, RowCount> m_row_enabled = {false, true, true, true, true};
 };
 
 } // namespace psr

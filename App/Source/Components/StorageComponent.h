@@ -11,8 +11,10 @@ namespace psr {
 // EquipmentComponent. Unlike InventoryComponent, deliberately uncapped (no
 // capacity field): storage exists precisely so a run's loot isn't bounded by
 // the inventory's carry limit. Populated by Items/Storage.h's StoreItem/
-// WithdrawItem; hardcoded-emplaced on the player in GameplayLayer::
-// SpawnNewCharacter, same as InventoryComponent.
+// WithdrawItem; hardcoded-emplaced on the player in
+// GameplayLayer::SpawnPlayer, same as InventoryComponent. Deliberately out of
+// scope for character-save persistence (Persistence/CharacterSaveFile.h) --
+// only the player entity/equipment/inventory and area unlocks are saved.
 struct StorageComponent
 {
     std::vector<entt::entity> items;

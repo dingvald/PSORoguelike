@@ -1,0 +1,16 @@
+<rml>
+    <head>
+        <title>Continue</title>
+        <link type="text/rcss" href="main_menu.rcss"/>
+        <link type="text/rcss" href="character_slot_select.rcss"/>
+    </head>
+    <body>
+        <div id="menu-shell">
+            <div id="slot-panel" class="panel">
+                <h1>Continue</h1>
+                <p class="subtitle">Up/Down to browse, Enter to choose, Esc to go back</p>
+                <ul id="slot-list" class="menu-list"></ul>
+            </div>
+        </div>
+    </body>
+</rml>

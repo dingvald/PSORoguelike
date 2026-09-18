@@ -70,3 +70,18 @@ h1 {
 .menu-row.disabled {
     color: #555;
 }
+
+/* Shared by any dynamically-built row list whose rows carry more than a bare
+   label (CharacterCreationLayer's class rows, CharacterSlotSelectLayer's
+   per-slot rows) -- a bold title line plus a smaller dimmed description
+   line, both inside one .menu-row. */
+.row-title {
+    display: block;
+    font-weight: bold;
+}
+
+.row-desc {
+    display: block;
+    font-size: 0.75em;
+    color: #aaa;
+}

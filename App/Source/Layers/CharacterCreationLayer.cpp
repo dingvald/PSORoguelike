@@ -5,6 +5,7 @@
 #include "Layers/GameplayLayer.h"
 #include "Layers/MainMenuLayer.h"
 #include "UI/RmlClickListener.h"
+#include "UI/RmlEventListener.h"
 #include "UI/RmlText.h"
 
 #include <RmlUi/Core.h>
@@ -15,6 +16,7 @@
 #include <array>
 #include <cctype>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace psr {
@@ -49,7 +51,9 @@ namespace {
 
 } // namespace
 
-CharacterCreationLayer::CharacterCreationLayer() : Layer("CharacterCreationLayer") {}
+CharacterCreationLayer::CharacterCreationLayer(int save_slot) : Layer("CharacterCreationLayer"), m_save_slot(save_slot)
+{
+}
 CharacterCreationLayer::~CharacterCreationLayer() = default;
 
 void CharacterCreationLayer::OnAttach()
@@ -73,6 +77,7 @@ void CharacterCreationLayer::OnAttach()
 
 void CharacterCreationLayer::OnDetach()
 {
+    m_name_change_listener.reset();
     m_listeners.clear();
     if (m_document)
     {
@@ -93,6 +98,22 @@ bool CharacterCreationLayer::OnKeyPressed(KeyPressedEvent& event)
         return false;
 
     const int key_code = event.GetKeyCode();
+
+    // The Name step hands every other key to RmlUi's own text input handling
+    // (typing needs Space/Enter to behave as ordinary characters/commit, not
+    // as this class's row-list navigation) -- only Escape (back to Section
+    // ID) is special-cased here; ConfirmName is reached via the input's own
+    // "change" event or the Confirm row's click instead (see ShowNameStep).
+    if (m_step == Step::Name)
+    {
+        if (key_code == SDLK_ESCAPE)
+        {
+            ShowSectionStep();
+            return true;
+        }
+        return false;
+    }
+
     if (key_code == SDLK_UP || key_code == SDLK_KP_8)
     {
         MoveSelection(-1);
@@ -126,11 +147,14 @@ void CharacterCreationLayer::ShowClassStep()
     m_step = Step::Class;
     m_selected_index = 0;
     m_listeners.clear();
+    m_name_change_listener.reset();
 
     if (Rml::Element* class_panel = m_document->GetElementById("class-panel"))
         class_panel->SetProperty("display", "flex");
     if (Rml::Element* section_panel = m_document->GetElementById("section-panel"))
         section_panel->SetProperty("display", "none");
+    if (Rml::Element* name_panel = m_document->GetElementById("name-panel"))
+        name_panel->SetProperty("display", "none");
 
     Rml::Element* list = m_document->GetElementById("class-list");
     if (!list)
@@ -169,11 +193,14 @@ void CharacterCreationLayer::ShowSectionStep()
     m_step = Step::SectionId;
     m_selected_index = 0;
     m_listeners.clear();
+    m_name_change_listener.reset();
 
     if (Rml::Element* class_panel = m_document->GetElementById("class-panel"))
         class_panel->SetProperty("display", "none");
     if (Rml::Element* section_panel = m_document->GetElementById("section-panel"))
         section_panel->SetProperty("display", "flex");
+    if (Rml::Element* name_panel = m_document->GetElementById("name-panel"))
+        name_panel->SetProperty("display", "none");
 
     Rml::Element* list = m_document->GetElementById("section-list");
     if (!list)
@@ -204,6 +231,56 @@ void CharacterCreationLayer::ShowSectionStep()
     }
 
     RefreshSelectionHighlight();
+}
+
+void CharacterCreationLayer::ShowNameStep()
+{
+    if (!m_document)
+        return;
+    m_step = Step::Name;
+    m_listeners.clear();
+    m_name_change_listener.reset();
+    m_name.clear();
+
+    if (Rml::Element* class_panel = m_document->GetElementById("class-panel"))
+        class_panel->SetProperty("display", "none");
+    if (Rml::Element* section_panel = m_document->GetElementById("section-panel"))
+        section_panel->SetProperty("display", "none");
+    if (Rml::Element* name_panel = m_document->GetElementById("name-panel"))
+        name_panel->SetProperty("display", "flex");
+
+    Rml::Element* input = m_document->GetElementById("name-input");
+    auto* text_input = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(input);
+    if (text_input)
+    {
+        text_input->SetValue("");
+        text_input->Focus();
+
+        // RmlUi's text input fires "change" on Enter (as well as on losing
+        // focus with a changed value) -- same commit trigger
+        // Editor/Source/UI/FieldWidgets.cpp's BuildIntField already relies on.
+        m_name_change_listener = std::make_unique<RmlEventListener>(
+            "change",
+            [this, text_input](Rml::Event&)
+            {
+                m_name = text_input->GetValue();
+                ConfirmName();
+            });
+        m_name_change_listener->Attach(*input);
+    }
+
+    if (Rml::Element* confirm = m_document->GetElementById("name-confirm"))
+    {
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, text_input]
+            {
+                if (text_input)
+                    m_name = text_input->GetValue();
+                ConfirmName();
+            });
+        listener->Attach(*confirm);
+        m_listeners.push_back(std::move(listener));
+    }
 }
 
 void CharacterCreationLayer::MoveSelection(int delta)
@@ -242,10 +319,29 @@ void CharacterCreationLayer::ConfirmSelection()
         return;
     }
 
-    if (m_selected_index < 0 || m_selected_index >= static_cast<int>(EnumNames<SectionId>::kValues.size()))
+    if (m_step == Step::SectionId)
+    {
+        if (m_selected_index < 0 || m_selected_index >= static_cast<int>(EnumNames<SectionId>::kValues.size()))
+            return;
+        m_chosen_section_id = EnumNames<SectionId>::kValues[static_cast<std::size_t>(m_selected_index)].second;
+        ShowNameStep();
         return;
-    const SectionId chosen_section_id = EnumNames<SectionId>::kValues[static_cast<std::size_t>(m_selected_index)].second;
-    TransitionTo<GameplayLayer>(m_chosen_class, chosen_section_id);
+    }
+}
+
+void CharacterCreationLayer::ConfirmName()
+{
+    const std::string_view whitespace = " \t";
+    const std::size_t first = m_name.find_first_not_of(whitespace);
+    if (first == std::string::npos)
+    {
+        m_name.clear();
+        return; // whitespace-only/empty -- stay on this step
+    }
+    const std::size_t last = m_name.find_last_not_of(whitespace);
+    m_name = m_name.substr(first, last - first + 1);
+
+    TransitionTo<GameplayLayer>(m_chosen_class, m_chosen_section_id, m_name, m_save_slot);
 }
 
 } // namespace psr
