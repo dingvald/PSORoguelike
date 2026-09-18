@@ -39,6 +39,8 @@
 #include "Messages/WorldTileHoverMessage.h"
 
 #include "ApplicationFilepaths.h"
+#include "Components/WeaponComponent.h" // WeaponRangeShape
+#include "Engine/Combat/TargetingMode.h"
 #include "Engine/Events/Event.h"
 #include "Engine/Events/KeyEvent.h"
 #include "Engine/Math/Color.h"
@@ -57,6 +59,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 
@@ -173,6 +176,64 @@ namespace {
         }
         return row + "</div>";
     }
+
+    // Index-aligned with EquipmentSlot (Weapon, Head, Torso, Hands, Legs, Mag)
+    // -- shared by OnCharacterScreenState's equip-row markup and
+    // RenderItemDetailPanel's "Equip Slot: ..." line, so both name a slot the
+    // same way.
+    constexpr std::array<const char*, 6> kEquipSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs", "Mag"};
+
+    // "N filled star" glyphs for RarityComponent::stars -- no fixed max scale
+    // (RarityComponent itself enforces no upper bound), so this renders
+    // exactly `stars` glyphs rather than filling a fixed-size 5-star bar.
+    // U+2726 (not U+2605 BLACK STAR) -- PixelCode-Regular.ttf's cmap has no
+    // glyph for U+2605 (renders as a tofu box), but does cover U+2726.
+    std::string StarsMarkup(int stars)
+    {
+        std::string markup;
+        for (int i = 0; i < stars; ++i)
+            markup += "\xE2\x9C\xA6"; // U+2726 BLACK FOUR POINTED STAR
+        return markup;
+    }
+
+    // A short, human-readable label for a weapon's WeaponRangeShape --
+    // includes the tile range/hit count only for the shapes where those
+    // fields are actually meaningful (see WeaponRangeShape's own doc comment
+    // on WeaponComponent.h).
+    std::string RangeShapeLabel(WeaponRangeShape shape, int range, int hits_per_turn)
+    {
+        switch (shape)
+        {
+        case WeaponRangeShape::SingleTarget:
+            return "Adjacent tile";
+        case WeaponRangeShape::Cone3:
+            return "3-tile cone";
+        case WeaponRangeShape::Surrounding:
+            return "All adjacent tiles";
+        case WeaponRangeShape::Line:
+        {
+            std::string label = "Line, " + std::to_string(range) + " tile" + (range == 1 ? "" : "s");
+            if (hits_per_turn > 1)
+                label += ", " + std::to_string(hits_per_turn) + " hits/turn";
+            return label;
+        }
+        }
+        return "?"; // unreachable for a valid enum value
+    }
+
+    const char* TargetingModeLabel(TargetingMode mode)
+    {
+        switch (mode)
+        {
+        case TargetingMode::Directional:
+            return "Directional (swing toward facing)";
+        case TargetingMode::TargetSquare:
+            return "Tile select";
+        case TargetingMode::SelfTarget:
+            return "Self";
+        }
+        return "?"; // unreachable for a valid enum value
+    }
 } // namespace
 
 HudLayer::HudLayer() : Layer("HudLayer") {}
@@ -242,7 +303,7 @@ void HudLayer::OnDetach()
     }
 }
 
-void HudLayer::OnUpdate(float /*delta_time*/)
+void HudLayer::OnUpdate(float delta_time)
 {
     if (m_log_scroll_pending && m_document)
     {
@@ -253,6 +314,14 @@ void HudLayer::OnUpdate(float /*delta_time*/)
         }
         m_log_scroll_pending = false;
     }
+
+    if (m_reopen_mag_context_menu_pending)
+    {
+        m_reopen_mag_context_menu_pending = false;
+        OpenContextMenu(CharacterScreenPanel::Equipment, static_cast<int>(EquipmentSlot::Mag));
+    }
+
+    UpdateMagPanelAnimations(delta_time);
 
     HandleQueuedMessages();
 }
@@ -481,6 +550,7 @@ void HudLayer::OnHotbarState(const HotbarStateMessage& message)
         element->SetClass("slot-photon-art", view.type == HotbarSlotType::PhotonArt);
         element->SetClass("slot-item", view.type == HotbarSlotType::Item);
         element->SetClass("slot-normal-attack", view.type == HotbarSlotType::NormalAttack);
+        element->SetClass("slot-special-attack", view.type == HotbarSlotType::SpecialAttack);
 
         if (Rml::Element* name = element->QuerySelector(".slot-name"))
             name->SetInnerRML(EscapeRml(view.name));
@@ -635,6 +705,7 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         return;
 
     const bool fresh_open = !m_character_screen_cache.has_value();
+    const bool fed_this_refresh = message.fed_mag;
     m_character_screen_cache = message;
     CloseContextMenu();
     CancelAwaitingHotbarSlot();
@@ -662,8 +733,6 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
 
     RenderStatsPanel();
 
-    static constexpr std::array<const char*, 6> kSlotLabels = {"Weapon", "Head", "Torso", "Hands", "Legs", "Mag"};
-
     if (Rml::Element* equipment_list = m_document->GetElementById("character-screen-equipment"))
     {
         std::string markup;
@@ -671,13 +740,21 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         {
             const std::string label =
                 message.equipment[i] ? EscapeRml(message.equipment[i]->display_name) : std::string("(empty)");
+            std::string stars_markup;
             std::string mod_slots_markup;
+            bool unmet_requirement = false;
             if (message.equipment[i])
+            {
+                if (message.equipment[i]->rarity_stars > 0)
+                    stars_markup =
+                        " <span class=\"item-detail-stars\">" + StarsMarkup(message.equipment[i]->rarity_stars) + "</span>";
+                unmet_requirement = !message.equipment[i]->requirement_met;
                 for (const std::string& mod_slot_label : message.equipment[i]->mod_slot_labels)
                     mod_slots_markup +=
                         "<div class=\"mod-slot-row\">\xE2\x80\xA2 " + EscapeRml(mod_slot_label) + "</div>";
-            markup +=
-                std::string("<div class=\"equip-row\">") + kSlotLabels[i] + ": " + label + "</div>" + mod_slots_markup;
+            }
+            markup += std::string("<div class=\"equip-row") + (unmet_requirement ? " unmet-requirement" : "") +
+                      "\">" + kEquipSlotLabels[i] + ": " + label + stars_markup + "</div>" + mod_slots_markup;
         }
         equipment_list->SetInnerRML(markup);
 
@@ -696,6 +773,7 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
                 {
                     m_hovered_equipment_index = index;
                     UpdateStatPreview();
+                    RefreshMagPanelVisibility();
                 },
                 [this, index]()
                 {
@@ -703,6 +781,7 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
                     {
                         m_hovered_equipment_index.reset();
                         UpdateStatPreview();
+                        RefreshMagPanelVisibility();
                     }
                 });
             hover_listener->Attach(*rows[i]);
@@ -714,7 +793,13 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
     {
         std::string markup;
         for (const CharacterScreenMessage::ItemEntry& entry : message.inventory)
-            markup += "<div class=\"inventory-row\">" + EscapeRml(ItemRowLabel(entry)) + "</div>";
+        {
+            std::string stars_markup;
+            if (entry.rarity_stars > 0)
+                stars_markup = " <span class=\"item-detail-stars\">" + StarsMarkup(entry.rarity_stars) + "</span>";
+            markup += std::string("<div class=\"inventory-row") + (entry.requirement_met ? "" : " unmet-requirement") +
+                      "\">" + EscapeRml(ItemRowLabel(entry)) + stars_markup + "</div>";
+        }
         // Pinned to the bottom, outside the .inventory-row rows above -- see
         // CharacterScreenMessage::meseta's doc comment for why this doesn't
         // consume a slot index or participate in row focus/selection.
@@ -774,6 +859,21 @@ void HudLayer::OnCharacterScreenState(const CharacterScreenMessage& message)
         m_focused_row = std::clamp(m_focused_row, 0, std::max(0, CharacterScreenRowCount(m_focused_panel) - 1));
     }
     RenderFocusHighlights();
+
+    // Chain straight back into food selection after a successful feed
+    // (message.fed_mag -- see its doc comment for why this reads off the
+    // message rather than a flag set around the Publish call) instead of
+    // stranding focus on a plain Inventory row -- unless the mag is now out
+    // of feed charges, in which case land back on its own context menu
+    // (Feed shows there, disabled) rather than silently reopening a picker
+    // that would just reject the next selection.
+    if (fed_this_refresh)
+    {
+        if (message.mag && message.mag->feed_charges_used < message.mag->feed_charges)
+            BeginAwaitingMagFood();
+        else
+            m_reopen_mag_context_menu_pending = true;
+    }
 }
 
 void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*message*/)
@@ -797,6 +897,8 @@ void HudLayer::OnCharacterScreenClosed(const CharacterScreenClosedMessage& /*mes
     m_character_screen_cache.reset();
     m_focused_panel = CharacterScreenPanel::Stats;
     m_focused_row = 0;
+    m_mag_panel_elements.reset();
+    m_mag_stat_animations = {};
 }
 
 void HudLayer::OnActionPaletteState(const ActionPaletteMessage& message)
@@ -913,6 +1015,37 @@ void HudLayer::OnActionPaletteState(const ActionPaletteMessage& message)
         }
     }
 
+    if (Rml::Element* list = m_document->GetElementById("action-palette-special-attack"))
+    {
+        std::string markup;
+        if (!message.special_attack.has_value())
+        {
+            markup = "<div class=\"list-empty\">No elemental special on the equipped weapon.</div>";
+        }
+        else
+        {
+            markup =
+                "<div class=\"special-attack-row\">" + EscapeRml(message.special_attack->display_name) + "</div>";
+        }
+        list->SetInnerRML(markup);
+
+        Rml::ElementList rows;
+        list->QuerySelectorAll(rows, ".special-attack-row");
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int index = static_cast<int>(i);
+            auto listener = std::make_unique<RmlClickListener>(
+                [this, index]()
+                {
+                    m_tech_focused_panel = ActionPalettePanel::SpecialAttack;
+                    m_tech_focused_row = index;
+                    ActivateFocusedTechRow();
+                });
+            listener->Attach(*rows[i]);
+            m_action_palette_listeners.push_back(std::move(listener));
+        }
+    }
+
     if (fresh_open)
     {
         m_tech_focused_panel = ActionPalettePanel::Techniques;
@@ -954,13 +1087,15 @@ int HudLayer::ActionPaletteRowCount(ActionPalettePanel panel) const
         return static_cast<int>(m_action_palette_cache->photon_arts.size());
     case ActionPalettePanel::NormalAttack:
         return m_action_palette_cache->normal_attack.has_value() ? 1 : 0;
+    case ActionPalettePanel::SpecialAttack:
+        return m_action_palette_cache->special_attack.has_value() ? 1 : 0;
     }
     return 0;
 }
 
 void HudLayer::MoveTechPanelFocus(int direction)
 {
-    constexpr int kPanelCount = 3;
+    constexpr int kPanelCount = 4;
     const int next = std::clamp(static_cast<int>(m_tech_focused_panel) + direction, 0, kPanelCount - 1);
     m_tech_focused_panel = static_cast<ActionPalettePanel>(next);
     m_tech_focused_row =
@@ -1010,6 +1145,11 @@ void HudLayer::ActivateFocusedTechRow()
             return;
         BeginAwaitingAbilityHotbarSlot(HotbarSlotType::NormalAttack, 0);
         return;
+    case ActionPalettePanel::SpecialAttack:
+        if (!m_action_palette_cache->special_attack.has_value())
+            return;
+        BeginAwaitingAbilityHotbarSlot(HotbarSlotType::SpecialAttack, 0);
+        return;
     }
 }
 
@@ -1021,6 +1161,7 @@ void HudLayer::RenderTechniquesFocusHighlights()
     RenderTechRowFocus("action-palette-techniques", ".technique-row", ActionPalettePanel::Techniques);
     RenderTechRowFocus("action-palette-photon-arts", ".photon-art-row", ActionPalettePanel::PhotonArts);
     RenderTechRowFocus("action-palette-normal-attack", ".normal-attack-row", ActionPalettePanel::NormalAttack);
+    RenderTechRowFocus("action-palette-special-attack", ".special-attack-row", ActionPalettePanel::SpecialAttack);
 }
 
 void HudLayer::RenderTechRowFocus(const char* container_id, const char* row_class, ActionPalettePanel panel)
@@ -1633,7 +1774,11 @@ void HudLayer::ChooseHighlightedMenuOption()
     if (m_menu_highlight < 0 || m_menu_highlight >= static_cast<int>(m_menu_options.size()))
         return;
 
-    const ContextMenuOption::Action action = m_menu_options[static_cast<std::size_t>(m_menu_highlight)].action;
+    const ContextMenuOption& option = m_menu_options[static_cast<std::size_t>(m_menu_highlight)];
+    if (option.disabled)
+        return;
+
+    const ContextMenuOption::Action action = option.action;
     const CharacterScreenPanel panel = m_menu_panel;
     const int index = m_menu_index;
 
@@ -1856,7 +2001,12 @@ std::vector<HudLayer::ContextMenuOption> HudLayer::BuildMenuOptions(CharacterScr
         {
             options.push_back({ContextMenuOption::Action::Remove, "Remove"});
             if (static_cast<EquipmentSlot>(index) == EquipmentSlot::Mag)
-                options.push_back({ContextMenuOption::Action::Feed, "Feed"});
+            {
+                const bool out_of_charges = m_character_screen_cache->mag &&
+                                             m_character_screen_cache->mag->feed_charges_used >=
+                                                 m_character_screen_cache->mag->feed_charges;
+                options.push_back({ContextMenuOption::Action::Feed, "Feed", out_of_charges});
+            }
         }
     }
     else if (panel == CharacterScreenPanel::Inventory)
@@ -1891,7 +2041,8 @@ void HudLayer::RenderContextMenu()
 
     std::string markup;
     for (const ContextMenuOption& option : m_menu_options)
-        markup += "<div class=\"menu-row\">" + EscapeRml(option.label) + "</div>";
+        markup += std::string("<div class=\"menu-row") + (option.disabled ? " disabled" : "") + "\">" +
+                   EscapeRml(option.label) + "</div>";
     menu->SetInnerRML(markup);
     menu->SetProperty("display", "block");
 
@@ -2002,16 +2153,23 @@ void HudLayer::RenderItemDetailPanel()
         return;
     }
 
-    std::string markup = "<div class=\"item-detail-title\">" + EscapeRml(entry->display_name) + "</div>";
+    std::string markup = "<div class=\"item-detail-title\">" + EscapeRml(entry->display_name);
+    if (entry->rarity_stars > 0)
+        markup += " <span class=\"item-detail-stars\">" + StarsMarkup(entry->rarity_stars) + "</span>";
+    markup += "</div>";
     markup += "<div class=\"item-detail-columns\">";
     markup += "<div class=\"item-detail-image\"><span class=\"item-detail-image-placeholder\">?</span></div>";
     markup += "<div class=\"item-detail-info\">";
 
-    if (entry->rarity_stars > 0)
-        markup += "<div class=\"item-detail-stars\">Stars: " + std::to_string(entry->rarity_stars) + "</div>";
-
     if (!entry->description.empty())
+    {
         markup += "<div class=\"item-detail-description\">" + EscapeRml(entry->description) + "</div>";
+        markup += "<div class=\"item-detail-separator\"></div>";
+    }
+
+    if (entry->equip_slot)
+        markup += "<div class=\"item-detail-stat-row\">Equip Slot: " +
+                  std::string(kEquipSlotLabels[static_cast<std::size_t>(*entry->equip_slot)]) + "</div>";
 
     if (entry->stats)
     {
@@ -2028,7 +2186,36 @@ void HudLayer::RenderItemDetailPanel()
         markup += "<div class=\"item-detail-stat-row\">vs " + EscapeRml(race_name) + ": +" +
                   std::to_string(bonus_percent) + "%</div>";
 
+    if (entry->weapon_detail)
+    {
+        const CharacterScreenMessage::ItemEntry::WeaponDetail& weapon_detail = *entry->weapon_detail;
+        markup += std::string("<div class=\"item-detail-stat-row\">") +
+                  (weapon_detail.fires_projectile ? "Ranged Weapon" : "Melee Weapon") + "</div>";
+        markup += "<div class=\"item-detail-stat-row\">Range: " +
+                  RangeShapeLabel(weapon_detail.range_shape, weapon_detail.range, weapon_detail.hits_per_turn) +
+                  "</div>";
+        markup += std::string("<div class=\"item-detail-stat-row\">Targeting: ") +
+                  TargetingModeLabel(weapon_detail.targeting_mode) + "</div>";
+        if (weapon_detail.max_grind_level > 0)
+            markup += "<div class=\"item-detail-stat-row\">Grind: +" + std::to_string(weapon_detail.grind_level) +
+                      " (max +" + std::to_string(weapon_detail.max_grind_level) + ")</div>";
+        if (!weapon_detail.status_effect_name.empty())
+            markup += "<div class=\"item-detail-stat-row\">" + std::to_string(weapon_detail.status_chance_percent) +
+                      "% chance: " + EscapeRml(weapon_detail.status_effect_name) + "</div>";
+        for (const std::string& photon_art_name : weapon_detail.photon_art_names)
+            markup += "<div class=\"item-detail-stat-row\">Grants Photon Art: " + EscapeRml(photon_art_name) +
+                      "</div>";
+    }
+
+    if (!entry->mod_slot_labels.empty())
+        markup += "<div class=\"item-detail-stat-row\">Mod Slots: " + std::to_string(entry->mod_slot_labels.size()) +
+                  "</div>";
+
     markup += "</div></div>";
+
+    if (!entry->requirement_text.empty())
+        markup += "<div class=\"item-detail-requirement" + std::string(entry->requirement_met ? "" : " unmet") +
+                  "\">" + EscapeRml(entry->requirement_text) + "</div>";
 
     panel->SetInnerRML(markup);
     panel->SetProperty("display", "flex");
@@ -2043,38 +2230,168 @@ void HudLayer::RenderMagPanel()
     if (!panel)
         return;
 
+    if (!m_character_screen_cache || !m_character_screen_cache->mag)
+    {
+        panel->SetProperty("display", "none");
+        m_mag_panel_elements.reset();
+        m_mag_stat_animations = {};
+        return;
+    }
+
+    const CharacterScreenMessage::MagSummary& mag = *m_character_screen_cache->mag;
+    const std::array<CharacterScreenMessage::MagStatBar, 4> bars = {mag.pow, mag.def, mag.dex, mag.mind};
+
+    if (!m_mag_panel_elements)
+    {
+        static constexpr std::array<const char*, 4> kLabels = {"POW", "DEF", "DEX", "MIND"};
+
+        std::string markup = "<div class=\"mag-panel-title\"></div>";
+        for (const char* label : kLabels)
+        {
+            markup += std::string("<div class=\"mag-stat-row\"><span class=\"mag-stat-label\">") + label +
+                      "</span><span class=\"mag-stat-level\"></span><div class=\"mag-stat-bar-track\">"
+                      "<div class=\"mag-stat-bar-fill\"></div></div></div>";
+        }
+        markup += "<div class=\"mag-info-row\"></div>";
+        panel->SetInnerRML(markup);
+
+        MagPanelElements elements;
+        elements.title = panel->QuerySelector(".mag-panel-title");
+        Rml::ElementList rows;
+        panel->QuerySelectorAll(rows, ".mag-stat-row");
+        Rml::ElementList levels;
+        panel->QuerySelectorAll(levels, ".mag-stat-level");
+        Rml::ElementList fills;
+        panel->QuerySelectorAll(fills, ".mag-stat-bar-fill");
+        for (std::size_t i = 0; i < 4 && i < rows.size() && i < levels.size() && i < fills.size(); ++i)
+        {
+            elements.rows[i] = rows[i];
+            elements.level_labels[i] = levels[i];
+            elements.fills[i] = fills[i];
+        }
+        elements.info_row = panel->QuerySelector(".mag-info-row");
+        m_mag_panel_elements = elements;
+
+        // First time this mag's data is shown: snap straight to its actual
+        // values instead of animating from a stale zero baseline.
+        for (std::size_t i = 0; i < 4; ++i)
+        {
+            const int subunits = bars[i].level * bars[i].progress_to_next + bars[i].progress;
+            m_mag_stat_animations[i] = MagStatAnimation{static_cast<float>(subunits), subunits, bars[i].level, 0.0f};
+        }
+    }
+    else
+    {
+        for (std::size_t i = 0; i < 4; ++i)
+            m_mag_stat_animations[i].target_subunits = bars[i].level * bars[i].progress_to_next + bars[i].progress;
+    }
+
+    ApplyMagPanelDisplay();
+    RefreshMagPanelVisibility();
+}
+
+void HudLayer::ApplyMagPanelDisplay()
+{
+    if (!m_mag_panel_elements || !m_character_screen_cache || !m_character_screen_cache->mag)
+        return;
+
+    const CharacterScreenMessage::MagSummary& mag = *m_character_screen_cache->mag;
+    const std::array<CharacterScreenMessage::MagStatBar, 4> bars = {mag.pow, mag.def, mag.dex, mag.mind};
+
+    int displayed_total_level = 0;
+    for (const MagStatAnimation& anim : m_mag_stat_animations)
+        displayed_total_level += anim.displayed_level;
+
+    if (m_mag_panel_elements->title)
+        m_mag_panel_elements->title->SetInnerRML("Mag - Lv " + std::to_string(displayed_total_level));
+
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        const MagStatAnimation& anim = m_mag_stat_animations[i];
+        const float progress_to_next = static_cast<float>(std::max(bars[i].progress_to_next, 1));
+        // Wrapped in float space (not truncated to int first) so the fill
+        // moves continuously between whole sub-units instead of stepping in
+        // 100/progress_to_next %-sized jumps as displayed_subunits ticks up.
+        const float wrapped =
+            anim.displayed_subunits - std::floor(anim.displayed_subunits / progress_to_next) * progress_to_next;
+        const int percent = std::clamp(static_cast<int>(wrapped / progress_to_next * 100.0f + 0.5f), 0, 100);
+
+        if (m_mag_panel_elements->level_labels[i])
+            m_mag_panel_elements->level_labels[i]->SetInnerRML(std::to_string(anim.displayed_level));
+        if (m_mag_panel_elements->fills[i])
+            m_mag_panel_elements->fills[i]->SetProperty("width", std::to_string(percent) + "%");
+        if (m_mag_panel_elements->rows[i])
+            m_mag_panel_elements->rows[i]->SetClass("mag-level-up", anim.level_up_flash > 0.0f);
+    }
+
+    if (m_mag_panel_elements->info_row)
+        m_mag_panel_elements->info_row->SetInnerRML("IQ: " + std::to_string(mag.iq) + "   Sync: " +
+                                                     std::to_string(static_cast<int>(mag.sync)) + "%");
+}
+
+void HudLayer::UpdateMagPanelAnimations(float delta_time)
+{
+    if (!AnyMagStatAnimating())
+        return;
+    if (!m_mag_panel_elements || !m_character_screen_cache || !m_character_screen_cache->mag)
+        return;
+
+    constexpr float kMagBarFillUnitsPerSecond = 40.0f;
+    constexpr float kMagLevelUpFlashSeconds = 0.5f;
+
+    const CharacterScreenMessage::MagSummary& mag = *m_character_screen_cache->mag;
+    const std::array<CharacterScreenMessage::MagStatBar, 4> bars = {mag.pow, mag.def, mag.dex, mag.mind};
+
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        MagStatAnimation& anim = m_mag_stat_animations[i];
+        const float target = static_cast<float>(anim.target_subunits);
+        if (anim.displayed_subunits < target)
+            anim.displayed_subunits =
+                std::min(target, anim.displayed_subunits + kMagBarFillUnitsPerSecond * delta_time);
+        else if (anim.displayed_subunits > target)
+            anim.displayed_subunits =
+                std::max(target, anim.displayed_subunits - kMagBarFillUnitsPerSecond * delta_time);
+
+        const int progress_to_next = std::max(bars[i].progress_to_next, 1);
+        const int new_level = static_cast<int>(anim.displayed_subunits) / progress_to_next;
+        if (new_level > anim.displayed_level)
+            anim.level_up_flash = kMagLevelUpFlashSeconds;
+        anim.displayed_level = new_level;
+
+        if (anim.level_up_flash > 0.0f)
+            anim.level_up_flash = std::max(0.0f, anim.level_up_flash - delta_time);
+    }
+
+    ApplyMagPanelDisplay();
+    RefreshMagPanelVisibility();
+}
+
+bool HudLayer::AnyMagStatAnimating() const
+{
+    for (const MagStatAnimation& anim : m_mag_stat_animations)
+        if (anim.displayed_subunits != static_cast<float>(anim.target_subunits) || anim.level_up_flash > 0.0f)
+            return true;
+    return false;
+}
+
+void HudLayer::RefreshMagPanelVisibility()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* panel = m_document->GetElementById("character-screen-mag-panel");
+    if (!panel)
+        return;
+
     const bool mag_slot_selected =
         m_hovered_equipment_index == static_cast<int>(EquipmentSlot::Mag) ||
         (!m_hovered_equipment_index.has_value() && m_focused_panel == CharacterScreenPanel::Equipment &&
          m_focused_row == static_cast<int>(EquipmentSlot::Mag));
 
-    if (!m_character_screen_cache || !m_character_screen_cache->mag || !mag_slot_selected)
-    {
-        panel->SetProperty("display", "none");
-        return;
-    }
-
-    const CharacterScreenMessage::MagSummary& mag = *m_character_screen_cache->mag;
-    const std::array<std::pair<const char*, CharacterScreenMessage::MagStatBar>, 4> bars = {
-        {{"POW", mag.pow}, {"DEF", mag.def}, {"DEX", mag.dex}, {"MIND", mag.mind}}};
-
-    std::string markup = "<div class=\"mag-panel-title\">Mag - Lv " + std::to_string(mag.level) + "</div>";
-    for (const auto& [label, bar] : bars)
-    {
-        markup += std::string("<div class=\"mag-stat-row\"><span class=\"mag-stat-label\">") + label +
-                  "</span><span class=\"mag-stat-level\">" + std::to_string(bar.level) +
-                  "</span><div class=\"mag-stat-bar-track\"><div class=\"mag-stat-bar-fill\"></div></div></div>";
-    }
-    markup += "<div class=\"mag-info-row\">IQ: " + std::to_string(mag.iq) +
-              "   Sync: " + std::to_string(static_cast<int>(mag.sync)) + "%</div>";
-
-    panel->SetInnerRML(markup);
-    panel->SetProperty("display", "flex");
-
-    Rml::ElementList fills;
-    panel->QuerySelectorAll(fills, ".mag-stat-bar-fill");
-    for (std::size_t i = 0; i < fills.size() && i < bars.size(); ++i)
-        fills[i]->SetProperty("width", PercentWidth(bars[i].second.progress, bars[i].second.progress_to_next));
+    const bool visible = m_character_screen_cache && m_character_screen_cache->mag &&
+                         (mag_slot_selected || m_awaiting_mag_food_selection || AnyMagStatAnimating());
+    panel->SetProperty("display", visible ? "flex" : "none");
 }
 
 void HudLayer::RenderRowFocus(const char* container_id, const char* row_class, CharacterScreenPanel panel)

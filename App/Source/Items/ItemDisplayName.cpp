@@ -2,8 +2,10 @@
 
 #include "Combat/Element.h"
 #include "Components/WeaponComponent.h"
+#include "Engine/ECS/ExtractDisplayString.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
+#include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Items/Affix.h"
 #include "Items/AffixLibrary.h"
@@ -14,20 +16,31 @@ namespace psr {
 
 namespace {
 
-    const char* ElementDisplayName(Element element)
+    // PSO's own tier-1 elemental special names (Heat/Frost/Shock/Dim are
+    // real PSO weapon-special names -- Ephinea/community-documented tiered
+    // chains, e.g. Fire's is Heat -> Fire -> Flame; this project has no
+    // per-weapon special tier, so every elemental weapon always uses the
+    // tier-1 name) rather than the plain element word, so a fire-flavored
+    // weapon reads "Heat Saber," not "Fire Saber." Light has no real PSO
+    // equivalent (PSO's true elemental-damage specials are only Fire/Ice/
+    // Lightning; "Dim" is actually the unrelated instant-kill special
+    // chain's tier-1 name, borrowed here for Dark since it fits this
+    // project's own five-element roster -- see Element.h) -- "Shine" is an
+    // invented name matching the same short, tier-1-sounding cadence.
+    const char* ElementalPrefixName(Element element)
     {
         switch (element)
         {
         case Element::Fire:
-            return "Fire";
+            return "Heat";
         case Element::Ice:
-            return "Ice";
+            return "Frost";
         case Element::Lightning:
-            return "Lightning";
+            return "Shock";
         case Element::Light:
-            return "Light";
+            return "Shine";
         case Element::Dark:
-            return "Dark";
+            return "Dim";
         case Element::None:
             return "";
         }
@@ -41,15 +54,17 @@ const char* ElementDescription(Element element)
     switch (element)
     {
     case Element::Fire:
-        return "Deals bonus Fire damage and may ignite the target.";
+        return "Deals bonus Fire damage and may ignite the target, resisted by its own Fire resistance.";
     case Element::Ice:
-        return "Deals bonus Ice damage and may freeze the target.";
+        return "Deals bonus Ice damage and may freeze the target, resisted by its own Ice resistance.";
     case Element::Lightning:
-        return "Deals bonus Lightning damage and may shock the target.";
+        return "Deals bonus Lightning damage and may shock the target, resisted by its own Lightning resistance.";
     case Element::Light:
-        return "Deals bonus Light damage, especially potent against dark creatures.";
+        return "Deals bonus Light damage, especially potent against dark creatures and resisted by the target's own "
+              "Light resistance.";
     case Element::Dark:
-        return "Deals bonus Dark damage, especially potent against light-averse creatures.";
+        return "Deals bonus Dark damage, especially potent against light-averse creatures and resisted by the "
+              "target's own Dark resistance.";
     case Element::None:
         return "";
     }
@@ -62,7 +77,7 @@ std::string FormatItemDisplayName(const Registry& registry, entt::entity item, c
     if (const PrefabIdComponent* prefab_id = registry.TryGetComponent<PrefabIdComponent>(item))
     {
         if (const std::optional<std::string> label = NameIdRegistry::Find(prefab_id->value))
-            base_name = *label;
+            base_name = ExtractDisplayString(*label);
     }
 
     const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(item);
@@ -77,7 +92,7 @@ std::string FormatItemDisplayName(const Registry& registry, entt::entity item, c
     }
 
     if (weapon->element != Element::None)
-        name += std::string(ElementDisplayName(weapon->element)) + " ";
+        name += std::string(ElementalPrefixName(weapon->element)) + " ";
 
     name += base_name;
 
@@ -91,6 +106,23 @@ std::string FormatItemDisplayName(const Registry& registry, entt::entity item, c
         name += " +" + std::to_string(weapon->grind_level);
 
     return name;
+}
+
+int ResolveDisplayRarity(const Registry& registry, entt::entity item)
+{
+    int stars = 0;
+    if (const RarityComponent* rarity = registry.TryGetComponent<RarityComponent>(item))
+        stars = rarity->stars;
+
+    if (const WeaponComponent* weapon = registry.TryGetComponent<WeaponComponent>(item))
+    {
+        if (weapon->element != Element::None)
+            ++stars;
+        if (weapon->prefix_affix_id != 0)
+            ++stars;
+    }
+
+    return stars;
 }
 
 } // namespace psr

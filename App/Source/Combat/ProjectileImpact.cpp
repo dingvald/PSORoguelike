@@ -56,17 +56,20 @@ bool ResolveProjectileImpact(Registry& registry, const Grid& grid, const AffixLi
             continue;
         }
 
+        const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+        const int resistance_percent =
+            defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
+
         int damage;
         bool is_critical = false;
         if (projectile.physical_damage)
         {
             // Physical (ATP-vs-DFP, race-bonus, crit) formula -- same as
             // WeaponAttackAction's melee branch, unlike the MST-based magic
-            // formula below every Technique projectile still uses. No
-            // ElementalResistanceComponent mitigation here, matching every
-            // other physical attack's convention (resistance only reduces
-            // magic damage; a physical weapon's element only feeds
-            // MaybeApplyElementalStatus below).
+            // formula below every Technique projectile still uses. The
+            // weapon's own elemental flavor (if any) still gets its usual
+            // resisted proc-and-bonus-damage roll, same as melee -- see
+            // RollElementalDamageBonus below.
             const RaceComponent* defender_race = target.TryGet<RaceComponent>();
             const std::uint32_t defender_race_id = defender_race ? defender_race->race_id : 0;
             const int boosted_atp =
@@ -75,14 +78,23 @@ bool ResolveProjectileImpact(Registry& registry, const Grid& grid, const AffixLi
             damage = ComputeDamage(boosted_atp, defender_stats.dfp, variance_roll(rng));
             is_critical = unit_roll(rng) < ComputeCritChance(projectile.attacker_stats.lck);
             damage = ApplyCritical(damage, is_critical);
+            damage += RollElementalDamageBonus(target, registry.GetStatusEffectLibrary(), projectile.element,
+                                               projectile.status_effect_id, projectile.status_chance_percent,
+                                               resistance_percent, boosted_atp, projectile.is_special_attack, rng);
         }
         else
         {
-            const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
-            const int resistance_percent =
-                defender_resistance ? defender_resistance->ResistanceFor(projectile.element) : 0;
             damage = static_cast<int>(std::lround(
                 ComputeTechniqueDamage(projectile.attacker_stats.mst, resistance_percent) * projectile.power_multiplier));
+
+            // The spell's own ailment still gets its usual resisted roll --
+            // unlike the physical branch above, the bonus this returns is
+            // discarded: a Technique's damage is already entirely elemental
+            // (ComputeTechniqueDamage), so folding in a second elemental
+            // kicker here would double-count it.
+            RollElementalDamageBonus(target, registry.GetStatusEffectLibrary(), projectile.element,
+                                     projectile.status_effect_id, projectile.status_chance_percent, resistance_percent,
+                                     projectile.attacker_stats.mst, /*is_special_attack=*/false, rng);
         }
 
         BeforeDamageEvent before{target, damage};
@@ -92,12 +104,6 @@ bool ResolveProjectileImpact(Registry& registry, const Grid& grid, const AffixLi
         IncomingDamageEvent incoming{source,      damage, is_critical, projectile.hit_effect_prefab_id,
                                      projectile.hit_effect_duration, projectile.hit_stun_energy};
         target.Dispatch(incoming);
-
-        if (!target.IsValid())
-            continue;
-
-        MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), projectile.status_effect_id,
-                                  projectile.status_chance_percent, rng);
     }
     return impacted;
 }

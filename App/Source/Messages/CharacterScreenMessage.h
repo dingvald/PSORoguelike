@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Components/StatsComponent.h"
+#include "Components/WeaponComponent.h" // WeaponRangeShape, reused verbatim
+#include "Engine/Combat/TargetingMode.h"
 #include "Items/Equip.h"
 
 #include <array>
@@ -64,11 +66,44 @@ struct CharacterScreenMessage
         std::string description;
         std::optional<StatsComponent> stats;
 
+        // A weapon's StatRequirement or an armor's required_level, formatted
+        // for display (e.g. "Requires 100 ATP" / "Requires Level 5") --
+        // empty when the item has no requirement. requirement_met compares
+        // it against the player's own current effective stats/level, so
+        // HudLayer can grey out an inventory/equipment row the player
+        // doesn't (yet) qualify for, while still leaving it selectable.
+        std::string requirement_text;
+        bool requirement_met = true;
+
         // A weapon's rolled WeaponComponent::race_bonuses, resolved to a
         // display race name (e.g. "Native") + bonus_percent -- fully
         // resolved so HudLayer never needs a race_id -> label lookup of its
         // own. Empty for a non-weapon item or a weapon with no race bonus.
         std::vector<std::pair<std::string, int>> species_bonuses;
+
+        // A weapon's own combat-relevant fields for the item-detail panel,
+        // fully resolved (status effect id -> name via StatusEffectLibrary,
+        // photon_art_ids -> names via PhotonArtLibrary) so HudLayer never
+        // needs either library itself. nullopt for a non-weapon item.
+        struct WeaponDetail
+        {
+            WeaponRangeShape range_shape = WeaponRangeShape::SingleTarget;
+            int range = 1;
+            int hits_per_turn = 1;
+            int grind_level = 0;
+            int max_grind_level = 0;
+            bool fires_projectile = false;
+            TargetingMode targeting_mode = TargetingMode::Directional;
+
+            // Only set when the weapon is elemental and status_chance_percent
+            // > 0 -- see WeaponComponent::status_effect_id's own doc comment
+            // on why a non-elemental weapon never applies its status_effect_id.
+            std::string status_effect_name;
+            int status_chance_percent = 0;
+
+            std::vector<std::string> photon_art_names;
+        };
+        std::optional<WeaponDetail> weapon_detail;
     };
 
     // One PSO-style stat's mag progress -- level plus progress toward the
@@ -93,6 +128,14 @@ struct CharacterScreenMessage
         MagStatBar mind;
         int iq = 0;
         float sync = 0.0f;
+
+        // MagComponent::feed_charges_used/feed_charges, copied as-is -- lets
+        // HudLayer's context menu grey out "Feed" once charges_used reaches
+        // charges (feeding's actual gate -- see GameplayLayer::
+        // OnMagFeedRequested) instead of offering an action it would just
+        // silently reject.
+        int feed_charges_used = 0;
+        int feed_charges = 3;
     };
 
     struct StatsSummary
@@ -140,6 +183,19 @@ struct CharacterScreenMessage
     // not one of the `inventory` entries above, so it never consumes a slot
     // index or shows up in CharacterScreenRowCount.
     int meseta = 0;
+
+    // Set only by GameplayLayer::OnMagFeedRequested's republish after a
+    // successful feed (never by CharacterScreenState::OnEnter or any other
+    // republish path). MessageBus::Publish only enqueues -- handler
+    // invocation is deferred to the subscriber's own HandleQueuedMessages,
+    // so HudLayer can't tell "this refresh followed a feed" apart from any
+    // other refresh via a flag it flips around the Publish call (that flag
+    // is long reset by the time this message is actually handled). Carrying
+    // the fact on the message itself sidesteps that timing entirely -- lets
+    // HudLayer::OnCharacterScreenState chain straight back into another
+    // food selection (or land on the Mag slot's own context menu, Feed
+    // disabled, once out of charges) instead of stranding focus.
+    bool fed_mag = false;
 };
 
 } // namespace psr

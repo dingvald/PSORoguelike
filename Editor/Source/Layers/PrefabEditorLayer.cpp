@@ -522,6 +522,26 @@ namespace {
         return array;
     }
 
+    StatRequirement ReadStatRequirement(const rapidjson::Value& object, const char* key)
+    {
+        StatRequirement requirement;
+        auto it = object.FindMember(key);
+        if (it == object.MemberEnd() || !it->value.IsObject())
+            return requirement;
+        requirement.stat = ReadEnum<AffixStat>(it->value, "stat", requirement.stat);
+        requirement.value = ReadInt(it->value, "value", requirement.value);
+        return requirement;
+    }
+
+    rapidjson::Value WriteStatRequirement(const StatRequirement& requirement,
+                                          rapidjson::Document::AllocatorType& allocator)
+    {
+        rapidjson::Value object(rapidjson::kObjectType);
+        object.AddMember("stat", StringValue(std::string{EnumName(requirement.stat)}, allocator), allocator);
+        object.AddMember("value", requirement.value, allocator);
+        return object;
+    }
+
     WeaponComponent ReadWeaponBody(const rapidjson::Value& body)
     {
         WeaponComponent weapon;
@@ -533,6 +553,7 @@ namespace {
         weapon.prefix_affix_id = ReadNameId(body, "prefix_affix_id", 0);
         weapon.suffix_affix_id = ReadNameId(body, "suffix_affix_id", 0);
         weapon.race_bonuses = ReadRaceBonuses(body, "race_bonuses");
+        weapon.stat_requirement = ReadStatRequirement(body, "stat_requirement");
         weapon.photon_art_ids = ReadNameIdArray(body, "photon_art_ids");
         weapon.element = ReadEnum<Element>(body, "element", weapon.element);
         weapon.status_effect_id = ReadNameId(body, "status_effect_id", 0);
@@ -557,6 +578,7 @@ namespace {
         object.AddMember("prefix_affix_id", WriteNameId(weapon.prefix_affix_id, allocator), allocator);
         object.AddMember("suffix_affix_id", WriteNameId(weapon.suffix_affix_id, allocator), allocator);
         object.AddMember("race_bonuses", WriteRaceBonuses(weapon.race_bonuses, allocator), allocator);
+        object.AddMember("stat_requirement", WriteStatRequirement(weapon.stat_requirement, allocator), allocator);
         object.AddMember("photon_art_ids", WriteNameIdArray(weapon.photon_art_ids, allocator), allocator);
         object.AddMember("element", StringValue(std::string{EnumName(weapon.element)}, allocator), allocator);
         object.AddMember("status_effect_id", WriteNameId(weapon.status_effect_id, allocator), allocator);
@@ -576,6 +598,7 @@ namespace {
         ArmorComponent armor;
         armor.slot = ReadEnum<ArmorSlot>(body, "slot", armor.slot);
         armor.mod_slot_count = ReadInt(body, "mod_slot_count", armor.mod_slot_count);
+        armor.required_level = ReadInt(body, "required_level", armor.required_level);
         return armor;
     }
 
@@ -584,6 +607,7 @@ namespace {
         rapidjson::Value object(rapidjson::kObjectType);
         object.AddMember("slot", StringValue(std::string{EnumName(armor.slot)}, allocator), allocator);
         object.AddMember("mod_slot_count", armor.mod_slot_count, allocator);
+        object.AddMember("required_level", armor.required_level, allocator);
         return object;
     }
 
@@ -802,13 +826,16 @@ namespace {
           "<div id=\"field-weapon-projectile-speed\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-projectile-prefab\" class=\"field-row\"></div>"
           "<div id=\"field-weapon-hit-stun-energy\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-stat-requirement-stat\" class=\"field-row\"></div>"
+          "<div id=\"field-weapon-stat-requirement-value\" class=\"field-row\"></div>"
           "<h3>Race Bonuses<span id=\"add-race-bonus\" class=\"btn\">Add Race Bonus</span></h3>"
           "<div id=\"race-bonus-list\" class=\"ref-scroll\"></div>"
           "<h3>Photon Arts<span id=\"add-photon-art\" class=\"btn\">Add Photon Art</span></h3>"
           "<div id=\"photon-art-id-list\" class=\"ref-scroll\"></div>"},
          {"armor", "Armor", "#6f9de8",
           "<div id=\"field-armor-slot\" class=\"field-row\"></div>"
-          "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"},
+          "<div id=\"field-mod-slot-count\" class=\"field-row\"></div>"
+          "<div id=\"field-armor-required-level\" class=\"field-row\"></div>"},
          {"mod", "Mod", "#8de89c", "<div class=\"list-empty\">No fields -- presence marks this prefab as a Mod.</div>"},
          {"item", "Item", "#e8c15d",
           "<div id=\"field-item-max-stack\" class=\"field-row\"></div>"
@@ -1781,6 +1808,21 @@ void PrefabEditorLayer::RefreshEditForm()
                                              m_weapon.hit_stun_energy = v;
                                              MarkDirty();
                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-stat-requirement-stat"))
+        keep(fieldwidgets::BuildEnumField(*row, "stat_requirement.stat", EnumOptions<AffixStat>(),
+                                          std::string{EnumName(m_weapon.stat_requirement.stat)},
+                                          [this](std::string v)
+                                          {
+                                              m_weapon.stat_requirement.stat = EnumFromString(v, AffixStat::Atp);
+                                              MarkDirty();
+                                          }));
+    if (Rml::Element* row = m_editor->GetElementById("field-weapon-stat-requirement-value"))
+        keep(fieldwidgets::BuildIntField(*row, "stat_requirement.value", m_weapon.stat_requirement.value,
+                                         [this](int v)
+                                         {
+                                             m_weapon.stat_requirement.value = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-armor-slot"))
         keep(fieldwidgets::BuildEnumField(*row, "slot", EnumOptions<ArmorSlot>(), std::string{EnumName(m_armor.slot)},
                                           [this](std::string v)
@@ -1796,6 +1838,13 @@ void PrefabEditorLayer::RefreshEditForm()
                                               m_armor.mod_slot_count = std::stoi(v);
                                               MarkDirty();
                                           }));
+    if (Rml::Element* row = m_editor->GetElementById("field-armor-required-level"))
+        keep(fieldwidgets::BuildIntField(*row, "required_level", m_armor.required_level,
+                                         [this](int v)
+                                         {
+                                             m_armor.required_level = v;
+                                             MarkDirty();
+                                         }));
     if (Rml::Element* row = m_editor->GetElementById("field-item-max-stack"))
         keep(fieldwidgets::BuildIntField(*row, "max_stack", m_item.max_stack,
                                          [this](int v)

@@ -18,7 +18,15 @@ enum class HotbarSlotType
     // unused/0, since "Normal Attack" always means "whatever is currently
     // equipped," not a fixed id. See GameplayLayer::TryActivateSlot and
     // Items/Hotbar.h's AssignAbilityToHotbarSlot.
-    NormalAttack
+    NormalAttack,
+
+    // The equipped weapon's own elemental prefix special (WeaponAttackAction
+    // constructed with is_special_attack=true) -- id is unused/0, same
+    // "always means whatever is currently equipped" convention as
+    // NormalAttack. Only assignable/activatable while the equipped weapon has
+    // an elemental flavor (WeaponComponent::element != Element::None); see
+    // AssignAbilityToHotbarSlot and GameplayLayer::TryActivateSlot.
+    SpecialAttack
 };
 
 // One quick-use slot: type plus a NameId into TechniqueLibrary/PhotonArtLibrary

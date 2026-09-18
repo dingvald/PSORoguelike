@@ -3,6 +3,7 @@
     "name": "forest_split_room",
     "area_tag": "forest",
     "category": "room",
+    "preferred_unlock_condition": "room_cleared",
     "can_rotate": true,
     "can_mirror": false,
     "tags": [],
@@ -1364,6 +1365,22 @@
             },
             "prefab_id": "enemies.booma",
             "wave": 0
+        },
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 10
+            },
+            "prefab_id": "enemies.savage_wolf",
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 14
+            },
+            "prefab_id": "enemies.barbarous_wolf",
+            "wave": 1
         }
     ]
 }

@@ -43,6 +43,16 @@ namespace psr {
 // the same mechanism TechniqueAction's own projectile branch uses, with
 // physical (ATP-vs-DFP, race-bonus, crit) damage rather than a Technique's
 // MST-based magic formula.
+//
+// is_special_attack (the hotbar's Special Attack slot, HotbarSlotType::
+// SpecialAttack -- distinct from a bump/Normal Attack swing) is a free no-op
+// if the equipped weapon has no elemental flavor (WeaponComponent::element ==
+// Element::None): there is no "special" to execute without a prefix granting
+// one. Otherwise it swings exactly like Normal Attack, except the landed
+// hit's elemental proc (see Combat/StatusEffectHooks.h's
+// RollElementalDamageBonus) is guaranteed (100% pre-resistance) rather than
+// status_chance_percent-rolled, and its bonus damage is doubled -- a
+// player-triggered guarantee of what Normal Attack only sometimes procs.
 class WeaponAttackAction : public IAction
 {
 public:
@@ -53,9 +63,10 @@ public:
 
     // direction: a fixed swing direction (MoveAction's bump fallback).
     // nullopt (default): resolve from the acting entity's own
-    // SelectedTargetComponent instead (the hotbar's Normal Attack slot).
+    // SelectedTargetComponent instead (the hotbar's Normal Attack/Special
+    // Attack slots).
     explicit WeaponAttackAction(Grid& grid, const AffixLibrary& affixes, std::mt19937& rng,
-                               std::optional<Vec2> direction = std::nullopt);
+                               std::optional<Vec2> direction = std::nullopt, bool is_special_attack = false);
 
     ActionResult Perform(Entity actor) override;
 
@@ -64,6 +75,7 @@ private:
     const AffixLibrary* m_affixes;
     std::mt19937* m_rng;
     std::optional<Vec2> m_direction;
+    bool m_is_special_attack;
 };
 
 } // namespace psr

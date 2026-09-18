@@ -12,6 +12,8 @@ namespace {
     constexpr float kDamageConstant = 0.9f;
     constexpr float kCritLckDivisor = 500.0f;
     constexpr float kCritMultiplier = 1.5f;
+    constexpr float kElementalDamageDivisor = 10.0f;
+    constexpr float kSpecialAttackElementalMultiplier = 2.0f;
 } // namespace
 
 float ComputeHitChance(int attacker_ata, int defender_evp)
@@ -36,6 +38,22 @@ int ComputeTechniqueDamage(int attacker_mst, int resistance_percent)
     const float resistance = std::clamp(static_cast<float>(resistance_percent), 0.0f, 100.0f);
     const float raw = static_cast<float>(attacker_mst) / kDamageDivisor * (1.0f - resistance / 100.0f);
     return std::max(1, static_cast<int>(std::floor(raw)));
+}
+
+int ComputeElementalDamage(int attacker_atp, int resistance_percent, bool is_special_attack)
+{
+    const float resistance = std::clamp(static_cast<float>(resistance_percent), 0.0f, 100.0f);
+    const float multiplier = is_special_attack ? kSpecialAttackElementalMultiplier : 1.0f;
+    const float raw =
+        static_cast<float>(attacker_atp) / kElementalDamageDivisor * (1.0f - resistance / 100.0f) * multiplier;
+    return std::max(0, static_cast<int>(std::floor(raw)));
+}
+
+int ApplyResistanceToStatusChance(int chance_percent, int resistance_percent)
+{
+    const float resistance = std::clamp(static_cast<float>(resistance_percent), 0.0f, 100.0f);
+    const float raw = static_cast<float>(chance_percent) * (1.0f - resistance / 100.0f);
+    return std::max(0, static_cast<int>(std::lround(raw)));
 }
 
 float ComputeCritChance(int attacker_lck)

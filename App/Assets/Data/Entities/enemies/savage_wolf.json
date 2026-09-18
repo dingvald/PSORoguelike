@@ -11,7 +11,7 @@
         },
         "pounce": {
             "preferred_distance": 2,
-            "pounce_chance_percent": 50,
+            "pounce_chance_percent": 33,
             "ghost_effect_prefab_id": "vfx.wolf_lunge_ghost",
             "ghost_effect_duration": 0.25
         },
@@ -20,12 +20,12 @@
             "max_hp": 45
         },
         "stats": {
-            "atp": 70,
-            "ata": 65,
+            "atp": 85,
+            "ata": 90,
             "mst": 0,
-            "dfp": 5,
-            "evp": 55,
-            "lck": 10
+            "dfp": 20,
+            "evp": 60,
+            "lck": 8
         },
         "race": {
             "race_id": "a_beast"
@@ -41,10 +41,11 @@
                 "y": 3
             },
             "color_1": "#6a6a6aff",
-            "color_2": "#c9c9c9ff",
+            "color_2": "#5a5835ff",
             "render_layer": 1,
             "frames": 1,
-            "frame_time": 0.0
+            "frame_time": 0.0,
+            "is_synced": true
         },
         "drop_table": {
             "entries": [
@@ -59,7 +60,7 @@
             "meseta_max": 30
         },
         "experience_value": {
-            "xp": 15
+            "xp": 5
         }
     }
 }

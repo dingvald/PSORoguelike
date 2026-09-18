@@ -4,6 +4,7 @@
 #include "Engine/Combat/TargetingMode.h"
 #include "Engine/ECS/ComponentSchemaRegistrar.h"
 #include "Engine/ECS/TypeReflection.h"
+#include "Items/Affix.h" // AffixStat, reused for StatRequirement::stat
 
 #include <array>
 #include <cstdint>
@@ -55,6 +56,21 @@ struct RaceBonusEntry
     }
 };
 
+// The minimum effective stat value a character needs to equip a weapon
+// (e.g. {Atp, 100} = "requires 100 ATP"). value <= 0 means no requirement --
+// the default, so authoring a weapon without this field imposes none.
+struct StatRequirement
+{
+    AffixStat stat = AffixStat::Atp;
+    int value = 0;
+
+    template <typename V> static void Describe(V& v)
+    {
+        v.template Field<&StatRequirement::stat>("stat");
+        v.template Field<&StatRequirement::value>("value");
+    }
+};
+
 // A weapon prefab's non-stat fields. A weapon entity also carries a sibling
 // StatsComponent (reattached here to mean "stat bonus granted when
 // equipped," not an entity's own base stats) and RarityComponent.
@@ -81,6 +97,11 @@ struct WeaponComponent
     std::uint32_t prefix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::uint32_t suffix_affix_id = 0; // NameId into the Affix library, 0 = none
     std::vector<RaceBonusEntry> race_bonuses;
+
+    // Minimum effective stat needed to equip this weapon -- see
+    // ItemDisplayName.h/CharacterScreenSnapshot.h for where this is checked
+    // and surfaced to the player.
+    StatRequirement stat_requirement;
 
     // Which Photon Arts this weapon grants (NameIds into PhotonArtLibrary) --
     // weapon-attached, not character-learned, per PhotonArt.h's own doc
@@ -137,6 +158,7 @@ struct WeaponComponent
             .Data<&WeaponComponent::prefix_affix_id>("prefix_affix_id")
             .Data<&WeaponComponent::suffix_affix_id>("suffix_affix_id")
             .Data<&WeaponComponent::race_bonuses>("race_bonuses")
+            .Data<&WeaponComponent::stat_requirement>("stat_requirement")
             .Data<&WeaponComponent::photon_art_ids>("photon_art_ids")
             .Data<&WeaponComponent::element>("element")
             .Data<&WeaponComponent::status_effect_id>("status_effect_id")

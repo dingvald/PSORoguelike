@@ -3,6 +3,7 @@
     "name": "forest_long_room",
     "area_tag": "forest",
     "category": "room",
+    "preferred_unlock_condition": "room_cleared",
     "can_rotate": true,
     "can_mirror": false,
     "tags": [],
@@ -1200,6 +1201,22 @@
             },
             "prefab_id": "enemies.barbarous_wolf",
             "wave": 0
+        },
+        {
+            "cell_offset": {
+                "x": 10,
+                "y": 11
+            },
+            "prefab_id": "enemies.monest",
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 13
+            },
+            "prefab_id": "enemies.gobooma",
+            "wave": 1
         }
     ]
 }

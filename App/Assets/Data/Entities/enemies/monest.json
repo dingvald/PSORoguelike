@@ -19,7 +19,7 @@
             "atp": 0,
             "ata": 0,
             "mst": 0,
-            "dfp": 10,
+            "dfp": 0,
             "evp": 0,
             "lck": 0
         },
@@ -27,7 +27,7 @@
             "race_id": "native"
         },
         "renderable": {
-            "texture_id": "creature_sprites",
+            "texture_id": "monest",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -36,9 +36,12 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#8a7a3aff",
-            "color_2": "#c9b35aff",
-            "render_layer": 1
+            "color_1": "#325d33ff",
+            "color_2": "#4c1e2fff",
+            "render_layer": 1,
+            "frames": 2,
+            "frame_time": 1.0,
+            "is_synced": false
         },
         "drop_table": {
             "entries": [
@@ -53,7 +56,7 @@
             "meseta_max": 40
         },
         "experience_value": {
-            "xp": 15
+            "xp": 6
         }
     }
 }

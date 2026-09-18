@@ -50,11 +50,17 @@ struct ArmorComponent
     ArmorSlot slot = ArmorSlot::Torso;
     int mod_slot_count = 0;
 
+    // Minimum character level needed to equip this armor. 0 = no requirement
+    // -- see App/Source/Items/CharacterScreenSnapshot.h for where this is
+    // checked and surfaced to the player.
+    int required_level = 0;
+
     static void Register(ComponentSchemaRegistrar& reg)
     {
         reg.Component<ArmorComponent>("armor")
             .Data<&ArmorComponent::slot>("slot")
-            .Data<&ArmorComponent::mod_slot_count>("mod_slot_count");
+            .Data<&ArmorComponent::mod_slot_count>("mod_slot_count")
+            .Data<&ArmorComponent::required_level>("required_level");
     }
 };
 

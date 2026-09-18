@@ -72,6 +72,20 @@ bool AssignAbilityToHotbarSlot(Entity actor, HotbarSlotType type, std::uint32_t 
             return false;
         id = 0;
     }
+    else if (type == HotbarSlotType::SpecialAttack)
+    {
+        // Same "always means whatever is currently equipped" convention as
+        // NormalAttack, but only valid while that weapon actually has an
+        // elemental prefix to execute -- there is no Special Attack to bind
+        // otherwise.
+        const EquipmentComponent* equipment = actor.TryGet<EquipmentComponent>();
+        if (!equipment || equipment->weapon == entt::null)
+            return false;
+        const WeaponComponent* weapon = actor.GetRegistry().TryGetComponent<WeaponComponent>(equipment->weapon);
+        if (!weapon || weapon->element == Element::None)
+            return false;
+        id = 0;
+    }
     else
     {
         return false;

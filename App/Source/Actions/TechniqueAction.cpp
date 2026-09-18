@@ -271,10 +271,14 @@ ActionResult TechniqueAction::Perform(Entity actor)
 
             // element/status_effect_id/status_chance_percent are spell-
             // authored on Technique itself (independent of the wielding
-            // weapon, unlike PhotonArt) -- see Technique.h's own doc
-            // comment.
-            MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), technique->status_effect_id,
-                                      technique->status_chance_percent, *m_rng);
+            // weapon, unlike PhotonArt) -- see Technique.h's own doc comment.
+            // The returned bonus is discarded: a Technique's damage is
+            // already entirely elemental (ComputeTechniqueDamage above), so
+            // folding in a second elemental kicker here would double-count it
+            // -- same reasoning as ResolveProjectileImpact's magic branch.
+            RollElementalDamageBonus(target, registry.GetStatusEffectLibrary(), technique->element,
+                                     technique->status_effect_id, technique->status_chance_percent,
+                                     resistance_percent, attacker_stats.mst, /*is_special_attack=*/false, *m_rng);
         }
     }
 

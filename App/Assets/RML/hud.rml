@@ -71,6 +71,7 @@
             <div id="action-palette-title">Action Palette</div>
             <div id="action-palette-columns">
                 <div id="action-palette-normal-attack" class="character-screen-panel"></div>
+                <div id="action-palette-special-attack" class="character-screen-panel"></div>
                 <div id="action-palette-techniques" class="character-screen-panel"></div>
                 <div id="action-palette-photon-arts" class="character-screen-panel"></div>
             </div>

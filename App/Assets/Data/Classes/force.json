@@ -5,6 +5,7 @@
     "starting_weapon_prefab_id": "weapons.wand",
     "starting_technique_id_strings": ["foie"],
     "starting_armor_prefab_id": "armor.frame",
+    "starting_mag_prefab_id": "mags.mag",
     "starting_inventory": [
         { "item_prefab_id": "monomate", "quantity": 1 },
         { "item_prefab_id": "monofluid", "quantity": 3 },

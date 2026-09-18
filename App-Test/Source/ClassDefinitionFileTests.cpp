@@ -88,6 +88,7 @@ TEST_CASE("LoadClassDefinition loads a valid document", "[ClassDefinitionFile]")
     REQUIRE(definition.starting_weapon_prefab_id == "weapons.saber");
     REQUIRE(definition.starting_technique_id_strings.empty());
     REQUIRE(definition.starting_armor_prefab_id.empty());
+    REQUIRE(definition.starting_mag_prefab_id.empty());
     REQUIRE(definition.starting_inventory.empty());
     REQUIRE(definition.base_hp == 50);
     REQUIRE(definition.base_tp == 15);
@@ -114,7 +115,8 @@ TEST_CASE("LoadClassDefinition reads starting_technique_id_strings when present"
     REQUIRE(definition.starting_technique_id_strings == std::vector<std::string>{"foie"});
 }
 
-TEST_CASE("LoadClassDefinition reads starting_armor_prefab_id and starting_inventory when present",
+TEST_CASE("LoadClassDefinition reads starting_armor_prefab_id, starting_mag_prefab_id, and starting_inventory "
+          "when present",
           "[ClassDefinitionFile]")
 {
     TempDirectory temp;
@@ -124,6 +126,7 @@ TEST_CASE("LoadClassDefinition reads starting_armor_prefab_id and starting_inven
     auto& allocator = document.GetAllocator();
     document["class_id"] = StringValue("force", allocator);
     document.AddMember("starting_armor_prefab_id", StringValue("armor.frame", allocator), allocator);
+    document.AddMember("starting_mag_prefab_id", StringValue("mags.mag", allocator), allocator);
 
     rapidjson::Value inventory(rapidjson::kArrayType);
     rapidjson::Value monofluid(rapidjson::kObjectType);
@@ -139,6 +142,7 @@ TEST_CASE("LoadClassDefinition reads starting_armor_prefab_id and starting_inven
 
     const psr::ClassDefinition definition = psr::LoadClassDefinition(file, psr::ClassId::Force);
     REQUIRE(definition.starting_armor_prefab_id == "armor.frame");
+    REQUIRE(definition.starting_mag_prefab_id == "mags.mag");
     REQUIRE(definition.starting_inventory.size() == 2);
     REQUIRE(definition.starting_inventory[0].item_prefab_id == "monofluid");
     REQUIRE(definition.starting_inventory[0].quantity == 3);

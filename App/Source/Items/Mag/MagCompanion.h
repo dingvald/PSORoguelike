@@ -24,8 +24,13 @@ void OnMagUnequipped(Registry& registry, entt::entity mag_entity);
 // actor currently has an equipped mag. Repositions the equipped mag one
 // tile behind actor -- opposite whatever LastDirectionComponent currently
 // holds (defaulting to south if actor has none) -- and advances its idle-
-// bob clock (MagComponent::bob_elapsed). A no-op if actor has no
-// EquipmentComponent or no mag equipped.
+// bob clock (MagComponent::bob_elapsed). The move itself lerps (a Tween
+// eases the render offset in from the mag's old tile, same as player
+// movement -- see MoveAction), except when the new tile is more than one
+// step away -- a teleport, or a stale tile inherited across a scene
+// transition -- in which case the mag snaps instantly instead of visibly
+// sliding across the map. A no-op if actor has no EquipmentComponent or no
+// mag equipped.
 void UpdateMagCompanion(Registry& registry, entt::entity actor, float delta_time);
 
 } // namespace psr

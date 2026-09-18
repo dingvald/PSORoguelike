@@ -339,7 +339,11 @@ private:
     // reasoning as OnEquipmentSlotActivated, but rewrites HotbarComponent
     // and republishes HotbarStateMessage instead of the Character screen.
     void OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message);
-    void PublishCharacterScreenState();
+
+    // fed_mag threads straight into CharacterScreenMessage::fed_mag -- see
+    // that field's doc comment for why OnMagFeedRequested passes true rather
+    // than HudLayer inferring it from Publish's timing.
+    void PublishCharacterScreenState(bool fed_mag = false);
 
     // Same "Assign to Hotbar" flow as OnHotbarSlotAssigned, but for the
     // Techniques/Photon Arts screen's rows (see AssignAbilityToHotbarSlot) --
@@ -675,7 +679,8 @@ private:
     TargetSelectionState m_target_selection_state;
     GameOverState m_game_over_state;
     AnimationState m_animation_state;
-    CharacterScreenState m_character_screen_state{m_affixes, m_class_definition.growth};
+    CharacterScreenState m_character_screen_state{m_affixes, m_class_definition.growth, m_photon_arts,
+                                                  m_status_effects};
     ActionPaletteState m_action_palette_state{m_techniques, m_photon_arts};
     MissionSelectState m_mission_select_state{m_dungeons, m_run_progress, m_areas};
     ShopState m_shop_state{m_shop_stock, m_affixes};

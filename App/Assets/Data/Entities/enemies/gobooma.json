@@ -1,0 +1,59 @@
+{
+    "schema_version": 1,
+    "components": {
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.natural_weapon"
+        },
+        "blocks_movement": {},
+        "renderable": {
+            "texture_id": "booma",
+            "texture_size": {
+                "x": 16,
+                "y": 24
+            },
+            "uv": {
+                "x": 0,
+                "y": 0
+            },
+            "color_1": "#312109ff",
+            "color_2": "#ac8438ff",
+            "render_layer": 0,
+            "frames": 1,
+            "frame_time": 0.0,
+            "is_synced": true
+        },
+        "ai": {
+            "behavior": "chase_and_attack",
+            "detection_range": 20
+        },
+        "actor": {
+            "movement_speed": 75,
+            "act_speed": 100
+        },
+        "experience_value": {
+            "xp": 6
+        },
+        "stats": {
+            "atp": 85,
+            "ata": 65,
+            "mst": 0,
+            "dfp": 5,
+            "evp": 68,
+            "lck": 8
+        },
+        "drop_table": {
+            "entries": [],
+            "no_drop_weight": 0.0,
+            "meseta_weight": 0.0,
+            "meseta_min": 0,
+            "meseta_max": 0
+        },
+        "health": {
+            "current_hp": 85,
+            "max_hp": 85
+        },
+        "race": {
+            "race_id": "native"
+        }
+    }
+}

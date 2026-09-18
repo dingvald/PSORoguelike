@@ -79,6 +79,12 @@ ActionPaletteMessage BuildActionPaletteMessage(Registry& registry, entt::entity 
             // regardless of which weapon happens to be equipped, the same
             // way a Technique/PhotonArt row names the spell/art, not "cast".
             message.normal_attack = ActionPaletteMessage::NormalAttackEntry{"Normal Attack"};
+
+            // Only present for an elemental weapon -- a non-elemental one
+            // has no prefix special to execute (see WeaponAttackAction's own
+            // is_special_attack no-op guard).
+            if (weapon->element != Element::None)
+                message.special_attack = ActionPaletteMessage::SpecialAttackEntry{"Special Attack"};
         }
     }
 

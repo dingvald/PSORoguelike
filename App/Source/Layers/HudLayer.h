@@ -9,6 +9,7 @@
 #include "Messages/StorageMessage.h"
 #include "Messages/ActionPaletteMessage.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -100,11 +101,12 @@ private:
         Inventory
     };
 
-    // Which of the Action Palette screen's three panels currently has
+    // Which of the Action Palette screen's four panels currently has
     // keyboard focus.
     enum class ActionPalettePanel
     {
         NormalAttack,
+        SpecialAttack,
         Techniques,
         PhotonArts
     };
@@ -151,6 +153,45 @@ private:
 
         Action action;
         std::string label;
+
+        // True when the action is valid for this row but not currently
+        // selectable (e.g. Feed while the mag's feed cooldown is active) --
+        // still rendered, greyed out via RML's own "disabled" class, but
+        // ChooseHighlightedMenuOption no-ops on it.
+        bool disabled = false;
+    };
+
+    // One mag stat bar's feed-animation state, tracked in raw sub-units
+    // (level * progress_to_next + progress -- see CharacterScreenMessage::
+    // MagStatBar) so a multi-level gain from one feed animates as a single
+    // continuous fill that visibly wraps to 0% at each level boundary
+    // instead of jumping straight to the final bar position.
+    // displayed_level/level_up_flash track what's actually been rendered so
+    // UpdateMagPanelAnimations can detect a level-up crossing as
+    // displayed_subunits sweeps past it, even when target_subunits already
+    // reflects several levels of gain.
+    struct MagStatAnimation
+    {
+        float displayed_subunits = 0.0f;
+        int target_subunits = 0;
+        int displayed_level = 0;
+        float level_up_flash = 0.0f;
+    };
+
+    // Child elements of #character-screen-mag-panel, captured once when its
+    // row markup is first built (see RenderMagPanel) so every later refresh
+    // -- especially the per-frame ones from UpdateMagPanelAnimations -- can
+    // update text/width directly instead of rebuilding markup (which would
+    // destroy and recreate .mag-stat-bar-fill every call, leaving no
+    // previous-frame width for the animation to read as its starting point).
+    // Index order matches MagSummary's pow/def/dex/mind fields.
+    struct MagPanelElements
+    {
+        Rml::Element* title = nullptr;
+        std::array<Rml::Element*, 4> level_labels{};
+        std::array<Rml::Element*, 4> fills{};
+        std::array<Rml::Element*, 4> rows{};
+        Rml::Element* info_row = nullptr;
     };
 
     void LoadDocument();
@@ -305,22 +346,63 @@ private:
     void BeginAwaitingMagFood();
     void CancelAwaitingMagFood();
 
-    // Renders #character-screen-mag-panel from m_character_screen_cache->mag
-    // -- hidden (via display:none) when no mag is equipped or the Equipment
-    // panel's current hover/focus target isn't the Mag slot. One
-    // .mag-stat-bar-fill width (an RCSS transition target) per stat, so a
-    // changed progress value after a feed animates rather than snapping.
+    // Builds/refreshes #character-screen-mag-panel from
+    // m_character_screen_cache->mag. Builds the panel's row markup once
+    // (cached into m_mag_panel_elements) and thereafter only updates text/
+    // width on those same elements -- rebuilding via SetInnerRML every call,
+    // the old approach, destroyed and recreated the .mag-stat-bar-fill
+    // elements each time, so there was never a previous frame's width for an
+    // RCSS transition to animate from. Retargets (doesn't reset)
+    // m_mag_stat_animations from the cache's actual level/progress; the
+    // fill-over-time animation itself is advanced in UpdateMagPanelAnimations,
+    // called every frame from OnUpdate so it keeps progressing regardless of
+    // focus/hover churn. Visibility is delegated to RefreshMagPanelVisibility.
     void RenderMagPanel();
+
+    // Pushes the four MagStatAnimation entries' current displayed_subunits/
+    // displayed_level/level_up_flash into m_mag_panel_elements (title text,
+    // per-stat level text + wrapped-progress fill width, the "mag-level-up"
+    // flash class, IQ/Sync text). Called after RenderMagPanel retargets and
+    // again every tick from UpdateMagPanelAnimations -- a no-op if the panel
+    // markup hasn't been built yet.
+    void ApplyMagPanelDisplay();
+
+    // Advances each of the four MagStatAnimation entries toward its
+    // target_subunits at a fixed rate (see kMagBarFillUnitsPerSecond in the
+    // .cpp), wrapping displayed_level up by one and arming level_up_flash
+    // whenever displayed_subunits crosses a progress_to_next boundary --
+    // this is what makes a multi-level feed visibly fill to 100%, flash, and
+    // reset per level instead of jumping straight to the final bar position.
+    // Ticks level_up_flash back down toward zero regardless. A no-op once
+    // AnyMagStatAnimating() is false, so this costs nothing while idle.
+    void UpdateMagPanelAnimations(float delta_time);
+
+    // True while any of the four stats still has displayed_subunits short of
+    // target_subunits, or a level_up_flash still fading -- keeps the mag
+    // panel visible (see RefreshMagPanelVisibility) for the whole animation
+    // even after focus/hover has moved off the Mag slot (e.g. once
+    // ActivateFocusedRow's Feed flow cancels awaiting-mag-food and moves
+    // focus back to a plain Inventory row).
+    bool AnyMagStatAnimating() const;
+
+    // Shows/hides #character-screen-mag-panel: visible while the Equipment
+    // panel's hover/focus target is the Mag slot, OR the "select food to
+    // feed" sub-state is active (m_awaiting_mag_food_selection), OR
+    // AnyMagStatAnimating() -- so the panel stays up for the whole feed
+    // animation instead of disappearing the instant focus leaves the Mag row
+    // (which BeginAwaitingMagFood always does, to jump focus into Inventory).
+    void RefreshMagPanelVisibility();
 
     // Renders #character-screen-item-detail from whichever Inventory/
     // Equipment row is currently hovered (taking priority) or keyboard-
     // focused -- same target-resolution shape as UpdateStatPreview, except
     // not restricted to equippable rows (a consumable/mod should still show
     // its detail). Hidden (via display:none) when nothing resolves. Reads
-    // straight from m_character_screen_cache (every field the panel needs
-    // -- name, stars, description, stats, species bonuses -- is already
-    // resolved there), so unlike UpdateStatPreview this never needs a
-    // round-trip message.
+    // straight from m_character_screen_cache (every field the panel needs --
+    // name, stars, description, equip slot, stats, species bonuses, a
+    // weapon's range/targeting/grind/status-chance/granted Photon Arts, an
+    // armor's mod slot count -- is already resolved there), so unlike
+    // UpdateStatPreview this never needs a round-trip message.
     void RenderItemDetailPanel();
 
     // Stat-change hover preview: recomputes which Inventory or Equipment row
@@ -396,6 +478,17 @@ private:
     // "unconditional guarded reset" idiom as CancelAwaitingHotbarSlot).
     bool m_awaiting_mag_food_selection = false;
 
+    // POW/DEF/DEX/MIND fill-over-time animation state (see
+    // UpdateMagPanelAnimations) and the cached mag-panel child elements they
+    // drive (see RenderMagPanel). m_mag_panel_elements is nullopt until the
+    // panel's row markup has been built at least once, and is reset whenever
+    // the mag panel goes back to having nothing to show (mag unequipped) or
+    // the Character screen closes, so the next equip/open rebuilds fresh and
+    // snaps to the new mag's actual values instead of animating from a stale
+    // baseline.
+    std::array<MagStatAnimation, 4> m_mag_stat_animations;
+    std::optional<MagPanelElements> m_mag_panel_elements;
+
     // Latest CharacterScreenStatPreviewMessage; nullopt (rendered as no
     // preview) until the first response arrives after a preview target is
     // requested. Cleared in OnCharacterScreenClosed.
@@ -418,6 +511,14 @@ private:
     int m_menu_highlight = 0;
     std::vector<ContextMenuOption> m_menu_options;
     std::vector<std::unique_ptr<RmlClickListener>> m_context_menu_listeners;
+
+    // Set by OnCharacterScreenState instead of calling OpenContextMenu
+    // directly when a feed-to-exhaustion refresh needs to land back on the
+    // mag's own context menu -- the equipment rows were just rebuilt via
+    // SetInnerRML in that same call, so RenderContextMenu's anchor->
+    // GetAbsoluteOffset() would still read pre-layout geometry. Consumed at
+    // the top of the next OnUpdate, same pattern as m_log_scroll_pending.
+    bool m_reopen_mag_context_menu_pending = false;
 
     // Rebuilt on every OnActionPaletteState call -- same reasoning as
     // m_character_screen_listeners (row count isn't fixed).

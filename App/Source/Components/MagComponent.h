@@ -56,11 +56,11 @@ struct MagEvolutionRule
 // now (see docs/GDD.md's Mag section) -- displayed in the Character screen's
 // mag panel, but neither currently gates or scales anything.
 //
-// feed_cooldown_remaining and bob_elapsed are runtime-only (normally left at
-// their zero default in authored JSON, the same way e.g. HealthComponent's
-// current_hp is both an authorable starting value and a runtime-mutated one)
-// -- still schema-registered/clone-eligible for uniformity with every other
-// flat component in this codebase.
+// feed_cooldown_remaining, feed_charges_used, and bob_elapsed are
+// runtime-only (normally left at their zero default in authored JSON, the
+// same way e.g. HealthComponent's current_hp is both an authorable starting
+// value and a runtime-mutated one) -- still schema-registered/clone-eligible
+// for uniformity with every other flat component in this codebase.
 struct MagComponent
 {
     int pow_level = 0;
@@ -77,6 +77,17 @@ struct MagComponent
 
     int feed_cooldown_turns = 50;
     int feed_cooldown_remaining = 0;
+
+    // How many feeds are allowed within one cooldown window (PSO's own
+    // "three feeds, then a cooldown" mag mechanic). The cooldown starts on
+    // the *first* feed after a recharge (feed_charges_used 0 -> 1, see
+    // MagFeeding.cpp's RegisterMagFeed), not once feed_charges is
+    // exhausted -- further feeds are still allowed up to feed_charges while
+    // it ticks down. TickMagFeedCooldowns snaps feed_charges_used back to
+    // zero (refilling every charge at once) the instant feed_cooldown_remaining
+    // reaches zero.
+    int feed_charges = 3;
+    int feed_charges_used = 0;
 
     float bob_elapsed = 0.0f;
 
@@ -98,6 +109,8 @@ struct MagComponent
             .Data<&MagComponent::sync>("sync")
             .Data<&MagComponent::feed_cooldown_turns>("feed_cooldown_turns")
             .Data<&MagComponent::feed_cooldown_remaining>("feed_cooldown_remaining")
+            .Data<&MagComponent::feed_charges>("feed_charges")
+            .Data<&MagComponent::feed_charges_used>("feed_charges_used")
             .Data<&MagComponent::feed_response>("feed_response")
             .Data<&MagComponent::evolution_tree>("evolution_tree");
     }

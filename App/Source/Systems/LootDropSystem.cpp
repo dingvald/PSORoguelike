@@ -4,6 +4,7 @@
 #include "Components/DropTableComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/EventHandlerComponent.h"
+#include "Engine/ECS/ExtractDisplayString.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Position.h"
 #include "Engine/ECS/Registry.h"
@@ -70,7 +71,7 @@ void LootDropSystem::OnDamage(Entity /*player*/, AfterDamageEvent& event)
     m_grid->AddEntity(target_position->tile, item);
 
     const std::optional<std::string> label = NameIdRegistry::Find(item_prefab_id);
-    m_message_bus->Publish(LootDropMessage{label ? *label : std::string("an item")});
+    m_message_bus->Publish(LootDropMessage{label ? ExtractDisplayString(*label) : std::string("an item")});
 }
 
 } // namespace psr

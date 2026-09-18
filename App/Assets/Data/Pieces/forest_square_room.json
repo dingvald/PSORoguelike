@@ -3,6 +3,7 @@
     "name": "forest_square_room",
     "area_tag": "forest",
     "category": "room",
+    "preferred_unlock_condition": "room_cleared",
     "can_rotate": false,
     "can_mirror": false,
     "tags": [],
@@ -1519,6 +1520,38 @@
             },
             "prefab_id": "enemies.booma",
             "wave": 0
+        },
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 9
+            },
+            "prefab_id": "enemies.monest",
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 11,
+                "y": 13
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 1
+        },
+        {
+            "cell_offset": {
+                "x": 9,
+                "y": 11
+            },
+            "prefab_id": "enemies.gobooma",
+            "wave": 2
+        },
+        {
+            "cell_offset": {
+                "x": 13,
+                "y": 11
+            },
+            "prefab_id": "enemies.booma",
+            "wave": 2
         }
     ]
 }

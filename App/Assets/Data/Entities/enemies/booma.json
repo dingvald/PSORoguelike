@@ -35,10 +35,11 @@
                 "y": 0
             },
             "color_1": "#b2ada9ff",
-            "color_2": "#634d22ff",
+            "color_2": "#783c31ff",
             "render_layer": 1,
             "frames": 1,
-            "frame_time": 0.0
+            "frame_time": 0.0,
+            "is_synced": true
         },
         "drop_table": {
             "entries": [
@@ -57,7 +58,7 @@
             "meseta_max": 25
         },
         "experience_value": {
-            "xp": 12
+            "xp": 5
         },
         "actor": {
             "movement_speed": 65,

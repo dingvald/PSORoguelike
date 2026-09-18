@@ -156,6 +156,10 @@ body {
     border: 2px #d43f3f;
 }
 
+.hotbar-slot.slot-special-attack {
+    border: 2px #ffb400;
+}
+
 .slot-key {
     display: block;
     margin-top: 0.2em;
@@ -406,9 +410,26 @@ body {
     border-left: 3px #f6470a;
 }
 
+/* An item whose weapon stat_requirement/armor required_level the player
+   doesn't currently meet -- still selectable (see HudLayer::
+   OnCharacterScreenState), just visually dimmed at rest. */
+.equip-row.unmet-requirement,
+.inventory-row.unmet-requirement {
+    color: #666;
+}
+
+.equip-row.unmet-requirement:hover,
+.inventory-row.unmet-requirement:hover,
+.equip-row.unmet-requirement.focused,
+.inventory-row.unmet-requirement.focused {
+    color: #fff;
+}
+
 /* The equipped mag's stats/level/IQ/sync -- centered below
-   #character-screen-columns, shown only while the Mag equipment-panel row
-   is hovered or keyboard-focused (see HudLayer::RenderMagPanel). */
+   #character-screen-columns, shown while the Mag equipment-panel row is
+   hovered/keyboard-focused, while a food item is being picked to feed it, or
+   while its fill-over-time feed animation is still playing (see
+   HudLayer::RefreshMagPanelVisibility). */
 #character-screen-mag-panel {
     display: none;
     flex-direction: column;
@@ -433,6 +454,16 @@ body {
     align-items: center;
     width: 100%;
     margin-bottom: 0.3em;
+    background-color: rgba(0, 0, 0, 0);
+    transition: background-color 0.4s;
+}
+
+/* Toggled for kMagLevelUpFlashSeconds by HudLayer::UpdateMagPanelAnimations
+   when a stat's fill-over-time animation sweeps displayed_subunits across a
+   progress_to_next boundary -- see MagStatAnimation::level_up_flash. The
+   transition above fades it back out once the class is removed. */
+.mag-stat-row.mag-level-up {
+    background-color: rgba(255, 215, 106, 130);
 }
 
 .mag-stat-label {
@@ -465,7 +496,6 @@ body {
     height: 100%;
     width: 0%;
     background-color: #3aa0ff;
-    transition: width 0.3s;
 }
 
 .mag-info-row {
@@ -478,9 +508,9 @@ body {
 /* The currently hovered/focused Inventory or Equipment item's full detail --
    centered below #character-screen-columns (and #character-screen-mag-panel,
    when both show at once), shown only while a row resolves a target (see
-   HudLayer::RenderItemDetailPanel). Image placeholder on the left, name/
-   stars/description/stats/species-bonuses on the right, in two equal-width
-   boxes. */
+   HudLayer::RenderItemDetailPanel). Image placeholder on the left, name+stars/
+   description/equip-slot/stats/species-bonuses/weapon-or-armor-specific rows
+   on the right, in two equal-width boxes. */
 #character-screen-item-detail {
     display: none;
     flex-direction: column;
@@ -497,6 +527,13 @@ body {
     font-weight: bold;
     color: #f6470a;
     margin-bottom: 0.4em;
+}
+
+.item-detail-separator {
+    display: block;
+    height: 0;
+    border-top: 1px solid #555;
+    margin: 0.3em 0 0.5em 0;
 }
 
 .item-detail-columns {
@@ -526,10 +563,18 @@ body {
 }
 
 .item-detail-stars {
-    display: block;
-    font-size: 0.85em;
     color: #d4c93f;
-    margin-bottom: 0.3em;
+}
+
+.item-detail-requirement {
+    display: block;
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 0.4em;
+}
+
+.item-detail-requirement.unmet {
+    color: #d9534f;
 }
 
 .item-detail-description {
@@ -581,6 +626,16 @@ body {
     border-left: 3px #f6470a;
 }
 
+.menu-row.disabled {
+    color: #666;
+    cursor: default;
+}
+
+.menu-row.disabled:hover {
+    color: #666;
+    background-color: transparent;
+}
+
 #character-screen-hint {
     margin-top: 0.4em;
     font-size: 0.9em;
@@ -623,7 +678,8 @@ body {
 
 .technique-row,
 .photon-art-row,
-.normal-attack-row {
+.normal-attack-row,
+.special-attack-row {
     display: block;
     padding: 0.3em 0.2em;
     font-size: 0.85em;
@@ -632,14 +688,16 @@ body {
 
 .technique-row:hover,
 .photon-art-row:hover,
-.normal-attack-row:hover {
+.normal-attack-row:hover,
+.special-attack-row:hover {
     color: #fff;
     background-color: rgba(58, 160, 255, 80);
 }
 
 .technique-row.focused,
 .photon-art-row.focused,
-.normal-attack-row.focused {
+.normal-attack-row.focused,
+.special-attack-row.focused {
     color: #fff;
     border-left: 3px #3aa0ff;
 }

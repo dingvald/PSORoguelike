@@ -14,18 +14,18 @@
             "max_hp": 8
         },
         "stats": {
-            "atp": 20,
-            "ata": 60,
+            "atp": 53,
+            "ata": 75,
             "mst": 0,
             "dfp": 0,
-            "evp": 55,
-            "lck": 5
+            "evp": 30,
+            "lck": 20
         },
         "race": {
             "race_id": "native"
         },
         "renderable": {
-            "texture_id": "creature_sprites",
+            "texture_id": "mothmant",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -34,9 +34,12 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#8a6a4aff",
-            "color_2": "#cbb389ff",
-            "render_layer": 1
+            "color_1": "#999693ff",
+            "color_2": "#4c1e2fff",
+            "render_layer": 1,
+            "frames": 2,
+            "frame_time": 1.0,
+            "is_synced": false
         },
         "drop_table": {
             "entries": [],

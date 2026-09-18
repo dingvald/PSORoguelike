@@ -30,7 +30,7 @@
             ]
         },
         "renderable": {
-            "texture_id": "item_pickup",
+            "texture_id": "basic_mag",
             "texture_size": {
                 "x": 16,
                 "y": 24
@@ -39,8 +39,8 @@
                 "x": 0,
                 "y": 0
             },
-            "color_1": "#000000ff",
-            "color_2": "#3aa0ffff",
+            "color_1": "#f5ce42ff",
+            "color_2": "#4263f5ff",
             "render_layer": 1,
             "frames": 1,
             "frame_time": 0.0

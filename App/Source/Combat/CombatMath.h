@@ -38,6 +38,29 @@ int ComputeDamage(int attacker_atp, int defender_dfp, float variance_roll);
 // spell's element reduces them.
 int ComputeTechniqueDamage(int attacker_mst, int resistance_percent);
 
+// The bonus elemental damage an elemental weapon (WeaponComponent::element !=
+// None) adds on top of ComputeDamage's physical result -- PSO's own "an
+// elemental hit deals its physical damage plus a smaller elemental kicker"
+// shape, distinct from a Technique's all-elemental, DFP-bypassing damage.
+// max(0, floor((attacker_atp / 10) * (1 - resistance_percent / 100) *
+// (is_special_attack ? 2.0 : 1.0))): half a Technique's per-ATP/MST rate
+// normally (a passive elemental proc shouldn't out-damage the weapon's own
+// swing), doubled when triggered as the weapon's own Special Attack (see
+// WeaponAttackAction) -- matching that action's guaranteed (rather than
+// chance-rolled) status application. Floored at 0, not 1: a fully-resisted
+// elemental hit should add nothing, unlike a Technique (which is *entirely*
+// elemental and must still land for *something*).
+int ComputeElementalDamage(int attacker_atp, int resistance_percent, bool is_special_attack);
+
+// resistance_percent's mitigation applied to an elemental status effect's own
+// proc chance (not its damage): max(0, round(chance_percent * (1 -
+// resistance_percent / 100))). Shared by every elemental attack path
+// (WeaponAttackAction/ProjectileImpact/PhotonArtAction) right before calling
+// MaybeApplyElementalStatus, so a resistant target shrugs off status
+// ailments proportionally to its resistance, same as it already takes less
+// elemental damage.
+int ApplyResistanceToStatusChance(int chance_percent, int resistance_percent);
+
 // PSO's LCK-driven critical hit chance, expressed as a fraction: lck / 500
 // (LCK / 5%), clamped to [0, 1].
 float ComputeCritChance(int attacker_lck);

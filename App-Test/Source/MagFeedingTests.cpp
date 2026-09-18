@@ -33,7 +33,7 @@ public:
         entt::entity species_a = prefab_registry.create();
         psr::MagComponent a;
         a.feed_cooldown_turns = 50;
-        a.feed_response.push_back({/*item_prefab_id=*/100, /*pow=*/6, /*def=*/0, /*dex=*/0, /*mind=*/0});
+        a.feed_response.push_back({/*item_prefab_id=*/100, /*pow=*/101, /*def=*/0, /*dex=*/0, /*mind=*/0});
         a.evolution_tree.push_back({"POW >= 3", kSpeciesBPrefabId});
         prefab_registry.emplace<psr::MagComponent>(species_a, a);
         psr::RenderableComponent renderable_a;
@@ -69,7 +69,7 @@ public:
         entt::entity species = prefab_registry.create();
         psr::MagComponent component;
         component.feed_cooldown_turns = 50;
-        component.feed_response.push_back({/*item_prefab_id=*/7, /*pow=*/5, /*def=*/0, /*dex=*/0, /*mind=*/0});
+        component.feed_response.push_back({/*item_prefab_id=*/7, /*pow=*/100, /*def=*/0, /*dex=*/0, /*mind=*/0});
         component.evolution_tree.push_back({"LEVEL >= 1", kSelfLoopPrefabId});
         prefab_registry.emplace<psr::MagComponent>(species, component);
         prefab_registry.emplace<psr::RenderableComponent>(species);
@@ -99,15 +99,15 @@ TEST_CASE("ApplyMagFood rolls progress into multiple stat levels in one feed", "
     psr::Registry registry;
     entt::entity mag = registry.CreateEntity();
     psr::MagComponent component;
-    // 12 / kMagPointsPerLevel(5) = 2 levels, remainder 2.
-    component.feed_response.push_back({/*item_prefab_id=*/7, /*pow=*/12, /*def=*/0, /*dex=*/0, /*mind=*/0});
+    // 212 / kMagPointsPerLevel(100) = 2 levels, remainder 12.
+    component.feed_response.push_back({/*item_prefab_id=*/7, /*pow=*/212, /*def=*/0, /*dex=*/0, /*mind=*/0});
     registry.Emplace<psr::MagComponent>(mag, component);
 
     REQUIRE(psr::ApplyMagFood(registry, mag, 7));
 
     const psr::MagComponent& result = registry.GetComponent<psr::MagComponent>(mag);
     CHECK(result.pow_level == 2);
-    CHECK(result.pow_progress == 2);
+    CHECK(result.pow_progress == 12);
 }
 
 TEST_CASE("ApplyMagFood clamps a negative delta at zero, never going below", "[MagFeeding]")
@@ -177,24 +177,70 @@ TEST_CASE("ApplyMagFood evolves the mag once its evolution_tree condition is met
     CHECK(evolved.pow_level == 3);            // runtime stat progress preserved through the evolution
 }
 
-TEST_CASE("TickMagFeedCooldowns decrements every live mag's cooldown by one, never below zero", "[MagFeeding]")
+TEST_CASE("RegisterMagFeed starts the cooldown on the first feed of a charge cycle", "[MagFeeding]")
+{
+    psr::MagComponent mag;
+    mag.feed_cooldown_turns = 50;
+    mag.feed_charges = 3;
+
+    psr::RegisterMagFeed(mag);
+    CHECK(mag.feed_charges_used == 1);
+    CHECK(mag.feed_cooldown_remaining == 50);
+}
+
+TEST_CASE("RegisterMagFeed allows further feeds within the same cycle without restarting the cooldown",
+          "[MagFeeding]")
+{
+    psr::MagComponent mag;
+    mag.feed_cooldown_turns = 50;
+    mag.feed_charges = 3;
+
+    psr::RegisterMagFeed(mag);
+    mag.feed_cooldown_remaining = 40; // simulate a few elapsed turns
+
+    psr::RegisterMagFeed(mag);
+    CHECK(mag.feed_charges_used == 2);
+    CHECK(mag.feed_cooldown_remaining == 40); // unchanged -- only the cycle's first feed (re)starts it
+
+    psr::RegisterMagFeed(mag);
+    CHECK(mag.feed_charges_used == 3);
+    CHECK(mag.feed_cooldown_remaining == 40);
+}
+
+TEST_CASE("TickMagFeedCooldowns decrements every live mag's cooldown by one, never below zero, refilling "
+          "feed_charges_used once a cooldown reaches zero",
+          "[MagFeeding]")
 {
     psr::Registry registry;
 
     entt::entity mag_a = registry.CreateEntity();
     psr::MagComponent component_a;
     component_a.feed_cooldown_remaining = 3;
+    component_a.feed_charges_used = 2;
     registry.Emplace<psr::MagComponent>(mag_a, component_a);
 
     entt::entity mag_b = registry.CreateEntity();
     psr::MagComponent component_b;
-    component_b.feed_cooldown_remaining = 0;
+    component_b.feed_cooldown_remaining = 1;
+    component_b.feed_charges_used = 3;
     registry.Emplace<psr::MagComponent>(mag_b, component_b);
+
+    entt::entity mag_c = registry.CreateEntity();
+    psr::MagComponent component_c;
+    component_c.feed_cooldown_remaining = 0;
+    component_c.feed_charges_used = 0;
+    registry.Emplace<psr::MagComponent>(mag_c, component_c);
 
     psr::TickMagFeedCooldowns(registry);
 
     CHECK(registry.GetComponent<psr::MagComponent>(mag_a).feed_cooldown_remaining == 2);
+    CHECK(registry.GetComponent<psr::MagComponent>(mag_a).feed_charges_used == 2); // still recharging
+
     CHECK(registry.GetComponent<psr::MagComponent>(mag_b).feed_cooldown_remaining == 0);
+    CHECK(registry.GetComponent<psr::MagComponent>(mag_b).feed_charges_used == 0); // just fully refilled
+
+    CHECK(registry.GetComponent<psr::MagComponent>(mag_c).feed_cooldown_remaining == 0);
+    CHECK(registry.GetComponent<psr::MagComponent>(mag_c).feed_charges_used == 0); // wasn't on cooldown, untouched
 }
 
 TEST_CASE("ApplyMagFood's self-referencing evolution rule is a correct no-op", "[MagFeeding][Evolution]")

@@ -51,6 +51,7 @@
 #include "Engine/Dungeon/DungeonStitcher.h"
 #include "Engine/Dungeon/PieceLibraryFile.h"
 #include "Engine/ECS/EventHandlerComponent.h"
+#include "Engine/ECS/ExtractDisplayString.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/ItemComponent.h"
 #include "Engine/ECS/JsonEntityLoader.h"
@@ -123,6 +124,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 namespace psr {
 
@@ -337,6 +339,17 @@ void GameplayLayer::SpawnNewCharacter()
         const entt::entity armor = m_registry.CreateEntity(
             entt::hashed_string::value(m_class_definition.starting_armor_prefab_id.c_str()));
         starting_inventory.items.push_back(armor);
+        EquipItem(Entity(m_registry, m_player), static_cast<int>(starting_inventory.items.size()) - 1);
+    }
+
+    // Class-authored starting mag (see ClassDefinition::starting_mag_prefab_id)
+    // -- same EquipItem routing as starting armor above, which also handles
+    // calling OnMagEquipped to place the companion in the world.
+    if (!m_class_definition.starting_mag_prefab_id.empty())
+    {
+        const entt::entity mag = m_registry.CreateEntity(
+            entt::hashed_string::value(m_class_definition.starting_mag_prefab_id.c_str()));
+        starting_inventory.items.push_back(mag);
         EquipItem(Entity(m_registry, m_player), static_cast<int>(starting_inventory.items.size()) - 1);
     }
 
@@ -949,6 +962,24 @@ bool GameplayLayer::TryActivateSlot(int slot_index)
         BeginTargeting(request);
         return true;
     }
+    case HotbarSlotType::SpecialAttack:
+    {
+        const EquipmentComponent* equipment = m_registry.TryGetComponent<EquipmentComponent>(m_player);
+        if (!equipment || equipment->weapon == entt::null)
+            return false;
+        const WeaponComponent* weapon = m_registry.TryGetComponent<WeaponComponent>(equipment->weapon);
+        if (!weapon || weapon->element == Element::None)
+            return false;
+
+        m_pending_slot_action =
+            std::make_unique<WeaponAttackAction>(*m_grid, m_affixes, m_rng, std::nullopt, /*is_special_attack=*/true);
+        TargetRequest request{m_pending_slot_action.get(), weapon->targeting_mode, weapon->range_shape,
+                              weapon->range};
+        request.is_projectile = weapon->fires_projectile;
+        request.projectile_pierces = weapon->projectile_pierces;
+        BeginTargeting(request);
+        return true;
+    }
     case HotbarSlotType::Empty:
     default:
         return false;
@@ -1070,7 +1101,7 @@ void GameplayLayer::OnMagFeedRequested(const MagFeedRequestedMessage& message)
         return;
 
     MagComponent* mag = m_registry.TryGetComponent<MagComponent>(equipment->mag);
-    if (!mag || mag->feed_cooldown_remaining > 0)
+    if (!mag || mag->feed_charges_used >= mag->feed_charges)
         return;
 
     InventoryComponent* inventory = m_registry.TryGetComponent<InventoryComponent>(m_player);
@@ -1098,8 +1129,8 @@ void GameplayLayer::OnMagFeedRequested(const MagFeedRequestedMessage& message)
         m_registry.DestroyEntity(food);
     }
 
-    mag->feed_cooldown_remaining = mag->feed_cooldown_turns;
-    PublishCharacterScreenState();
+    RegisterMagFeed(*mag);
+    PublishCharacterScreenState(/*fed_mag=*/true);
 }
 
 void GameplayLayer::OnHotbarSlotAssigned(const HotbarSlotAssignedMessage& message)
@@ -1178,12 +1209,16 @@ void GameplayLayer::OnStorageWithdrawRequested(const StorageWithdrawRequestedMes
         Publish(BuildStorageMessage(m_registry, m_player, m_affixes));
 }
 
-void GameplayLayer::PublishCharacterScreenState()
+void GameplayLayer::PublishCharacterScreenState(bool fed_mag)
 {
     if (!m_registry.IsValid(m_player))
         return;
 
-    Publish(BuildCharacterScreenMessage(m_registry, m_player, m_affixes, m_class_definition.growth));
+    CharacterScreenMessage message = BuildCharacterScreenMessage(m_registry, m_player, m_affixes,
+                                                                  m_class_definition.growth, m_photon_arts,
+                                                                  m_status_effects);
+    message.fed_mag = fed_mag;
+    Publish(std::move(message));
 }
 
 void GameplayLayer::PublishFloatingTextState()
@@ -1221,7 +1256,8 @@ void GameplayLayer::PublishTargetState()
             state.has_target = true;
             state.name = DisplayName(m_registry, tab_target->target, m_player);
             if (const RaceComponent* race = target.TryGet<RaceComponent>())
-                state.race_label = NameIdRegistry::Find(race->race_id).value_or("Unknown");
+                state.race_label =
+                    NameIdRegistry::Find(race->race_id).transform(ExtractDisplayString).value_or("Unknown");
             if (const HealthComponent* health = target.TryGet<HealthComponent>())
             {
                 state.current_hp = health->current_hp;
@@ -1357,10 +1393,13 @@ void GameplayLayer::PublishHotbarState()
             // instance -- falls back to the placeholder stub for an unbound slot.
             view.name = "(item)";
             if (const std::optional<std::string> label = NameIdRegistry::Find(slot.id))
-                view.name = *label;
+                view.name = ExtractDisplayString(*label);
             break;
         case HotbarSlotType::NormalAttack:
             view.name = "Normal";
+            break;
+        case HotbarSlotType::SpecialAttack:
+            view.name = "Special";
             break;
         case HotbarSlotType::Empty:
         default:

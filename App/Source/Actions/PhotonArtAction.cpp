@@ -9,6 +9,7 @@
 #include "Combat/StatusEffectApplication.h"
 #include "Combat/StatusEffectHooks.h"
 #include "Combat/TargetResolution.h"
+#include "Components/ElementalResistanceComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
 #include "Components/StatsComponent.h"
@@ -162,6 +163,18 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                     std::lround(ComputeDamage(boosted_atp, defender_stats.dfp, variance_roll(*m_rng)) * multiplier));
                 damage = ApplyCritical(damage, unit_roll(*m_rng) < ComputeCritChance(attacker_stats.lck));
 
+                // The wielded weapon's own elemental flavor (if any) gets one
+                // roll, resisted by the target's ElementalResistanceComponent,
+                // for its ailment and a bonus-damage kicker together -- folded
+                // into this same hit's damage number, same as WeaponAttackAction.
+                const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+                const int resistance_percent =
+                    defender_resistance ? defender_resistance->ResistanceFor(before_cast.element) : 0;
+                damage += RollElementalDamageBonus(target, registry.GetStatusEffectLibrary(), before_cast.element,
+                                                   before_cast.status_effect_id, before_cast.status_chance_percent,
+                                                   resistance_percent, boosted_atp, /*is_special_attack=*/false,
+                                                   *m_rng);
+
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
@@ -176,14 +189,6 @@ ActionResult PhotonArtAction::Perform(Entity actor)
                         attacker_health->current_hp = std::min(
                             attacker_health->max_hp, attacker_health->current_hp + damage * art->drain_percent / 100);
                 }
-
-                if (!target.IsValid())
-                    break;
-
-                // The wielded weapon's own elemental flavor (if any) gets a
-                // chance to inflict its ailment on a landed, non-lethal hit.
-                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), before_cast.status_effect_id,
-                                          before_cast.status_chance_percent, *m_rng);
             }
         }
     }

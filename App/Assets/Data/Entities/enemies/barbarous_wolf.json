@@ -1,25 +1,25 @@
 {
     "schema_version": 1,
     "components": {
+        "blocks_movement": {},
+        "innate_weapon": {
+            "weapon_prefab_id": "weapons.natural_weapon"
+        },
         "actor": {
             "movement_speed": 80,
             "act_speed": 80
         },
-        "innate_weapon": {
-            "weapon_prefab_id": "weapons.natural_weapon"
-        },
-        "blocks_movement": {},
         "health": {
             "current_hp": 65,
             "max_hp": 65
         },
         "stats": {
-            "atp": 1,
-            "ata": 1,
+            "atp": 95,
+            "ata": 90,
             "mst": 0,
-            "dfp": 1,
-            "evp": 1,
-            "lck": 1
+            "dfp": 25,
+            "evp": 65,
+            "lck": 10
         },
         "race": {
             "race_id": "native"
@@ -38,7 +38,8 @@
             "color_2": "#3a608fff",
             "render_layer": 0,
             "frames": 1,
-            "frame_time": 0.0
+            "frame_time": 0.0,
+            "is_synced": true
         },
         "drop_table": {
             "entries": [],
@@ -51,8 +52,14 @@
             "xp": 7
         },
         "ai": {
-            "behavior": "pack_follower",
+            "behavior": "keep_distance_and_pounce",
             "detection_range": 20
+        },
+        "pounce": {
+            "preferred_distance": 2,
+            "pounce_chance_percent": 33,
+            "ghost_effect_prefab_id": "vfx.wolf_lunge_ghost",
+            "ghost_effect_duration": 0.25
         }
     }
 }

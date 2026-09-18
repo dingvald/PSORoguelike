@@ -5,6 +5,8 @@
 namespace psr {
 
 class AffixLibrary;
+class PhotonArtLibrary;
+class StatusEffectLibrary;
 struct GrowthCurve;
 
 // Modal Character screen (Inventory + Equipment as simple lists), pushed by
@@ -24,7 +26,8 @@ struct GrowthCurve;
 class CharacterScreenState : public GameState
 {
 public:
-    CharacterScreenState(const AffixLibrary& affixes, const GrowthCurve& growth_curve);
+    CharacterScreenState(const AffixLibrary& affixes, const GrowthCurve& growth_curve,
+                         const PhotonArtLibrary& photon_arts, const StatusEffectLibrary& status_effects);
 
     GameStateId GetId() const override { return GameStateId::CharacterScreen; }
 
@@ -44,6 +47,8 @@ public:
 private:
     const AffixLibrary* m_affixes;
     const GrowthCurve* m_growth_curve;
+    const PhotonArtLibrary* m_photon_arts;
+    const StatusEffectLibrary* m_status_effects;
     bool m_close_requested = false;
 };
 

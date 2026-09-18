@@ -40,6 +40,24 @@ TEST_CASE("ComputeTechniqueDamage floors (MST / 5) * (1 - resistance%), no DFP t
     CHECK(psr::ComputeTechniqueDamage(1, 0) == 1);    // never zero on a landed cast
 }
 
+TEST_CASE("ComputeElementalDamage floors (ATP / 10) * (1 - resistance%), doubled when special, floored at 0",
+          "[CombatMath]")
+{
+    CHECK(psr::ComputeElementalDamage(100, 0, false) == 10);   // floor(100/10) = 10
+    CHECK(psr::ComputeElementalDamage(100, 50, false) == 5);   // half resisted
+    CHECK(psr::ComputeElementalDamage(100, 100, false) == 0);  // fully resisted -- unlike physical/technique, may be 0
+    CHECK(psr::ComputeElementalDamage(100, 0, true) == 20);    // Special Attack doubles the bonus
+    CHECK(psr::ComputeElementalDamage(100, 50, true) == 10);   // still resisted first, then doubled
+}
+
+TEST_CASE("ApplyResistanceToStatusChance scales chance% by (1 - resistance%), floored at 0", "[CombatMath]")
+{
+    CHECK(psr::ApplyResistanceToStatusChance(40, 0) == 40);
+    CHECK(psr::ApplyResistanceToStatusChance(40, 50) == 20);
+    CHECK(psr::ApplyResistanceToStatusChance(40, 100) == 0);
+    CHECK(psr::ApplyResistanceToStatusChance(100, 100) == 0);
+}
+
 TEST_CASE("ComputeCritChance is LCK/500 clamped to [0, 1]", "[CombatMath]")
 {
     CHECK(psr::ComputeCritChance(0) == Catch::Approx(0.0f));

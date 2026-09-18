@@ -10,7 +10,9 @@
 #include "Combat/TargetResolution.h"
 #include "Components/ActorComponent.h"
 #include "Components/BlocksMovementComponent.h"
+#include "Components/ElementalResistanceComponent.h"
 #include "Components/KnockbackMultiplierComponent.h"
+#include "Components/PlayerControlledComponent.h"
 #include "Components/ProjectileComponent.h"
 #include "Components/RaceComponent.h"
 #include "Components/SelectedTargetComponent.h"
@@ -26,6 +28,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <random>
 #include <utility>
@@ -87,8 +90,9 @@ namespace {
 } // namespace
 
 WeaponAttackAction::WeaponAttackAction(Grid& grid, const AffixLibrary& affixes, std::mt19937& rng,
-                                       std::optional<Vec2> direction)
-    : m_grid(&grid), m_affixes(&affixes), m_rng(&rng), m_direction(direction)
+                                       std::optional<Vec2> direction, bool is_special_attack)
+    : m_grid(&grid), m_affixes(&affixes), m_rng(&rng), m_direction(direction),
+      m_is_special_attack(is_special_attack)
 {
 }
 
@@ -115,6 +119,28 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
     if (before_attack.cancelled) // Shocked -- attack-type actions no-op for zero cost, movement still works
         return ActionResult(0);
     if (!before_attack.has_weapon)
+    {
+        // Free no-op is fine for the player (attacking bare-handed on purpose
+        // shouldn't burn a turn), but an NPC re-picked with the same
+        // deterministic decision would get this same zero cost forever,
+        // hanging TurnCoordinator::Step -- e.g. a chase/attack prefab authored
+        // without an innate_weapon, so it never got an EquipmentComponent.
+        // Charge a normal attack cost instead so that degrades to a whiff.
+        if (!actor.Has<PlayerControlledComponent>())
+        {
+            std::fprintf(stderr,
+                        "Warning: WeaponAttackAction: entity %u has no weapon equipped -- check its "
+                        "innate_weapon authoring\n",
+                        entt::to_integral(actor.Handle()));
+            return ActionResult(EffectiveActCost(actor, kWeaponAttackCost));
+        }
+        return ActionResult(0);
+    }
+
+    // Special Attack with no elemental prefix to execute -- a free no-op,
+    // same shape as the "no weapon" case above (the player has nothing to
+    // trigger, so nothing should cost a turn).
+    if (m_is_special_attack && before_attack.element == Element::None)
         return ActionResult(0);
 
     // A fixed direction means this call came from MoveAction's bump
@@ -156,6 +182,7 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
                 component.physical_damage = true;
                 component.race_bonuses = before_attack.race_bonuses;
                 component.hit_stun_energy = before_attack.hit_stun_energy;
+                component.is_special_attack = m_is_special_attack;
                 registry.Emplace<ProjectileComponent>(projectile, std::move(component));
 
                 // ap = action_threshold: enters the TurnQueue already at full
@@ -206,14 +233,16 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
     std::vector<RaceBonusEntry> race_bonuses = before_attack.race_bonuses;
     const std::uint32_t status_effect_id = before_attack.status_effect_id;
     const int status_chance_percent = before_attack.status_chance_percent;
+    const Element element = before_attack.element;
+    const bool is_special_attack = m_is_special_attack;
     const StatsComponent attacker_stats = before_attack.attacker_stats;
     const std::uint32_t hit_effect_prefab_id = before_attack.hit_effect_prefab_id;
     const float hit_effect_duration = before_attack.hit_effect_duration;
     const int hit_stun_energy = before_attack.hit_stun_energy;
 
     auto apply_damage = [registry_ptr, grid_ptr, affixes, rng, actor_handle, swing_origin, targets, hits_per_turn,
-                         race_bonuses, status_effect_id, status_chance_percent, attacker_stats, hit_effect_prefab_id,
-                         hit_effect_duration, hit_stun_energy]()
+                         race_bonuses, status_effect_id, status_chance_percent, element, is_special_attack,
+                         attacker_stats, hit_effect_prefab_id, hit_effect_duration, hit_stun_energy]()
     {
         Registry& registry = *registry_ptr;
         Entity actor(registry, actor_handle);
@@ -252,6 +281,17 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
                 const bool is_critical = unit_roll(*rng) < ComputeCritChance(attacker_stats.lck);
                 damage = ApplyCritical(damage, is_critical);
 
+                // The weapon's own elemental flavor (if any) gets one roll,
+                // resisted by the target's ElementalResistanceComponent, for
+                // its ailment and a bonus-damage kicker together -- folded
+                // into this same hit's damage number rather than a separate
+                // pop-in, see RollElementalDamageBonus's own doc comment.
+                const ElementalResistanceComponent* defender_resistance = target.TryGet<ElementalResistanceComponent>();
+                const int resistance_percent = defender_resistance ? defender_resistance->ResistanceFor(element) : 0;
+                damage += RollElementalDamageBonus(target, registry.GetStatusEffectLibrary(), element,
+                                                   status_effect_id, status_chance_percent, resistance_percent,
+                                                   boosted_atp, is_special_attack, *rng);
+
                 BeforeDamageEvent before{target, damage};
                 actor.Dispatch(before);
                 damage = before.incoming_damage;
@@ -259,14 +299,6 @@ ActionResult WeaponAttackAction::Perform(Entity actor)
                 IncomingDamageEvent incoming{actor,       damage, is_critical, hit_effect_prefab_id, hit_effect_duration,
                                             hit_stun_energy};
                 target.Dispatch(incoming);
-
-                if (!target.IsValid())
-                    break;
-
-                // The weapon's own elemental flavor (if any) gets a chance
-                // to inflict its ailment on a landed, non-lethal hit.
-                MaybeApplyElementalStatus(target, registry.GetStatusEffectLibrary(), status_effect_id,
-                                          status_chance_percent, *rng);
             }
 
             if (landed_hit)

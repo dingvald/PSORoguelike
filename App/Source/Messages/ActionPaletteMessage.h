@@ -46,6 +46,16 @@ struct ActionPaletteMessage
         std::string display_name;
     };
 
+    // The equipped weapon's own elemental prefix special -- same "no id to
+    // round-trip" shape as NormalAttackEntry. Present iff the player has a
+    // weapon equipped AND it carries an elemental flavor (WeaponComponent::
+    // element != Element::None); a non-elemental weapon has no Special
+    // Attack to bind.
+    struct SpecialAttackEntry
+    {
+        std::string display_name;
+    };
+
     // Every Technique the player has learned (KnownTechniquesComponent).
     std::vector<TechniqueEntry> techniques;
 
@@ -54,6 +64,7 @@ struct ActionPaletteMessage
     std::vector<PhotonArtEntry> photon_arts;
 
     std::optional<NormalAttackEntry> normal_attack;
+    std::optional<SpecialAttackEntry> special_attack;
 };
 
 } // namespace psr

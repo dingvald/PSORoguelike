@@ -4,6 +4,7 @@
 #include "Components/WeaponComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/PrefabIdComponent.h"
+#include "Engine/ECS/RarityComponent.h"
 #include "Engine/ECS/Registry.h"
 #include "Items/Affix.h"
 #include "Items/AffixLibrary.h"
@@ -38,7 +39,7 @@ TEST_CASE("FormatItemDisplayName returns just the base name for a non-weapon ite
     registry.Emplace<psr::PrefabIdComponent>(
         item, psr::PrefabIdComponent{RegisterName("test.item_display_name.frame")});
 
-    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "test.item_display_name.frame");
+    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "Frame");
 }
 
 TEST_CASE("FormatItemDisplayName decorates a weapon with its element", "[ItemDisplayName]")
@@ -51,7 +52,7 @@ TEST_CASE("FormatItemDisplayName decorates a weapon with its element", "[ItemDis
     weapon.element = psr::Element::Fire;
     registry.Emplace<psr::WeaponComponent>(item, weapon);
 
-    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "Fire test.item_display_name.element_saber");
+    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "Heat Element Saber");
 }
 
 TEST_CASE("FormatItemDisplayName appends a suffix affix as 'of <name>'", "[ItemDisplayName]")
@@ -70,7 +71,7 @@ TEST_CASE("FormatItemDisplayName appends a suffix affix as 'of <name>'", "[ItemD
     weapon.suffix_affix_id = 101;
     registry.Emplace<psr::WeaponComponent>(item, weapon);
 
-    REQUIRE(psr::FormatItemDisplayName(registry, item, affixes) == "test.item_display_name.suffix_saber of Power");
+    REQUIRE(psr::FormatItemDisplayName(registry, item, affixes) == "Suffix Saber of Power");
 }
 
 TEST_CASE("FormatItemDisplayName appends a nonzero grind level", "[ItemDisplayName]")
@@ -83,7 +84,7 @@ TEST_CASE("FormatItemDisplayName appends a nonzero grind level", "[ItemDisplayNa
     weapon.grind_level = 4;
     registry.Emplace<psr::WeaponComponent>(item, weapon);
 
-    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "test.item_display_name.grind_saber +4");
+    REQUIRE(psr::FormatItemDisplayName(registry, item, g_no_affixes) == "Grind Saber +4");
 }
 
 TEST_CASE("FormatItemDisplayName combines prefix, element, base name, suffix, and grind level", "[ItemDisplayName]")
@@ -111,6 +112,48 @@ TEST_CASE("FormatItemDisplayName combines prefix, element, base name, suffix, an
     weapon.grind_level = 4;
     registry.Emplace<psr::WeaponComponent>(item, weapon);
 
-    REQUIRE(psr::FormatItemDisplayName(registry, item, affixes) ==
-            "Godly Fire test.item_display_name.saber of Power +4");
+    REQUIRE(psr::FormatItemDisplayName(registry, item, affixes) == "Godly Heat Saber of Power +4");
+}
+
+TEST_CASE("ResolveDisplayRarity returns 0 for an item with no RarityComponent", "[ItemDisplayName]")
+{
+    psr::Registry registry;
+    entt::entity item = registry.CreateEntity();
+
+    REQUIRE(psr::ResolveDisplayRarity(registry, item) == 0);
+}
+
+TEST_CASE("ResolveDisplayRarity returns the authored base for a non-weapon item", "[ItemDisplayName]")
+{
+    psr::Registry registry;
+    entt::entity item = registry.CreateEntity();
+    registry.Emplace<psr::RarityComponent>(item, psr::RarityComponent{3});
+
+    REQUIRE(psr::ResolveDisplayRarity(registry, item) == 3);
+}
+
+TEST_CASE("ResolveDisplayRarity adds one star for an elemental weapon prefix", "[ItemDisplayName]")
+{
+    psr::Registry registry;
+    entt::entity item = registry.CreateEntity();
+    registry.Emplace<psr::RarityComponent>(item, psr::RarityComponent{1});
+    psr::WeaponComponent weapon;
+    weapon.element = psr::Element::Ice;
+    registry.Emplace<psr::WeaponComponent>(item, weapon);
+
+    REQUIRE(psr::ResolveDisplayRarity(registry, item) == 2);
+}
+
+TEST_CASE("ResolveDisplayRarity adds one star per active weapon prefix (element and prefix_affix_id)",
+          "[ItemDisplayName]")
+{
+    psr::Registry registry;
+    entt::entity item = registry.CreateEntity();
+    registry.Emplace<psr::RarityComponent>(item, psr::RarityComponent{1});
+    psr::WeaponComponent weapon;
+    weapon.element = psr::Element::Fire;
+    weapon.prefix_affix_id = 42;
+    registry.Emplace<psr::WeaponComponent>(item, weapon);
+
+    REQUIRE(psr::ResolveDisplayRarity(registry, item) == 3);
 }

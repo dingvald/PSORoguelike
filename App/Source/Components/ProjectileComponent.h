@@ -51,6 +51,13 @@ struct ProjectileComponent
     bool physical_damage = false;
     std::vector<RaceBonusEntry> race_bonuses; // only meaningful when physical_damage
 
+    // true: this shot came from the hotbar's Special Attack slot
+    // (WeaponAttackAction with is_special_attack) -- ResolveProjectileImpact's
+    // elemental proc roll (RollElementalDamageBonus) is guaranteed rather than
+    // status_chance_percent-rolled, and its bonus damage is doubled. Only
+    // meaningful when physical_damage.
+    bool is_special_attack = false;
+
     // Extra energy debited from the target's TurnQueue schedule on a landed
     // hit -- see WeaponComponent::hit_stun_energy's own doc comment for the
     // units. 0 (default) for every existing Technique projectile. Never

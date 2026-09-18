@@ -19,6 +19,7 @@
 #include "Components/TPComponent.h"
 #include "Engine/Combat/DamageEvent.h"
 #include "Engine/ECS/EventHandlerComponent.h"
+#include "Engine/ECS/ExtractDisplayString.h"
 #include "Engine/ECS/HealthComponent.h"
 #include "Engine/ECS/NameIdRegistry.h"
 #include "Engine/ECS/Registry.h"
@@ -99,7 +100,7 @@ void CombatLogBridge::OnPhotonArtCast(Entity actor, AfterPhotonArtCastEvent& eve
 void CombatLogBridge::OnItemPickup(Entity actor, AfterItemPickupEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
-    const std::string item_name = label ? *label : std::string("an item");
+    const std::string item_name = label ? ExtractDisplayString(*label) : std::string("an item");
     m_message_bus->Publish(
         CombatLogEntryMessage{DisplayName(actor.Handle()) + " picked up [c=#d4c93f]" + item_name + "[/c]"});
 }
@@ -107,7 +108,7 @@ void CombatLogBridge::OnItemPickup(Entity actor, AfterItemPickupEvent& event)
 void CombatLogBridge::OnItemDrop(Entity actor, AfterItemDropEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
-    const std::string item_name = label ? *label : std::string("an item");
+    const std::string item_name = label ? ExtractDisplayString(*label) : std::string("an item");
     m_message_bus->Publish(
         CombatLogEntryMessage{DisplayName(actor.Handle()) + " dropped [c=#d4c93f]" + item_name + "[/c]"});
 }
@@ -115,7 +116,7 @@ void CombatLogBridge::OnItemDrop(Entity actor, AfterItemDropEvent& event)
 void CombatLogBridge::OnItemUse(Entity actor, AfterItemUseEvent& event)
 {
     const std::optional<std::string> label = NameIdRegistry::Find(event.item_prefab_id);
-    const std::string item_name = label ? *label : std::string("an item");
+    const std::string item_name = label ? ExtractDisplayString(*label) : std::string("an item");
     m_message_bus->Publish(
         CombatLogEntryMessage{DisplayName(actor.Handle()) + " used [c=#d4c93f]" + item_name + "[/c]"});
 

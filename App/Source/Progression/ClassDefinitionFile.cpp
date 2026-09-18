@@ -97,6 +97,7 @@ ClassDefinition LoadClassDefinition(const std::filesystem::path& path, ClassId e
     definition.starting_weapon_prefab_id = ReadString(document, "starting_weapon_prefab_id", "");
     definition.starting_technique_id_strings = ReadStringArray(document, "starting_technique_id_strings");
     definition.starting_armor_prefab_id = ReadString(document, "starting_armor_prefab_id", "");
+    definition.starting_mag_prefab_id = ReadString(document, "starting_mag_prefab_id", "");
     definition.starting_inventory = ReadStartingInventory(document);
     definition.base_hp = ReadInt(document, "base_hp", definition.base_hp);
     definition.base_tp = ReadInt(document, "base_tp", definition.base_tp);

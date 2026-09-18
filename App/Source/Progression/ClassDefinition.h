@@ -34,6 +34,7 @@ struct ClassDefinition
     std::string starting_weapon_prefab_id;
     std::vector<std::string> starting_technique_id_strings; // empty for Hunter/Ranger
     std::string starting_armor_prefab_id;                   // empty = nothing equipped
+    std::string starting_mag_prefab_id;                     // empty = nothing equipped
     std::vector<StartingInventoryEntry> starting_inventory;
 
     int base_hp = 0;

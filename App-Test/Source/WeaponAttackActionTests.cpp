@@ -119,6 +119,27 @@ TEST_CASE("WeaponAttackAction with no weapon equipped is a free no-op", "[Weapon
     REQUIRE(result.cost == 0);
 }
 
+TEST_CASE("WeaponAttackAction Special Attack with a non-elemental weapon is a free no-op", "[WeaponAttackAction]")
+{
+    psr::Registry registry;
+    psr::Grid grid{5, 5};
+    psr::AffixLibrary affixes;
+    psr::StatusEffectLibrary status_effects;
+    psr::SetUpCombatRegistry(registry, grid, affixes, status_effects);
+    std::mt19937 rng{1};
+
+    psr::Entity actor = MakeActor(registry, grid, {1, 1}, /*atp=*/50, /*ata=*/50, /*player=*/true);
+    entt::entity weapon = MakeWeapon(registry); // WeaponComponent::element defaults to Element::None
+    actor.Emplace<psr::EquipmentComponent>(psr::EquipmentComponent{weapon});
+    psr::Entity defender = MakeDefender(registry, grid, {2, 1}, /*dfp=*/0, /*evp=*/0, /*hp=*/20, /*player=*/false);
+
+    psr::WeaponAttackAction action(grid, affixes, rng, psr::Vec2{1, 0}, /*is_special_attack=*/true);
+    psr::ActionResult result = action.Perform(actor);
+
+    REQUIRE(result.cost == 0);
+    REQUIRE(defender.Get<psr::HealthComponent>().current_hp == 20); // nothing to execute -- no swing happened
+}
+
 TEST_CASE("WeaponAttackAction against an empty tile is a free no-op", "[WeaponAttackAction]")
 {
     psr::Registry registry;

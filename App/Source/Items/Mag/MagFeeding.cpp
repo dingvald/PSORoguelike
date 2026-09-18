@@ -21,18 +21,20 @@ namespace {
         progress = total % kMagPointsPerLevel;
     }
 
-    // Re-syncs mag_entity's config (feed_cooldown_turns/feed_response/
-    // evolution_tree) and visual/species identity (RenderableComponent/
-    // PrefabIdComponent) against target_prefab_id's own template -- a
-    // field-by-field copy, not CopyFromPrefab<MagComponent>'s blind
-    // whole-component clone, so stat levels/progress/iq/sync/
-    // feed_cooldown_remaining/bob_elapsed survive the evolution untouched.
+    // Re-syncs mag_entity's config (feed_cooldown_turns/feed_charges/
+    // feed_response/evolution_tree) and visual/species identity
+    // (RenderableComponent/PrefabIdComponent) against target_prefab_id's own
+    // template -- a field-by-field copy, not CopyFromPrefab<MagComponent>'s
+    // blind whole-component clone, so stat levels/progress/iq/sync/
+    // feed_cooldown_remaining/feed_charges_used/bob_elapsed survive the
+    // evolution untouched.
     void EvolveMag(Registry& registry, entt::entity mag_entity, std::uint32_t target_prefab_id)
     {
         MagComponent& mag = registry.GetComponent<MagComponent>(mag_entity);
         const MagComponent& target_template = registry.GetPrefabComponent<MagComponent>(target_prefab_id);
 
         mag.feed_cooldown_turns = target_template.feed_cooldown_turns;
+        mag.feed_charges = target_template.feed_charges;
         mag.feed_response = target_template.feed_response;
         mag.evolution_tree = target_template.evolution_tree;
 
@@ -92,13 +94,24 @@ bool ApplyMagFood(Registry& registry, entt::entity mag_entity, std::uint32_t ite
     return true;
 }
 
+void RegisterMagFeed(MagComponent& mag)
+{
+    if (mag.feed_charges_used == 0)
+        mag.feed_cooldown_remaining = mag.feed_cooldown_turns;
+    ++mag.feed_charges_used;
+}
+
 void TickMagFeedCooldowns(Registry& registry)
 {
     registry.Each<MagComponent>(
         [](entt::entity, MagComponent& mag)
         {
-            if (mag.feed_cooldown_remaining > 0)
-                --mag.feed_cooldown_remaining;
+            if (mag.feed_cooldown_remaining <= 0)
+                return;
+
+            --mag.feed_cooldown_remaining;
+            if (mag.feed_cooldown_remaining == 0)
+                mag.feed_charges_used = 0;
         });
 }
 
