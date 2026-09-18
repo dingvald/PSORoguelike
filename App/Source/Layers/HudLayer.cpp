@@ -4,6 +4,8 @@
 #include "Messages/CharacterScreenMessage.h"
 #include "Messages/CharacterScreenStatPreviewMessage.h"
 #include "Messages/CombatLogEntryMessage.h"
+#include "Messages/ConfirmChoiceMessage.h"
+#include "Messages/ConfirmClosedMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/EquipmentSlotHoverChangedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
@@ -20,8 +22,11 @@
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectClosedMessage.h"
 #include "Messages/MissionSelectedMessage.h"
+#include "Messages/PauseMenuActionMessage.h"
+#include "Messages/PauseMenuClosedMessage.h"
 #include "Messages/PlayerDefeatedMessage.h"
 #include "Messages/PlayerStatusMessage.h"
+#include "Messages/ReturnedToTitleMessage.h"
 #include "Messages/ShopBuyRequestedMessage.h"
 #include "Messages/ShopClosedMessage.h"
 #include "Messages/ShopSellRequestedMessage.h"
@@ -252,6 +257,8 @@ void HudLayer::OnAttach()
     WireHotbarSlots();
     WireEventLogScroll();
     WireWorldMouseInteraction();
+    WirePauseMenu();
+    WireConfirmDialog();
 
     Subscribe<PlayerStatusMessage>(&HudLayer::OnPlayerStatus, this);
     Subscribe<HotbarStateMessage>(&HudLayer::OnHotbarState, this);
@@ -277,6 +284,11 @@ void HudLayer::OnAttach()
     Subscribe<StorageMessage>(&HudLayer::OnStorageScreenState, this);
     Subscribe<StorageClosedMessage>(&HudLayer::OnStorageScreenClosed, this);
     Subscribe<WorldTileHoverMessage>(&HudLayer::OnWorldTileHover, this);
+    Subscribe<PauseMenuMessage>(&HudLayer::OnPauseMenuState, this);
+    Subscribe<PauseMenuClosedMessage>(&HudLayer::OnPauseMenuClosed, this);
+    Subscribe<ConfirmMessage>(&HudLayer::OnConfirmState, this);
+    Subscribe<ConfirmClosedMessage>(&HudLayer::OnConfirmClosed, this);
+    Subscribe<ReturnedToTitleMessage>(&HudLayer::OnReturnedToTitle, this);
 
     // Tells GameplayLayer to re-publish current state now that this layer is
     // actually subscribed -- see HudReadyMessage.h for why a one-time publish
@@ -293,6 +305,8 @@ void HudLayer::OnDetach()
     m_mission_select_listeners.clear();
     m_shop_listeners.clear();
     m_storage_listeners.clear();
+    m_pause_listeners.clear();
+    m_confirm_listeners.clear();
     m_context_menu_listeners.clear();
     m_log_scroll_listener.reset();
     m_world_mouse_listeners.clear();
@@ -352,6 +366,75 @@ void HudLayer::WireHotbarSlots()
             std::make_unique<RmlClickListener>([this, slot]() { Publish(HotbarSlotActivatedMessage{slot}); });
         listener->Attach(*element);
         m_hotbar_listeners.push_back(std::move(listener));
+    }
+}
+
+void HudLayer::WirePauseMenu()
+{
+    static constexpr std::array<std::pair<const char*, PauseMenuAction>, 3> kActionRows = {
+        {{"pause-row-resume", PauseMenuAction::Resume},
+         {"pause-row-quit-title", PauseMenuAction::QuitToTitle},
+         {"pause-row-quit-desktop", PauseMenuAction::QuitToDesktop}}};
+    for (const auto& [id, action] : kActionRows)
+    {
+        Rml::Element* element = m_document->GetElementById(id);
+        if (!element)
+            continue;
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, action]()
+            {
+                if (!m_pause_cache || m_pause_placeholder_open || m_confirm_cache)
+                    return;
+                Publish(PauseMenuActionMessage{action});
+            });
+        listener->Attach(*element);
+        m_pause_listeners.push_back(std::move(listener));
+    }
+
+    static constexpr std::array<std::pair<const char*, const char*>, 2> kPlaceholderRows = {
+        {{"pause-row-options", "Options"}, {"pause-row-help", "Help"}}};
+    for (const auto& [id, title] : kPlaceholderRows)
+    {
+        Rml::Element* element = m_document->GetElementById(id);
+        if (!element)
+            continue;
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, title]()
+            {
+                if (!m_pause_cache || m_pause_placeholder_open || m_confirm_cache)
+                    return;
+                ShowPausePlaceholder(title);
+            });
+        listener->Attach(*element);
+        m_pause_listeners.push_back(std::move(listener));
+    }
+
+    if (Rml::Element* back = m_document->GetElementById("pause-placeholder-hint"))
+    {
+        auto listener = std::make_unique<RmlClickListener>([this]() { HidePausePlaceholder(); });
+        listener->Attach(*back);
+        m_pause_listeners.push_back(std::move(listener));
+    }
+}
+
+void HudLayer::WireConfirmDialog()
+{
+    static constexpr std::array<std::pair<const char*, bool>, 2> kRows = {
+        {{"confirm-row-yes", true}, {"confirm-row-no", false}}};
+    for (const auto& [id, confirmed] : kRows)
+    {
+        Rml::Element* element = m_document->GetElementById(id);
+        if (!element)
+            continue;
+        auto listener = std::make_unique<RmlClickListener>(
+            [this, confirmed]()
+            {
+                if (!m_confirm_cache)
+                    return;
+                Publish(ConfirmChoiceMessage{confirmed});
+            });
+        listener->Attach(*element);
+        m_confirm_listeners.push_back(std::move(listener));
     }
 }
 
@@ -1285,6 +1368,176 @@ void HudLayer::RenderMissionSelectFocusHighlight()
     for (std::size_t i = 0; i < rows.size(); ++i)
         rows[i]->SetClass("focused", static_cast<int>(i) == m_mission_select_focused_row);
 }
+
+void HudLayer::OnPauseMenuState(const PauseMenuMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_pause_cache.has_value();
+    m_pause_cache = message;
+
+    if (Rml::Element* overlay = m_document->GetElementById("pause-screen"))
+        overlay->SetProperty("display", "flex");
+
+    if (fresh_open)
+    {
+        m_pause_focused_row = 0;
+        m_pause_placeholder_open = false;
+        if (Rml::Element* placeholder = m_document->GetElementById("pause-placeholder-panel"))
+            placeholder->SetProperty("display", "none");
+        if (Rml::Element* menu = m_document->GetElementById("pause-menu-panel"))
+            menu->SetProperty("display", "flex");
+    }
+    RenderPauseFocusHighlight();
+}
+
+void HudLayer::OnPauseMenuClosed(const PauseMenuClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("pause-screen"))
+        overlay->SetProperty("display", "none");
+
+    m_pause_cache.reset();
+    m_pause_focused_row = 0;
+    m_pause_placeholder_open = false;
+}
+
+void HudLayer::MovePauseRowFocus(int direction)
+{
+    constexpr int kPauseRowCount = 5;
+    m_pause_focused_row = std::clamp(m_pause_focused_row + direction, 0, kPauseRowCount - 1);
+    RenderPauseFocusHighlight();
+}
+
+void HudLayer::ActivateFocusedPauseRow()
+{
+    if (!m_pause_cache)
+        return;
+
+    switch (m_pause_focused_row)
+    {
+    case 0:
+        Publish(PauseMenuActionMessage{PauseMenuAction::Resume});
+        break;
+    case 1:
+        ShowPausePlaceholder("Options");
+        break;
+    case 2:
+        ShowPausePlaceholder("Help");
+        break;
+    case 3:
+        Publish(PauseMenuActionMessage{PauseMenuAction::QuitToTitle});
+        break;
+    case 4:
+        Publish(PauseMenuActionMessage{PauseMenuAction::QuitToDesktop});
+        break;
+    default:
+        break;
+    }
+}
+
+void HudLayer::RenderPauseFocusHighlight()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* list = m_document->GetElementById("pause-screen-list");
+    if (!list)
+        return;
+
+    Rml::ElementList rows;
+    list->QuerySelectorAll(rows, ".mission-row");
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", static_cast<int>(i) == m_pause_focused_row);
+}
+
+void HudLayer::ShowPausePlaceholder(const char* title)
+{
+    if (!m_document)
+        return;
+    if (Rml::Element* menu = m_document->GetElementById("pause-menu-panel"))
+        menu->SetProperty("display", "none");
+    if (Rml::Element* placeholder_title = m_document->GetElementById("pause-placeholder-title"))
+        placeholder_title->SetInnerRML(title);
+    if (Rml::Element* placeholder = m_document->GetElementById("pause-placeholder-panel"))
+        placeholder->SetProperty("display", "flex");
+    m_pause_placeholder_open = true;
+}
+
+void HudLayer::HidePausePlaceholder()
+{
+    if (!m_document)
+        return;
+    if (Rml::Element* placeholder = m_document->GetElementById("pause-placeholder-panel"))
+        placeholder->SetProperty("display", "none");
+    if (Rml::Element* menu = m_document->GetElementById("pause-menu-panel"))
+        menu->SetProperty("display", "flex");
+    m_pause_placeholder_open = false;
+}
+
+void HudLayer::OnConfirmState(const ConfirmMessage& message)
+{
+    if (!m_document)
+        return;
+
+    const bool fresh_open = !m_confirm_cache.has_value();
+    m_confirm_cache = message;
+
+    if (Rml::Element* overlay = m_document->GetElementById("confirm-dialog"))
+        overlay->SetProperty("display", "flex");
+    if (Rml::Element* text = m_document->GetElementById("confirm-dialog-message"))
+        text->SetInnerRML(EscapeRml(message.text));
+
+    if (fresh_open)
+        m_confirm_focused_row = 1; // defaults to No -- see the class doc comment
+    RenderConfirmFocusHighlight();
+}
+
+void HudLayer::OnConfirmClosed(const ConfirmClosedMessage& /*message*/)
+{
+    if (!m_document)
+        return;
+
+    if (Rml::Element* overlay = m_document->GetElementById("confirm-dialog"))
+        overlay->SetProperty("display", "none");
+
+    m_confirm_cache.reset();
+    m_confirm_focused_row = 1;
+}
+
+void HudLayer::MoveConfirmRowFocus(int direction)
+{
+    constexpr int kConfirmRowCount = 2;
+    m_confirm_focused_row = std::clamp(m_confirm_focused_row + direction, 0, kConfirmRowCount - 1);
+    RenderConfirmFocusHighlight();
+}
+
+void HudLayer::ActivateFocusedConfirmRow()
+{
+    if (!m_confirm_cache)
+        return;
+    Publish(ConfirmChoiceMessage{m_confirm_focused_row == 0});
+}
+
+void HudLayer::RenderConfirmFocusHighlight()
+{
+    if (!m_document)
+        return;
+
+    Rml::Element* list = m_document->GetElementById("confirm-dialog-list");
+    if (!list)
+        return;
+
+    Rml::ElementList rows;
+    list->QuerySelectorAll(rows, ".mission-row");
+    for (std::size_t i = 0; i < rows.size(); ++i)
+        rows[i]->SetClass("focused", static_cast<int>(i) == m_confirm_focused_row);
+}
+
+void HudLayer::OnReturnedToTitle(const ReturnedToTitleMessage& /*message*/) { RemoveSelf(); }
 
 void HudLayer::OnShopScreenState(const ShopMessage& message)
 {
@@ -2428,7 +2681,7 @@ Rml::Element* HudLayer::CharacterScreenRowElement(CharacterScreenPanel panel, in
 void HudLayer::OnEvent(Event& event)
 {
     if (!m_document || (!m_character_screen_cache && !m_action_palette_cache && !m_mission_select_cache &&
-                        !m_shop_cache && !m_storage_cache))
+                        !m_shop_cache && !m_storage_cache && !m_pause_cache && !m_confirm_cache))
         return;
 
     EventDispatcher dispatcher(event);
@@ -2484,6 +2737,58 @@ void HudLayer::OnEvent(Event& event)
                     return true;
                 default:
                     return true; // swallow panel-switching and everything else while picking food
+                }
+            }
+
+            if (m_pause_placeholder_open)
+            {
+                if (key == SDLK_ESCAPE || key == SDLK_SPACE || key == SDLK_KP_5)
+                {
+                    HidePausePlaceholder();
+                    return true;
+                }
+                return true; // swallow everything else while the placeholder is up
+            }
+
+            if (m_confirm_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_8:
+                    MoveConfirmRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MoveConfirmRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedConfirmRow();
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            // Only reached while the pause menu itself has top focus (no
+            // placeholder, no confirm dialog on top of it) -- Escape falls
+            // through to PauseState's own HandleEvent, closing the whole
+            // menu (an implicit Resume), same as every other screen here.
+            if (m_pause_cache)
+            {
+                switch (key)
+                {
+                case SDLK_KP_8:
+                    MovePauseRowFocus(-1);
+                    return true;
+                case SDLK_KP_2:
+                    MovePauseRowFocus(1);
+                    return true;
+                case SDLK_SPACE:
+                case SDLK_KP_5:
+                    ActivateFocusedPauseRow();
+                    return true;
+                default:
+                    return false;
                 }
             }
 

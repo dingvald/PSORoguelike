@@ -103,6 +103,34 @@
             <div id="storage-hint">Numpad to navigate, Space to store/withdraw, Esc to close</div>
         </div>
 
+        <div id="pause-screen">
+            <div id="pause-menu-panel">
+                <div id="pause-screen-title">Paused</div>
+                <div id="pause-screen-list">
+                    <div id="pause-row-resume" class="mission-row">Resume</div>
+                    <div id="pause-row-options" class="mission-row">Options</div>
+                    <div id="pause-row-help" class="mission-row">Help</div>
+                    <div id="pause-row-quit-title" class="mission-row">Quit to Title</div>
+                    <div id="pause-row-quit-desktop" class="mission-row">Quit to Desktop</div>
+                </div>
+                <div id="pause-screen-hint">Numpad to navigate, Space to select, Esc to resume</div>
+            </div>
+            <div id="pause-placeholder-panel">
+                <div id="pause-placeholder-title"></div>
+                <div id="pause-placeholder-text">Coming Soon</div>
+                <div id="pause-placeholder-hint">Space / Esc to go back</div>
+            </div>
+        </div>
+
+        <div id="confirm-dialog">
+            <div id="confirm-dialog-message"></div>
+            <div id="confirm-dialog-list">
+                <div id="confirm-row-yes" class="mission-row">Yes</div>
+                <div id="confirm-row-no" class="mission-row">No</div>
+            </div>
+            <div id="confirm-dialog-hint">Numpad to navigate, Space to select, Esc to cancel</div>
+        </div>
+
         <div id="tile-tooltip"></div>
     </body>
 </rml>

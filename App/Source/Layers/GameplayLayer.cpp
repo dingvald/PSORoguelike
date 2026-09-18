@@ -77,7 +77,9 @@
 #include "Items/Storage.h"
 #include "Items/StorageSnapshot.h"
 #include "Layers/HudLayer.h"
+#include "Layers/MainMenuLayer.h"
 #include "Messages/CharacterScreenMessage.h"
+#include "Messages/ConfirmChoiceMessage.h"
 #include "Messages/EquipmentSlotActivatedMessage.h"
 #include "Messages/FloatingTextStateMessage.h"
 #include "Messages/GameRestartedMessage.h"
@@ -94,7 +96,9 @@
 #include "Messages/MesetaChangedMessage.h"
 #include "Messages/MissionCompletedMessage.h"
 #include "Messages/MissionSelectedMessage.h"
+#include "Messages/PauseMenuActionMessage.h"
 #include "Messages/RestartRequestedMessage.h"
+#include "Messages/ReturnedToTitleMessage.h"
 #include "Messages/ShopBuyRequestedMessage.h"
 #include "Messages/ShopMessage.h"
 #include "Messages/ShopSellRequestedMessage.h"
@@ -199,6 +203,8 @@ void GameplayLayer::OnAttach()
     Subscribe<WorldMouseDownMessage>(&GameplayLayer::OnWorldMouseDown, this);
     Subscribe<WorldMouseMoveMessage>(&GameplayLayer::OnWorldMouseMove, this);
     Subscribe<WorldMouseScrollMessage>(&GameplayLayer::OnWorldMouseScroll, this);
+    Subscribe<PauseMenuActionMessage>(&GameplayLayer::OnPauseMenuAction, this);
+    Subscribe<ConfirmChoiceMessage>(&GameplayLayer::OnConfirmChoice, this);
 
     PushOverlay<HudLayer>();
 
@@ -1165,6 +1171,59 @@ void GameplayLayer::OnMissionSelected(const MissionSelectedMessage& message)
     TransitionToWorld(SceneKind::Dungeon, message.dungeon_id_string);
 }
 
+void GameplayLayer::OnPauseMenuAction(const PauseMenuActionMessage& message)
+{
+    if (m_state_machine.Top() != &m_pause_state)
+        return;
+
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+    switch (message.action)
+    {
+    case PauseMenuAction::Resume:
+        m_state_machine.Pop(context);
+        break;
+    case PauseMenuAction::QuitToTitle:
+        m_confirm_state.Configure("Quit to Title? Progress will be lost -- there is no save yet.",
+                                  ConfirmAction::QuitToTitle);
+        m_state_machine.Push(m_confirm_state, context);
+        break;
+    case PauseMenuAction::QuitToDesktop:
+        m_confirm_state.Configure("Quit to desktop? Progress will be lost -- there is no save yet.",
+                                  ConfirmAction::QuitToDesktop);
+        m_state_machine.Push(m_confirm_state, context);
+        break;
+    }
+}
+
+void GameplayLayer::OnConfirmChoice(const ConfirmChoiceMessage& message)
+{
+    if (m_state_machine.Top() != &m_confirm_state)
+        return;
+
+    const ConfirmAction action = m_confirm_state.GetAction();
+    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+    m_state_machine.Pop(context); // back to the pause menu either way
+
+    if (!message.confirmed)
+        return;
+
+    switch (action)
+    {
+    case ConfirmAction::QuitToDesktop:
+        RequestQuit();
+        break;
+    case ConfirmAction::QuitToTitle:
+        // HudLayer was pushed as an overlay alongside this layer (see
+        // OnAttach's PushOverlay<HudLayer>()) -- TransitionTo() only
+        // replaces this layer, not overlays stacked on top of it, so it
+        // must remove itself in response to this message or it would keep
+        // rendering/intercepting events over the main menu.
+        GetMessageBus().Publish(ReturnedToTitleMessage{});
+        TransitionTo<MainMenuLayer>();
+        break;
+    }
+}
+
 void GameplayLayer::OnShopBuyRequested(const ShopBuyRequestedMessage& message)
 {
     if (m_state_machine.Top() != &m_shop_state || !m_registry.IsValid(m_player))
@@ -1502,13 +1561,21 @@ void GameplayLayer::OnEvent(Event& event)
                     return true;
                 }
 
-                // Only claimed when there's a target to clear -- nothing else
-                // binds Escape while ExploringState is on top, but leaving it
-                // unhandled otherwise keeps room for that to change later.
-                if (key_event.GetKeyCode() == SDLK_ESCAPE &&
-                    m_registry.GetComponent<TabTargetComponent>(m_player).target != entt::null)
+                // M14.2's escape hierarchy, root case: a modal state closes
+                // itself on Escape (reached via m_state_machine.HandleEvent
+                // below once it's on top, so it never gets here), and a
+                // locked tab-target is cleared instead of opening the pause
+                // menu -- otherwise Escape opens it.
+                if (key_event.GetKeyCode() == SDLK_ESCAPE)
                 {
-                    m_tab_target_system->ClearTarget(Entity(m_registry, m_player));
+                    if (m_registry.GetComponent<TabTargetComponent>(m_player).target != entt::null)
+                    {
+                        m_tab_target_system->ClearTarget(Entity(m_registry, m_player));
+                        return true;
+                    }
+
+                    GameplayContext context{m_registry, *m_grid, *m_turn_coordinator, m_player, GetMessageBus()};
+                    m_state_machine.Push(m_pause_state, context);
                     return true;
                 }
 

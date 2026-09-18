@@ -147,9 +147,9 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | Gap | Severity | Milestone |
 |---|---|---|
 | No audio subsystem of any kind | Blocker | M12 |
-| ~~No title screen~~ — resolved; pause, settings, and quit confirmation still missing | Blocker | M14 |
+| ~~No title screen~~ — resolved; ~~pause, quit confirmation~~ — resolved (M14.2); settings screen still missing | Blocker | M14 |
 | No save/load; a closed window loses the character | Blocker | M11.2 |
-| Escape quits to desktop instantly from gameplay | Blocker | M14 |
+| ~~Escape does nothing useful from gameplay, no pause, no quit confirmation~~ — resolved (M14.2) | Blocker | M14 |
 | No key rebinding, no gamepad, minimal mouse support | High | M15 |
 | No packaging, no CI, Windows-only, three known test failures | Blocker | M18 |
 | No item tooltips, comparison, stacking, or sorting | High | M16 |
@@ -160,7 +160,7 @@ developer's machine. Specifically, and each expanded into its own milestone belo
 | ~~An area is a single dungeon; no multi-level areas (Forest 1/2, Caves 1-3) or teleporters~~ — resolved (Mission Select still lists every dungeon individually, see 4.6's own note) | Medium | M4.6 |
 | ~~Area/biome schema (M3.2) never built, so no per-area theming~~ — resolved | High | M3 |
 | ~~No character creation, no classes~~ — resolved; no difficulty tiers | High | M10 |
-| Mag companion not started | Medium | M9 |
+| ~~Mag companion not started~~ — resolved (entity/feeding/evolution/HUD); species/evolution editor still missing | Medium | M9 |
 | No localization seam; strings hardcoded in C++ and RML | Medium | M16 |
 
 Severity here means "distance from shippable," not implementation difficulty. A blocker is
@@ -1570,25 +1570,58 @@ of Equip being the only thing an inventory click could do.
 
 ## M9 — Mag Companion
 
-**Status:** Not started
+**Status:** 9.1 landed uncommitted alongside a session boundary and captured here retroactively —
+the same lag several M6-M11 follow-up sections above already had; this file still called it "Not
+started" after the code landed. Engine/UI done; the editor half of the bullet is the one genuinely
+open piece.
 
 - **9.1 Mag entity & feeding:** Engine: Mag ECS entity, in-field feeding (consumable → Mag),
   evolution/stat-boost accumulation. Editor: Mag species/evolution editor (feed-response
   table, evolution thresholds). UI: Mag status panel, feed-prompt when holding a feedable
   item.
 
-  **Ship-readiness gap detail:** the last wholly-unstarted *designed* system, and the only
-  milestone in M1-M11 with no code behind it at all. Much of its plumbing now exists for free: it
-  is an entity with components; it feeds on `ConsumableComponent` items through a
-  `UseItemAction`-shaped path; its stat contribution can route through `ComputeEffectiveStats`
-  the same way equipment already does; its species and evolution thresholds are a content library
-  in the established five-file pattern; and its HUD panel is one more `hud.rml` block alongside
-  the existing bars. Its genuinely new work is the feed-response table, the evolution rules, and a
-  companion entity that follows the player across the turn scheduler *and* across hub-to-dungeon
-  swaps — that last part interacts directly with `TransitionToWorld`'s selective entity
-  destruction, which today preserves only the player and what is reachable from its inventory,
-  equipment, and storage. A Mag must be added to that preserved set explicitly or it is destroyed
-  on the first mission launch.
+  **Done (Engine + UI):** `MagComponent` (`App/Source/Components/MagComponent.h`) holds four
+  PSO-style stats (POW/DEF/DEX/MIND, each a level + progress-to-next-level, `kMagPointsPerLevel`
+  units per level), informational `iq`/`sync`, a feed-cooldown/charge pair (`feed_cooldown_turns`,
+  `feed_charges` — PSO's "three feeds, then a cooldown" mechanic), and — authored inline per
+  species/prefab, same "no separate library" shape `DropTableComponent` already set —
+  `feed_response` (`MagFeedResponse`: per-item POW/DEF/DEX/MIND deltas) and `evolution_tree`
+  (`MagEvolutionRule`: a `condition` expression over current stat levels, evaluated in order,
+  first match wins). `App/Source/Items/Mag/MagFeeding.{h,cpp}`'s `ApplyMagFood` rolls a fed item's
+  deltas into level/progress (clamped at zero, never negative) and then checks `evolution_tree` via
+  `MagEvolutionExpression.{h,cpp}` (a small expression evaluator over POW/DEF/DEX/MIND/LEVEL),
+  swapping the mag's prefab/renderable identity in place on a match while preserving its runtime
+  stat/cooldown state; `RegisterMagFeed`/`TickMagFeedCooldowns` run the charge/cooldown state
+  machine from `GameplayLayer`'s per-turn callback. `App/Source/Items/Mag/MagCompanion.{h,cpp}`
+  gives the mag a real world presence: `OnMagEquipped`/`OnMagUnequipped` (hooked into `Equip.cpp`'s
+  `EquipItem`/`UnequipSlot`, since a mag occupies `EquipmentComponent::mag` like any other slot)
+  place/remove it on the `Grid`, and `UpdateMagCompanion` (called every frame from
+  `GameplayLayer::OnUpdate`) repositions it one tile behind the player opposite
+  `LastDirectionComponent`, lerping via `TweenComponent` for an ordinary step and snapping
+  instantly for a teleport or a tile inherited stale across a hub/dungeon transition — the mag
+  never gains `BlocksMovementComponent`/`HealthComponent`, so it needs no special-casing in
+  movement/targeting/line-of-sight. It survives `TransitionToWorld`'s selective entity destruction
+  for the reason its own doc comment gives: it's reachable through `EquipmentComponent` like any
+  other equipped item, the same preserved set weapons/armor already sit in — no separate
+  preservation rule was needed. UI: `HudLayer` (`RenderMagPanel`/`ApplyMagPanelDisplay`/
+  `UpdateMagPanelAnimations`/`RefreshMagPanelVisibility`) draws a POW/DEF/DEX/MIND/level/IQ/Sync
+  panel with a level-up flash, styled in `hud.rcss`; feeding is a real in-field prompt
+  (`BeginAwaitingMagFood`/`CancelAwaitingMagFood`) that opens on holding a feedable item and
+  publishes `MagFeedRequestedMessage`, handled by `GameplayLayer::OnMagFeedRequested`. Catch2
+  coverage in `App-Test/Source/MagFeedingTests.cpp` (feed deltas, clamping, evolution match and
+  self-loop no-op, cooldown/charge cycling) and `MagCompanionTests.cpp`/
+  `MagEvolutionExpressionTests.cpp`.
+
+  **Still open — Editor:** no Mag species/evolution editor exists (no Mag-related card anywhere in
+  `Editor/Source/Layers/PrefabEditorLayer`) — a species' `feed_response` table and `evolution_tree`
+  can only be hand-authored in JSON today, not through the Editor — `PrefabEditorLayer` has no
+  Mag Inspector card at all yet, not even a generic one (its two vector-of-struct fields need
+  hand-wired `BuildRowList` support, the same reason Weapon's `race_bonuses` and Drop Table's
+  `entries` needed one rather than falling out of the fully-generic field path). This is the one
+  sub-bullet of 9.1 still genuinely unstarted, and the natural next content-tooling gap to close
+  for this milestone: a new Mag Inspector card with two `BuildRowList` rows (feed-response rows
+  keyed by item prefab, evolution-rule rows pairing a condition string with a target prefab),
+  following the exact pattern `PrefabEditorLayer`'s Drop Table/race-bonus rows already use.
 
 ## M10 — Hub, Missions & Difficulty
 
@@ -1930,19 +1963,25 @@ attacking, hurt, or dying.
 
 ## M14 — Front end & session flow
 
-**Status:** 14.1/14.4 done; 14.2/14.3/14.5/14.6 not started. **Severity: blocker** (the
-Escape-quits-instantly defect the Evidence paragraph below names is 14.2's fix, not 14.1's — still
-open).
+**Status:** 14.1/14.4 done; 14.2 implemented **pending your own Windows build + manual
+verification** (same caveat M3.2/M4.5 already carry — this session ran in a Linux sandbox with no
+MSVC/vcpkg toolchain); 14.3/14.5/14.6 not started. **Severity: blocker** for the remaining pieces
+(see 14.3/14.5/14.6's own entries) — the Escape/pause gap 14.2 closes was the project's most severe
+player-facing defect and is now resolved.
 
-**Evidence (14.1/14.4 resolved; the rest still stands):** `App/Source/main.cpp` used to push
-`GameplayLayer` directly and call `Run()`, with no title screen, no menu layer, and no state before
-gameplay — it now pushes `MainMenuLayer` instead (see 14.1 below). `Application::OnKeyPressed`
-still handles `SDLK_ESCAPE` by calling `RequestQuit()` unconditionally, though — so from the
-Exploring state, where no layer consumes Escape, pressing it still closes the game instantly, with
-no confirmation and (since M11.2 has not started) no save. That single line is still the most
-severe player-facing defect in the project; fixing it is 14.2's job, not 14.1's. There is also
-still no pause: closing a modal returns straight to the turn loop, and there is no way to stop
-playing other than quitting.
+**Evidence (14.1/14.2/14.4 resolved; 14.3/14.5/14.6 still stand):** `App/Source/main.cpp` used to
+push `GameplayLayer` directly and call `Run()`, with no title screen, no menu layer, and no state
+before gameplay — it now pushes `MainMenuLayer` instead (see 14.1 below). **Correction to this
+paragraph's own prior claim:** it previously said Escape "closes the game instantly" from Exploring;
+that was never quite right and 14.2's own implementation work is what surfaced the mistake —
+`ExploringState::HandleEvent` (see M6.2) already forwards every `KeyPressedEvent` into
+`TurnCoordinator::PressKey` and unconditionally returns `true`, so `event.handled` was already `true`
+by the time `Application::OnKeyPressed`'s unconditional `RequestQuit()` would have run, and Escape
+was actually swallowed as a harmless buffered no-op — not a quit. The real defect was milder but just
+as blocking in effect: Escape did *nothing* from Exploring (no pause, no menu, no way to stop
+playing other than closing the window), there was no confirmation on any destructive action, and
+there was no pause at all (closing a modal returned straight to the turn loop). 14.2 below fixes all
+of that regardless of which exact prior mechanism was true.
 
 - **14.1 Title screen & app state machine.** Engine: `main.cpp` should push a `MainMenuLayer`
   rather than `GameplayLayer`, with the existing `Application::TransitionTo` doing the swap — the
@@ -1968,11 +2007,13 @@ playing other than quitting.
   separate, not-yet-started scope). **Deviates from this bullet's own "app-level state distinction
   (Title / Playing / Paused)" wording:** no new `AppState` enum was introduced — which top-level
   `Layer` is currently attached already fully encodes Title vs. Playing (`TransitionTo` always
-  holds exactly one at a time), and a real state distinction has no work to do until Paused exists
-  (M14.2, still not started) — Paused needs to *suspend* `GameplayLayer` while keeping it alive
-  underneath, not just replace it with another layer, so building the enum now would have had
-  nothing correct to model. No title art (none exists) — placeholder text/theme only, per the
-  user's own choice.
+  holds exactly one at a time), and a real state distinction had no work to do until Paused
+  existed. **Still holds now that M14.2 is done below:** Paused turned out to need only a
+  `GameStateMachine` state (`PauseState`) that suspends `GameplayLayer` in place by sitting on top
+  of its own stack, not an app-level enum above `TransitionTo` — the same "which top-level `Layer`
+  is attached already encodes Title vs. Playing" fact still holds, since Paused never replaces
+  `GameplayLayer` at all. No title art (none exists) — placeholder text/theme only, per the user's
+  own choice.
 - **14.2 Pause menu & escape hierarchy.** Engine: remove the unconditional Escape-quits handler
   from `Application::OnKeyPressed` and replace it with a proper hierarchy — Escape closes the
   topmost modal if one is open, otherwise cancels targeting, otherwise opens the pause menu, and
@@ -1983,10 +2024,62 @@ playing other than quitting.
   following the six existing overlays' convention, with Resume, Options, Help, Abandon Mission
   (folding in the current bare `H` keybind, which today abandons with no confirmation), Quit to
   Title, and Quit to Desktop. Every destructive row needs a confirm step.
+
+  **Done, pending your own Windows build + manual verification** (same caveat M3.2/M4.5 already
+  carry — this session ran in a Linux sandbox with no MSVC/vcpkg toolchain, so this compiles by
+  careful inspection against the codebase's own established patterns, not an actual build) — **row
+  set trimmed to Resume/Options/Help/Quit to Title/Quit to Desktop per the user's explicit brief** (Abandon Mission stays the bare `H` keybind this round; folding it into the
+  pause menu is left open, not scoped here). New `App/Source/States/PauseState.{h,cpp}` mirrors
+  `MissionSelectState`'s exact publish-on-enter/close-on-Escape shape (`PauseMenuMessage`/
+  `PauseMenuClosedMessage`) — no dynamic entries, since the row set is fixed engine UI rather than
+  authored content, so the rows are baked directly into `hud.rml`. `GameplayLayer::OnEvent`'s
+  existing tab-target-clear-on-Escape check (inside its `Top() == &m_exploring_state` block) now
+  falls through to `m_state_machine.Push(m_pause_state, context)` when there's no tab-target to
+  clear, instead of leaving Escape unhandled. Every existing modal (Character/Action Palette/
+  Mission Select/Shop/Storage/Target Selection) already closed itself on Escape before this round,
+  so "closes the topmost modal" needed no new code — only the from-Exploring root case was
+  actually missing. New `App/Source/States/ConfirmState.{h,cpp}` is the reusable yes/no sub-state
+  (`ConfirmMessage(text)`/`ConfirmClosedMessage`/`ConfirmChoiceMessage{confirmed}`), configured via
+  `Configure(message, ConfirmAction)` immediately before `Push()` — the same "configure right
+  before push" idiom `GameStateMachine.h` already documents for `TargetSelectionState` — and
+  pushed **on top of** `PauseState` (not replacing it) so the pause screen stays visible underneath,
+  the first time this codebase stacks two modal `GameState`s. `GameplayLayer::OnPauseMenuAction`
+  resolves Resume by popping `PauseState` directly; both Quit rows configure+push `ConfirmState`
+  instead of acting immediately, since neither can save progress yet (M11.2) — the confirm text
+  says so explicitly. `GameplayLayer::OnConfirmChoice` pops `ConfirmState` back to the pause menu
+  either way and, only if confirmed, either calls `RequestQuit()` (Quit to Desktop) or publishes a
+  new `ReturnedToTitleMessage` and calls `TransitionTo<MainMenuLayer>()` (Quit to Title) — the
+  message exists because `HudLayer` was pushed as an *overlay* alongside `GameplayLayer` (see
+  `OnAttach`'s `PushOverlay<HudLayer>()`), and `TransitionTo()` only replaces the layer that calls
+  it, not overlays stacked on top of it; without it the HUD would keep rendering and intercepting
+  events over the main menu. Options/Help are inert placeholders resolved entirely inside
+  `HudLayer` (`ShowPausePlaceholder`/`HidePausePlaceholder`), the same "Coming Soon" precedent
+  `MainMenuLayer`'s own Options/Credits rows already set — they never publish anything, so
+  `GameplayLayer` never sees them. UI: `#pause-screen` (a `#pause-menu-panel`/
+  `#pause-placeholder-panel` pair, toggled the same way `MainMenuLayer`'s own menu/placeholder
+  panels are) and `#confirm-dialog`, both new `hud.rml`/`hud.rcss` overlays reusing the existing
+  `.mission-row` class for row layout/hover/focus rather than a new palette per screen. Confirm's
+  focus defaults to **No** on open (`m_confirm_focused_row = 1`), a deliberate safety default so a
+  stray Space/Enter can't accidentally confirm a destructive choice. Numpad navigation
+  (`KP_8`/`KP_2` move, `Space`/`KP_5` activate) matches every other in-session overlay's own
+  convention; row clicks are wired once in `HudLayer::OnAttach` (`WirePauseMenu`/
+  `WireConfirmDialog`), not rebuilt per open, since — unlike Mission Select/Shop/Storage — the row
+  set never changes. Catch2 coverage in `App-Test/Source/PauseAndConfirmStateTests.cpp`
+  (`HandleEvent`/`Update` close-on-Escape and OnEnter-resets-close-flag for both states, plus
+  `ConfirmState::Configure`/`GetAction` round-tripping) — `GameplayLayer`/`HudLayer`'s own wiring
+  is Layer-level and manually verified only, same convention this file already documents for every
+  other screen's message-handler plumbing.
 - **14.3 Confirmation & destructive-action guards.** Engine: a reusable confirm-prompt sub-state,
   since several existing flows currently destroy things silently — abandoning a mission (`H`),
   dropping an item, selling an item, and eventually deleting a save. UI: one shared confirm
   widget rather than a bespoke one per screen.
+
+  **Partially addressed by 14.2's `ConfirmState`, still open as its own bullet.** 14.2 built the
+  reusable confirm sub-state this bullet calls for and wired it to the two pause-menu Quit rows
+  only, per the user's explicit choice to scope 14.2 that way rather than block it on generalizing
+  every destructive flow at once. Still unwired to `ConfirmState`: the `H` abandon-mission keybind,
+  dropping an item, selling an item, and (once it exists) deleting a save — each just needs its own
+  `Configure(message, action)` call site once `ConfirmAction` grows the matching enumerator.
 - **14.4 New-character flow.** Engine: this is where M10.3's character creation actually attaches
   — the title's New Character row leads into class and Section ID selection, then into
   `SpawnNewCharacter`. Today `SpawnNewCharacter` is called unconditionally on attach with a
@@ -2409,8 +2502,9 @@ scope — every row points at a bullet above.
 
 **Blocking — a build cannot ship without these**
 
-- [ ] Escape no longer quits the game from gameplay (14.2)
-- [ ] Title screen, pause menu, and a confirmed quit path (14.1, 14.2, 14.3)
+- [x] Escape opens a real pause menu from gameplay, with a confirm step on both Quit rows (14.2)
+- [ ] Title screen and pause menu done (14.1, 14.2); a confirm guard on every other destructive
+      flow (abandon mission, drop, sell, delete-save) still open (14.3)
 - [ ] Save and load, so closing the window does not destroy the character (11.2)
 - [ ] Audio: an engine, a content type, and a cue on every feedback moment (12.1–12.3)
 - [ ] Options screen with volume, display, and rebinding (15.1, 15.4, 15.5)
